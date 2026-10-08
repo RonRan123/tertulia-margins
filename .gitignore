@@ -1,0 +1,34 @@
+# deps & build
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# env & secrets
+.env
+.env*.local
+
+# copyrighted inputs and local data: never commit
+books/
+data/
+*.epub
+
+# eval run outputs (scorecards worth keeping go in docs/)
+evals/runs/
+
+# deploy
+.vercel
+
+# tooling
+.claude/settings.local.json
+coverage/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
