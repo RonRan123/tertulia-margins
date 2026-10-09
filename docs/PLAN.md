@@ -95,6 +95,10 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Quotes the AI takes from the reader's notes are flagged `citation_missing` by `checkCitations` (Sprint 3 test; Ronith: leave it for now). Option later: pass notes to the check and exempt verbatim note quotes
 - Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
+- **UX redesign: marginalia-first (Ronith, 2026-10-09).** The current two-pane setup feels sparse and like a plain-text notebook. Two ideas, to be run through `/decide` before any work:
+  1. *Markdown-rendered notes.* Notes show formatted (headings, bold, quotes, lists) instead of plain text. Tension: DESIGN §3 lists a rich-text editor as a non-goal, so the options likely range from live-preview of a textarea to rendering on blur.
+  2. *Auto-responding marginalia.* Shrink the chat to an on-demand tool. Instead, the AI automatically reacts to sections or quotes in the notes with probing questions that push the reader's thinking, without being prompted, as margin comments beside the note.
+  - Open questions for the `/decide`: (a) D6 says AI text lives only in the chat pane, so margin comments need a visibly distinct AI-only area that never edits notes, and the invariant needs restating; (b) trigger and cost (on pause, per paragraph, on a button?), since auto-calls multiply spend and interact with caching (Sprint 5); (c) probing questions vs. grounded claims: do they need `[¶n]` citations and `checkCitations`?; (d) how this relates to Augment and disagreement flags (Sprint 5), which may fold into it; (e) whether it replaces `/define` and `/quiz` in Sprint 4 or sits beside them.
 
 ## Time log
 | Day | Planned h | Actual h | Shipped | Notes |
