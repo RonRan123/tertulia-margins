@@ -1,54 +1,475 @@
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
+/* Tokens (design spec §3). The reader writes in ink, in a book serif; the AI writes beside it in
+   a verdigris pencil, in a sans (D6: typeface, colour and rule change together). */
+:root {
+  color-scheme: light dark;
+  --paper: #fafaf7;
+  --sheet: #ffffff;
+  --ink: #1d2230;
+  --ink-soft: #5e6472;
+  --rule: #e2e3de;
+  --ai: #2c7a70;
+  --ai-ink: #1f3f3b;
+  --ai-wash: #eff6f4; /* verdigris pencil */
+  --quote: #7a6745; /* book binding: passage quotes */
+  --warn: #9b3d12;
+  --focus: #2f5bd8;
+  --serif: var(--font-literata), "Literata", Georgia, "Times New Roman", serif;
+  --sans: var(--font-hanken), "Hanken Grotesk", system-ui, sans-serif;
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s6: 1.5rem;
+  --s8: 2rem;
+  --notes-w: 38rem;
+  --margin-w: 20rem;
+  --drawer-w: 26rem; /* notes + margin + drawer = 84rem: the side-by-side breakpoint below and in page.tsx */
+  --radius: 4px;
+  --margin-rule: 3px double color-mix(in srgb, var(--ai) 45%, transparent);
 }
 
-/* A column filling the window: the panes take what the header (one line or wrapped) leaves. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #15171c;
+    --sheet: #1b1e24;
+    --ink: #e7e5df;
+    --ink-soft: #a0a5af;
+    --rule: #2d313a;
+    --ai: #6fc3b5;
+    --ai-ink: #d3eae5;
+    --ai-wash: #18292a;
+    --quote: #c4ae84;
+    --warn: #f2a47a;
+    --focus: #93aeff;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 0.875rem/1.45 var(--sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Buttons */
+button {
+  font: 500 0.875rem var(--sans);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--ai);
+  border-color: var(--ai);
+  color: var(--sheet);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ai);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s4);
+  color: var(--warn);
+  font: 0.8125rem/1.4 var(--sans);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* Page: a column filling the window; the panes take what the header leaves and scroll on their own. */
 main {
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
   height: 100dvh;
-  max-width: 90rem;
-  margin: 0 auto;
-  padding: 1rem;
-}
-
-h1,
-h2 {
-  margin: 0;
-}
-
-h1 {
-  font-size: 1.25rem;
-}
-
-h2 {
-  font-size: 1rem;
 }
 
 .app-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.75rem;
+  gap: var(--s2) var(--s4);
+  padding: var(--s3) var(--s4);
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
 }
 
-/* Two panes, notes | chat (D14); stacked on narrow screens. minmax(0, 1fr): a long unbroken
-   word must wrap, not widen its pane. */
+.app-header h1 {
+  margin: 0;
+  font: italic 400 1.125rem var(--serif);
+}
+
+.reference-summary {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.chat-toggle {
+  position: relative;
+  margin-left: auto;
+}
+
+.unread {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ai);
+}
+
+/* Notes | margin (D18). minmax(0, …): a long unbroken word must wrap, not widen its column. */
 .panes {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, var(--notes-w)) var(--margin-w);
+  justify-content: center;
   flex: 1;
   min-height: 0;
 }
 
-.notes,
+.notes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sheet);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  padding: var(--s2) var(--s6);
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+}
+
+.toolbar .divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--rule);
+}
+
+.notes-status {
+  flex: 1;
+  min-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+.empty-reference {
+  margin: 0;
+  padding: var(--s2) var(--s6);
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The reader's writing surface: the notes face, no box. */
+.notes textarea {
+  flex: 1;
+  resize: none;
+  font: 400 1.125rem/1.65 var(--serif);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: var(--s4) var(--s6);
+}
+
+.notes textarea::placeholder {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.notes textarea:focus-visible {
+  outline: none; /* the writing surface shows its caret instead */
+}
+
+/* React split button and kind menu */
+.split {
+  position: relative;
+  display: inline-flex;
+}
+
+.split > :first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.split > :nth-child(2) {
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left-color: var(--sheet);
+  padding-inline: var(--s2);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--s1));
+  left: 0;
+  z-index: 20;
+  min-width: 15rem;
+  padding: var(--s1);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+.menu [role="menuitem"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: var(--s2) var(--s3);
+  background: none;
+}
+
+.menu [role="menuitem"]:hover,
+.menu [role="menuitem"]:focus {
+  background: var(--ai-wash);
+}
+
+.menu [role="menuitem"] small {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+/* The margin: a double rule like a legal pad's, then the AI's cards. */
+.margin {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  padding: var(--s4);
+  overflow-y: auto;
+  border-left: var(--margin-rule);
+}
+
+.card {
+  padding: var(--s2) var(--s3);
+  background: var(--ai-wash);
+  border-left: 2px solid var(--ai);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font: 0.9375rem/1.5 var(--sans);
+  color: var(--ai-ink);
+  overflow-wrap: anywhere;
+}
+
+.card.is-active {
+  border-left-width: 4px;
+}
+
+.card.is-detached {
+  opacity: 0.7;
+}
+
+.card.is-detached .excerpt {
+  text-decoration: line-through;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.card .kind {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--ai);
+}
+
+.card .kind.is-choosing {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.card .delete {
+  border: 0;
+  background: none;
+  padding: 0 var(--s1);
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.card .confirm {
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
+.card .confirm button {
+  padding: 0 var(--s2);
+  font-size: 0.8125rem;
+}
+
+.card .excerpt {
+  display: block;
+  margin: var(--s1) 0;
+  font: italic 0.875rem/1.4 var(--serif);
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.card p {
+  margin: var(--s1) 0;
+  white-space: pre-wrap;
+}
+
+.card .follow-up,
+.card .reply-user {
+  margin-left: var(--s3);
+}
+
+.card .reply-user {
+  font: 1rem/1.55 var(--serif);
+  color: var(--ink);
+}
+
+.card textarea {
+  margin-top: var(--s1);
+  font: 1rem/1.5 var(--serif);
+  resize: vertical;
+}
+
+.card .link {
+  margin-top: var(--s1);
+}
+
+.detached-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.detached-divider::before,
+.detached-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed var(--ink-soft);
+}
+
+.caret {
+  color: var(--ai);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The area under the header: the panes, and the chat drawer anchored to it, so the drawer never
+   covers the header's Chat toggle. clip: the closed drawer, pushed off to the right, adds no scroll. */
+.workspace {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-x: clip;
+}
+
+/* Chat drawer, not modal. Below 84rem it slides over the margin column only: its width is
+   everything right of the notes column (centred, or pushed left when the window is narrow). */
+.drawer {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--margin-w) + max(0px, (100% - var(--notes-w) - var(--margin-w)) / 2));
+  padding: var(--s3) var(--s4);
+  background: var(--sheet);
+  border-left: 1px solid var(--rule);
+  transform: translateX(100%);
+  transition: transform 160ms ease-out;
+}
+
+.drawer[data-open] {
+  transform: none;
+  box-shadow: -4px 0 16px rgb(0 0 0 / 0.08);
+}
+
+/* Wide: notes, margin and drawer side by side; opening the drawer moves the panes left. */
+@media (min-width: 84rem) {
+  .drawer {
+    width: var(--drawer-w);
+  }
+
+  .workspace[data-chat-open] .panes {
+    padding-right: var(--drawer-w);
+  }
+}
+
+.drawer-close {
+  align-self: flex-end;
+}
+
 .chat {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
 }
 
@@ -56,133 +477,142 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s2);
   min-height: 2rem;
-  font-size: 0.85rem;
 }
 
-.notes textarea {
-  flex: 1;
-  resize: none;
-  padding: 0.5rem;
-  font-family: ui-monospace, monospace;
+.pane-header h2 {
+  margin: 0;
+  font: 600 1rem var(--sans);
 }
 
-.chat .messages {
+.messages {
   flex: 1;
   overflow-y: auto;
   margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@media (max-width: 48rem) {
-  main {
-    height: auto;
-  }
-
-  .panes {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .notes textarea {
-    min-height: 16rem;
-  }
-}
-
-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
+.message {
+  margin: var(--s3) 0;
   overflow-wrap: anywhere;
+}
+
+.message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  font: 1rem/1.55 var(--serif);
+  color: var(--ink);
+}
+
+/* AI replies wear the margin card's look (D6). */
+.message.ai {
+  padding: var(--s2) var(--s3);
+  background: var(--ai-wash);
+  border-left: 2px solid var(--ai);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font: 0.9375rem/1.5 var(--sans);
+  color: var(--ai-ink);
+}
+
+.chat form textarea {
+  font: 1rem/1.5 var(--serif);
+}
+
+.chat form button {
+  margin-top: var(--s1);
 }
 
 /* D14: the reference text is edited in a dialog, never shown as a reading pane. */
 dialog.reference {
   width: min(48rem, calc(100vw - 2rem));
-  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
 }
 
 dialog.reference::backdrop {
   background: rgb(0 0 0 / 0.3);
 }
 
-.reference-summary {
-  font-weight: 400;
-  color: #666;
-}
-
 .reference-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.25rem;
+  gap: var(--s2);
+  margin-bottom: var(--s1);
   font-weight: 600;
 }
 
-.messages {
-  list-style: none;
-  padding: 0;
+dialog.reference form button {
+  margin-top: var(--s2);
 }
 
-.message {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
-  overflow-wrap: anywhere;
+@media (prefers-reduced-motion: reduce) {
+  .drawer {
+    transition: none;
+  }
+
+  .caret {
+    animation: none;
+  }
 }
 
-.message p {
-  margin: 0.25rem 0;
-  white-space: pre-wrap;
-}
+/* Phone: one column; the page scrolls, the toolbar sticks, the margin rule turns horizontal. */
+@media (max-width: 48rem) {
+  main {
+    height: auto;
+    min-height: 100dvh;
+  }
 
-.who {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #666;
-}
+  .app-header .reference-button {
+    order: 1;
+    flex-basis: 100%;
+    text-align: left;
+  }
 
-/* D6: AI text is always visually distinct from the user's words. */
-.message.ai {
-  background: #eef3fb;
-  border-left: 3px solid #4a72b8;
-  font-family: Georgia, serif;
-}
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.warning {
-  margin: 0.5rem 0 0;
-  padding-left: 1rem;
-  font-size: 0.85rem;
-  font-family: system-ui, sans-serif;
-  color: #9a3412;
-}
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding-inline: var(--s4);
+  }
 
-form button {
-  margin-top: 0.25rem;
-}
+  .notes-status {
+    flex-basis: 100%;
+    text-align: left;
+  }
 
-.notes-status {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #666;
-}
+  .empty-reference {
+    padding-inline: var(--s4);
+  }
 
-.notes-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
+  .notes textarea {
+    min-height: 50dvh;
+    padding: var(--s4);
+  }
 
-.notes-toolbar button {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.5rem;
-}
+  .margin {
+    overflow-y: visible;
+    border-left: 0;
+    border-top: var(--margin-rule);
+  }
 
-.notes-toolbar .divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 0 0.25rem;
-  background: #ccc;
+  /* A full-screen sheet over everything, header included; Close (or Esc) brings the page back. */
+  .drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
+  }
 }

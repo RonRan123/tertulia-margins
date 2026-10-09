@@ -18,9 +18,7 @@ export type ChatMessage = Turn & {
 // `messages` starts with the AI's reaction, then (reader reply, AI answer) pairs. A reply's
 // request sends `messages` as `history` (with `reaction: { excerpt, kind }`).
 export type Reaction = { id: string; excerpt: string; kind: ReactionKind; messages: ChatMessage[] };
-// loadState always fills `reactions`. It is optional only until the page keeps reactions (Sprint 5
-// UI): until then a save without it stores none.
-export type AppState = { reference: string; notes: string; messages: ChatMessage[]; reactions?: Reaction[] };
+export type AppState = { reference: string; notes: string; messages: ChatMessage[]; reactions: Reaction[] };
 export type KeyValueStorage = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 export type StoreError = "save_failed"; // storage full, blocked (private mode) or unavailable
 
@@ -46,7 +44,7 @@ export function loadState(storage: KeyValueStorage): AppState {
 }
 
 export function saveState(storage: KeyValueStorage, state: AppState): StoreError | undefined {
-  const { reference, notes, messages, reactions = [] } = state;
+  const { reference, notes, messages, reactions } = state;
   try {
     const saved = { reference, notes, messages: finishedMessages(messages), reactions: finishedReactions(reactions) };
     storage.setItem(STORAGE_KEY, JSON.stringify(saved));

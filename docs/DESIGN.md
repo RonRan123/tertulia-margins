@@ -53,9 +53,9 @@ These are deliberately excluded so they cannot creep back in silently.
 The interaction model is the product's whole differentiation, so it is specified first.
 
 1. The user types or pastes reference text from the book, with `[p. N]` page markers, or imports it from a PDF (D13). It stays in the background as reference, not a reading pane (D14).
-2. The user writes notes in the left pane as they read, exactly as they would in Obsidian.
-3. The user selects a line (in the passage or their notes) and runs a command, or asks a free-form question in the right pane.
-4. The AI replies in the right pane, citing paragraphs of the passage. Replies never edit the user's notes.
+2. The user writes notes in the notes column as they read, exactly as they would in Obsidian.
+3. The user selects a line in their notes and runs a command, or asks a free-form question in the chat drawer.
+4. The AI replies in the chat drawer (commands, questions) or the margin (reactions), citing paragraphs of the passage. Replies never edit the user's notes.
 5. The user may press **React** on a note (the selection or the paragraph at the cursor): the AI answers in the margin column beside the notes with a probing question, a pushback cited `[¶n]`, or a connection to another passage. Each reaction is a thread the user can reply to. Nothing is added to the notes. The chat stays available in a collapsed drawer (D18; replaces Augment).
 6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote. Commands run from a toolbar above the notes on the selected text; `/define` picks the occurrence nearest the cites around the selection, else the first (D17).
 7. Export produces one markdown file: frontmatter (date, reference page range), then the user's notes with their inline passage quotes. No AI-written text, no reference text (D17).
@@ -66,10 +66,11 @@ The invariant: **the notes pane holds only the user's words and verbatim passage
 
 ```
 Browser (one page)
-  ┌───────────────┬───────────────┐
-  │  Notes pane   │  Chat pane    │   passage + notes kept in browser storage
-  │  (textarea)   │  (stream)     │
-  └───────┬───────┴───────▲───────┘
+  ┌───────────────╥───────────────┐
+  │  Notes        ║  Margin cards │   passage, notes, chat, reactions kept in
+  │  (textarea)   ║  (+ chat      │   browser storage
+  │               ║   drawer)     │
+  └───────┬───────╨───────▲───────┘
           │ POST /api/converse   │ streamed text + citation flags
           ▼                      │
   route handler (thin: parse, call core, stream out)
@@ -81,7 +82,7 @@ Browser (one page)
   prompts/  (markdown files the user owns and edits)
 ```
 
-The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
+The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
 
 ### 6.1 Why it is shaped like this
 

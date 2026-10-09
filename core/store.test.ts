@@ -67,16 +67,14 @@ test("malformed messages are dropped and unknown fields stripped", () => {
   });
 });
 
-test("an old save without reactions loads with none; a save without them stores none", () => {
+test("an old save without reactions loads with none", () => {
   const { storage } = memoryStorage({ [KEY]: JSON.stringify({ reference: "R", notes: "N", messages: [] }) });
-  expect(loadState(storage).reactions).toEqual([]);
-  saveState(storage, { reference: "R", notes: "N", messages: [] });
   expect(loadState(storage).reactions).toEqual([]);
 });
 
 test("a reaction still streaming is not saved; a reply still streaming drops only that pair", () => {
   const { storage } = memoryStorage();
-  const [thread] = state.reactions!;
+  const [thread] = state.reactions;
   const streamingReply = { ...thread, messages: [...thread.messages, { role: "user" as const, content: "And?" }, { role: "assistant" as const, content: "Ha", isStreaming: true }] };
   const streamingOpening = { id: "r2", excerpt: "N", kind: "question" as const, messages: [{ role: "assistant" as const, content: "Wh", isStreaming: true }] };
   saveState(storage, { ...state, reactions: [streamingReply, streamingOpening] });

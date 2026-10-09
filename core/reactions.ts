@@ -1,6 +1,7 @@
 // Marginalia (D18, D20): a reaction is the AI's reply in the margin to one excerpt of the notes.
 // Like COMMANDS, each kind is a row; a router call picks the kind when the reader doesn't.
 // Browser-safe (no node:fs): the UI imports the kinds and the anchoring helpers too.
+import type { Turn } from "./converse.ts";
 
 export const REACTIONS = {
   question: { promptFile: "react-question.md", maxTokens: 4000 },
@@ -55,4 +56,35 @@ export function findExcerpt(notes: string, excerpt: string): { start: number; en
   const words = target.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const loose = new RegExp(words.join(String.raw`\s+`)).exec(notes);
   return loose ? { start: loose.index, end: loose.index + loose[0].length } : undefined;
+}
+
+// The margin's order: reactions whose excerpt is still in the notes, by where it starts (ties keep
+// creation order), then the detached ones ("Your note changed"), which stay until deleted.
+export function placeReactions<R extends { excerpt: string }>(
+  notes: string,
+  reactions: R[],
+): { placed: { reaction: R; start: number; end: number }[]; detached: R[] } {
+  const placed: { reaction: R; start: number; end: number }[] = [];
+  const detached: R[] = [];
+  for (const reaction of reactions) {
+    const range = findExcerpt(notes, reaction.excerpt);
+    if (range) placed.push({ reaction, ...range });
+    else detached.push(reaction);
+  }
+  placed.sort((a, b) => a.start - b.start); // stable sort: same start keeps creation order
+  return { placed, detached };
+}
+
+// A thread reply's `history`: the AI's opening reaction, then the (reply, answer) pairs that got an
+// answer. A failed answer is dropped with the reply that prompted it, like chat. An opening that
+// failed leaves nothing to reply to: [] (the UI offers no Reply then).
+export function threadHistory(messages: (Turn & { error?: string })[]): Turn[] {
+  const isAnswered = (m?: Turn & { error?: string }) => m?.role === "assistant" && m.content !== "" && !m.error;
+  if (!isAnswered(messages[0])) return [];
+  const history: Turn[] = [{ role: "assistant", content: messages[0].content }];
+  for (let i = 1; i + 1 < messages.length; i += 2) {
+    const [reply, answer] = [messages[i], messages[i + 1]];
+    if (isAnswered(answer)) history.push({ role: "user", content: reply.content }, { role: "assistant", content: answer.content });
+  }
+  return history;
 }

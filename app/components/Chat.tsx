@@ -1,11 +1,21 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, useState, type Dispatch, type Ref, type SetStateAction } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Dispatch,
+  type KeyboardEvent,
+  type Ref,
+  type SetStateAction,
+} from "react";
 import type { CitationCheck } from "@/core/citations.ts";
 import { commandLabel, type Command } from "@/core/commands.ts";
-import type { ConverseEvent, Turn } from "@/core/converse.ts";
-import { citedPages, labelCitations, parsePassage } from "@/core/passage.ts";
+import type { Turn } from "@/core/converse.ts";
+import { labelCitations } from "@/core/passage.ts";
 import type { ChatMessage as Message } from "@/core/store.ts";
+import { streamMessage } from "@/lib/converse-client.ts";
 
 // The page owns the messages so it can persist them (D7). Notes go with every question (D6:
 // they steer the reply, but the AI's text stays here in the chat, never in the notes).
@@ -17,12 +27,13 @@ type ChatProps = {
   // The page owns isBusy too: the notes toolbar disables its commands while a reply streams.
   isBusy: boolean;
   setIsBusy: (isBusy: boolean) => void;
+  onReplyEnd?: () => void; // the page shows an unread dot if the drawer is closed
   ref?: Ref<ChatHandle>; // lets the notes toolbar run a command through the same send()
 };
 
-export type ChatHandle = { run: (command: Command) => void };
+export type ChatHandle = { run: (command: Command) => void; focus: () => void };
 
-export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBusy, ref }: ChatProps) {
+export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBusy, onReplyEnd, ref }: ChatProps) {
   const [question, setQuestion] = useState("");
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [hasAskedToClear, setHasAskedToClear] = useState(false); // then focus returns to "Clear conversation"
@@ -41,7 +52,10 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
 
   // A command shows as its label ("/define melancholy") here and in history; the full selection
   // goes only in `command`.
-  useImperativeHandle(ref, () => ({ run: (command) => send(commandLabel(command), command) }));
+  useImperativeHandle(ref, () => ({
+    run: (command) => send(commandLabel(command), command),
+    focus: () => questionBox.current?.focus(),
+  }));
 
   async function send(question: string, command?: Command) {
     const isReady = question.trim() !== "" && hasReference && !isBusy;
@@ -54,28 +68,12 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
       const isAnswered = answer.content !== "" && !answer.error;
       if (isAnswered) history.push({ role: "user", content: asked.content }, { role: "assistant", content: answer.content });
     }
-    const paragraphs = parsePassage(reference); // as sent, for the finished reply's page labels
     setMessages([...messages, { role: "user", content: question }, { role: "assistant", content: "", isStreaming: true }]);
     if (!command) setQuestion("");
     setIsBusy(true);
-    try {
-      const requestError = await streamReply({ passage: reference, question, notes, history, command }, (event) => {
-        if (event.type === "text") updateLast((m) => ({ ...m, content: m.content + event.text }));
-        // An empty reply (e.g. a refusal) is an error, not a blank bubble.
-        if (event.type === "done")
-          updateLast((m) =>
-            m.content === ""
-              ? { ...m, error: `empty_reply (stop_reason: ${event.stats.stopReason})` }
-              : { ...m, citations: event.stats.citations },
-          );
-        if (event.type === "error") updateLast((m) => ({ ...m, error: event.code }));
-      });
-      if (requestError) updateLast((m) => ({ ...m, error: requestError }));
-    } catch {
-      updateLast((m) => ({ ...m, error: "network_error" }));
-    }
-    updateLast((m) => ({ ...m, pages: citedPages(m.content, paragraphs), isStreaming: false }));
+    await streamMessage({ passage: reference, question, notes, history, command }, updateLast);
     setIsBusy(false);
+    onReplyEnd?.();
   }
 
   return (
@@ -84,7 +82,7 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
         <h2>Chat</h2>
         {/* Clears the conversation only; notes and reference text stay. Asks inline first. */}
         {isConfirmingClear ? (
-          <span>
+          <span onKeyDown={(e) => escapeTo(e, () => setIsConfirmingClear(false))}>
             Clear {messages.length} messages?{" "}
             <button
               type="button"
@@ -115,11 +113,15 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
           </button>
         )}
       </div>
+      {messages.length === 0 && <p className="empty">Ask about the text or your notes. Define and Quiz replies land here too.</p>}
+      {/* Who wrote what is carried by typeface, colour and rule (D6), not by a label. */}
       <ol className="messages" ref={messageList}>
         {messages.map((m, i) => (
           <li key={i} className={m.role === "user" ? "message user" : "message ai"}>
-            <span className="who">{m.role === "user" ? "You" : "AI"}</span>
-            <p>{m.role === "assistant" ? labelCitations(m.content, m.pages ?? {}) : m.content}</p>
+            <p>
+              {m.role === "assistant" ? labelCitations(m.content, m.pages ?? {}) : m.content}
+              {m.isStreaming && <span className="caret" aria-hidden="true">▍</span>}
+            </p>
             {m.error && <p className="warning">Reply failed: {m.error}</p>}
             <CitationWarnings citations={m.citations} />
           </li>
@@ -154,7 +156,15 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
   );
 }
 
-function CitationWarnings({ citations }: { citations?: CitationCheck[] }) {
+// Esc in an inline confirm cancels it, and only it: preventDefault tells the page not to close the drawer too.
+export function escapeTo(e: KeyboardEvent, cancel: () => void) {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  cancel();
+}
+
+// Citation checks that failed, under a reply. Chat and margin cards both use it.
+export function CitationWarnings({ citations }: { citations?: CitationCheck[] }) {
   const failed = (citations ?? []).filter((c) => c.status !== "ok");
   if (failed.length === 0) return null;
   return (
@@ -166,51 +176,4 @@ function CitationWarnings({ citations }: { citations?: CitationCheck[] }) {
       ))}
     </ul>
   );
-}
-
-// POST to the route and call onEvent for each NDJSON line as it arrives.
-// Returns an error code if the request was rejected (e.g. "passage_missing"), a line was not JSON
-// ("bad_response"), or the stream ended without a "done" or "error" line ("stream_incomplete").
-async function streamReply(
-  body: { passage: string; question: string; notes: string; history: Turn[]; command?: Command },
-  onEvent: (event: ConverseEvent) => void,
-): Promise<string | undefined> {
-  const response = await fetch("/api/converse", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok || !response.body) {
-    const { error } = await response.json().catch(() => ({ error: "api_error" }));
-    return String(error);
-  }
-  let isFinished = false;
-  const handleLine = (line: string): boolean => {
-    if (!line.trim()) return true;
-    let event: ConverseEvent;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      return false;
-    }
-    if (event.type === "done" || event.type === "error") isFinished = true;
-    onEvent(event);
-    return true;
-  };
-
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += value;
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? ""; // keep a partial last line for the next chunk
-    if (!lines.every(handleLine)) {
-      void reader.cancel();
-      return "bad_response";
-    }
-  }
-  if (!handleLine(buffer)) return "bad_response"; // a last line with no trailing newline
-  return isFinished ? undefined : "stream_incomplete";
 }
