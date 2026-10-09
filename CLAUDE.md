@@ -26,6 +26,10 @@ Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md
 - Every claim about the book cites `[¶n]`; unsupported → "not in the text". `checkCitations` must stay green.
 
 ## Commands
+- `npm run dev`: local app at http://localhost:3000
+- `npm run build`: production build (must pass before each commit)
+- `npm test`: Vitest, runs `core/**/*.test.ts`
+- `npm run lint`: ESLint
 <!-- Fill in once scaffolded (day 1): dev, build, test, lint, eval -->
 
 ## Gotchas
