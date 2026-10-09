@@ -1,14 +1,15 @@
-// Usage: npm run ask -- <passage-file> "<question>"
+// Usage: npm run ask -- <passage-file> "<question>" ["Title | Author"]
 import { readFileSync } from "node:fs";
 import { converse } from "../core/converse.ts";
 
-const [file, question] = process.argv.slice(2);
+const [file, question, titleAuthor] = process.argv.slice(2);
 if (!file || !question) {
-  console.error('usage: npm run ask -- <passage-file> "<question>"');
+  console.error('usage: npm run ask -- <passage-file> "<question>" ["Title | Author"]');
   process.exit(1);
 }
 
-const reply = converse({ passage: readFileSync(file, "utf8"), question });
+const [title, author] = (titleAuthor ?? "").split("|").map((s) => s.trim() || undefined);
+const reply = converse({ passage: readFileSync(file, "utf8"), question, book: { title, author } });
 let step = await reply.next();
 while (!step.done) {
   process.stdout.write(step.value);
