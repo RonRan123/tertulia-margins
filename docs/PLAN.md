@@ -46,7 +46,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 ## Sprint 2 (Day 2, 3 h): input + first page
 **Goal:** reference text from your own book produces a grounded streamed reply in the browser, with page labels.
 - [x] Reference text with `[p. N]` markers: paragraphs labelled with the page of the last marker before them (D13). **Verify:** unit tests: markers stripped from the text, labels correct, a paragraph spanning a marker gets a page range.
-- [ ] PDF import (secondary, `pdfjs-dist`, runs in the browser): extracts text, infers paragraphs, fills the reference-text box with `[PDF p. N]` markers for you to trim (D13). **Verify:** your PDF imports with paragraph breaks that match the book on a hand-checked page.
+- [x] PDF import (secondary, `pdfjs-dist`, runs in the browser): extracts text, infers paragraphs, fills the reference-text box with `[PDF p. N]` markers for you to trim (D13). **Verify:** your PDF imports with paragraph breaks that match the book on a hand-checked page.
 - [ ] Minimal page: reference-text box + chat (multi-turn), page shown beside each `[¶n]`, failed citations flagged. **Verify:** screenshot of a grounded streamed reply.
 - **Demo:** the screenshot, from your own book.
 - **Risk:** paragraph detection from the PDF. If it eats more than 1 h, ship one paragraph per PDF page and note it.
