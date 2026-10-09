@@ -64,6 +64,14 @@ function pageLabel(start: Marker | undefined, end: Marker | undefined): string |
   return `${prefix(start)}pp. ${start.page}–${last}`;
 }
 
+// The pages the reference text covers: "p. 101 to p. 108", "p. 101" if one page, undefined if unlabelled.
+export function pageRange(paragraphs: Paragraph[]): string | undefined {
+  const pages = paragraphs.map((p) => p.page).filter((p) => p !== undefined);
+  if (pages.length === 0) return undefined;
+  const [first, last] = [pages[0], pages[pages.length - 1]];
+  return first === last ? first : `${first} to ${last}`;
+}
+
 // Page labels by paragraph number ({ 12: "p. 101" }): only what a reply's citations need.
 export type PageLabels = Record<number, string>;
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { defineQuote, insertAfterLine, isDefinable, trimPhrase } from "@/core/commands.ts";
+import { exportMarkdown } from "@/core/export.ts";
 import { loadState, saveState, STORAGE_KEY, type AppState, type ChatMessage, type KeyValueStorage, type StoreError } from "@/core/store.ts";
 import { Chat, type ChatHandle } from "./components/Chat";
 import { ReferenceText } from "./components/ReferenceText";
@@ -13,6 +14,16 @@ const browserStorage: KeyValueStorage = {
 };
 const SAVE_DELAY_MS = 300;
 const STATUS_MS = 5000;
+
+// Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
+function download(filename: string, content: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url)); // after the click's download has started (Safari)
+}
 
 // Two panes, notes | chat (D14); the reference text lives behind a header button.
 export default function Home() {
@@ -129,6 +140,8 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [isLoaded, reference, notes, messages]);
 
+  const isNotesEmpty = notes.trim() === "";
+
   return (
     <main>
       <header className="app-header">
@@ -162,6 +175,18 @@ export default function Home() {
                   {name === "define" ? "Define" : "Quiz"}
                 </button>
               ))}
+              <span className="divider" aria-hidden="true" />
+              <button
+                type="button"
+                disabled={isNotesEmpty}
+                title={isNotesEmpty ? "Nothing to export yet" : undefined}
+                onClick={() => {
+                  const file = exportMarkdown(notes, reference, new Date());
+                  download(file.filename, file.content);
+                }}
+              >
+                Export .md
+              </button>
             </div>
           </div>
           {/* The user's own words and app-pasted passage quotes only (D6): the AI never writes here. */}

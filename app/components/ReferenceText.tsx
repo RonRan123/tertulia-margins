@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
-import { parsePassage } from "@/core/passage.ts";
+import { pageRange, parsePassage } from "@/core/passage.ts";
 import { PdfImportButton } from "./PdfImportButton";
 
 // The reference text the AI grounds on. D14: it lives in the background, not in a reading pane:
@@ -50,8 +50,6 @@ function summarize(reference: string): string {
   const paragraphs = parsePassage(reference);
   if (paragraphs.length === 0) return "not set";
   const count = `${paragraphs.length} paragraph${paragraphs.length === 1 ? "" : "s"}`;
-  const pages = paragraphs.map((p) => p.page).filter((p) => p !== undefined);
-  if (pages.length === 0) return count;
-  const [first, last] = [pages[0], pages[pages.length - 1]];
-  return first === last ? `${count}, ${first}` : `${count}, ${first} to ${last}`;
+  const pages = pageRange(paragraphs);
+  return pages ? `${count}, ${pages}` : count;
 }
