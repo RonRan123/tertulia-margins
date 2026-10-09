@@ -52,7 +52,7 @@ These are deliberately excluded so they cannot creep back in silently.
 
 The interaction model is the product's whole differentiation, so it is specified first.
 
-1. The user uploads a PDF or pastes a passage (a chapter or part of one). Upload keeps page numbers (D8).
+1. The user types or pastes reference text from the book, with `[p. N]` page markers, or imports it from a PDF (D13). It stays in the background as reference, not a reading pane (D14).
 2. The user writes notes in the left pane as they read, exactly as they would in Obsidian.
 3. The user selects a line (in the passage or their notes) and runs a command, or asks a free-form question in the right pane.
 4. The AI replies in the right pane, citing paragraphs of the passage. Replies never edit the user's notes.
@@ -95,7 +95,7 @@ Browser (one page)
 
 This is the highest technical risk (see §9), so it gets a concrete mechanism rather than a hopeful prompt.
 
-1. **Paragraph IDs.** The passage is split into paragraphs and labelled `[¶1]`, `[¶2]`, ... before it goes into the prompt. The app also records each paragraph's page: the printed page number when it can be detected, otherwise the PDF page (D8). The model cites `[¶n]`; the UI shows the page beside it, so the model never has to guess a page number.
+1. **Paragraph IDs.** The passage is split into paragraphs and labelled `[¶1]`, `[¶2]`, ... before it goes into the prompt. The app also records each paragraph's page from the `[p. N]` markers in the reference text, which are stripped before the text reaches the model (D13). PDF import inserts `[PDF p. N]` markers instead, since its pages don't match the paper book. The model cites `[¶n]`; the UI shows the page beside it, so the model never has to guess a page number.
 2. **Cite or abstain.** The system prompt requires every claim about the book to cite `[¶n]` and to quote at most a short span. If the text does not support an answer, the model says "not in the text."
 3. **Deterministic check.** After streaming, `checkCitations` verifies each quoted span actually appears in the cited paragraph (after whitespace/quote normalization). Failures are flagged in the UI, not hidden.
    Rules (Ronith, Sprint 1): a quote is checked against the citations in its own sentence (none → `citation_missing`); a range like `[¶18-19]` passes if the quote is in any paragraph of it; quotes under 3 words are scare-quotes and are skipped; a cite to a paragraph that doesn't exist is `citation_not_found`; otherwise `quote_not_in_paragraph`. Normalization ignores case, curly vs straight quotes, `_italics_` markers, spacing and trailing punctuation; `…` splits a quote into fragments that must each appear.
@@ -156,7 +156,7 @@ Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md), organised as one spri
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Model invents quotes/page numbers | High | ¶ IDs + deterministic citation check (§6.2) |
-| Getting text in is harder than Obsidian habit | Medium | PDF upload (D8) with paste as fallback; revisit after real use |
+| Getting text in is harder than Obsidian habit | Medium | Typed/pasted reference text with page markers, PDF import as a shortcut (D13); revisit after real use |
 | Editor rabbit hole | Medium | Plain textarea is a non-goal boundary (§3) |
 | Scope creep into "tensions across works" | High | Non-goal; v4 is one book |
 | Ronith loses the thread of the code | Medium | Working agreement in CLAUDE.md; `/decide`, `/explain` skills |

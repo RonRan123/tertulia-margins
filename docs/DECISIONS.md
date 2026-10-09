@@ -59,7 +59,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** browser-only storage loses data in real use, or notes need to live directly in the Obsidian vault (then option B).
 
 ## D8. Citations show page numbers; input becomes PDF upload
-- **Status:** Accepted (2026-10-08, Ronith: readers rely on the page numbers printed in the book; otherwise use paragraph and PDF page numbers)
+- **Status:** Amended by D13 (2026-10-09). Originally Accepted (2026-10-08, Ronith: readers rely on the page numbers printed in the book; otherwise use paragraph and PDF page numbers)
 - **Context:** pasted text has no reliable page numbers, but Ronith wants citations a reader can find in the physical book. Touches D3 and D4.
 - **Alternatives:** page markers typed into pasted text (~0.5 h, no dependency); `[¶n]` only for the MVP.
 - **Why:** page numbers are what readers use to locate a passage.
@@ -105,6 +105,24 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Details:** server-side refusal fallback on (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) so a mis-flagged refusal is retried instead of returning nothing.
 - **Cost we accept:** one dependency; possibly shallower readings than Opus.
 - **Revisit if:** Sprint 5's Q3 measurement shows Opus reads meaningfully better, or TTFT at `low` is still slow.
+
+## D13. Page labels come from typed `[p. N]` markers; PDF import is secondary (amends D8)
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Ronith's PDF was produced by calibre from an ebook: 137 pages with a text layer but no printed page numbers, and its pages don't match the paper edition. D8's printed-page detection can't work on it.
+- **Alternatives:** approximate book pages interpolated from a typed chapter range (~0.5 h, off by a page or two); PDF page numbers only.
+- **Why:** readers locate passages by the paper book's page; only the reader knows it, so the reader types it.
+- **Rule:** a `[p. N]` marker labels every paragraph after it until the next marker; a paragraph containing a marker gets a range. Markers are stripped before the text reaches the model. PDF import (`pdfjs-dist`, in the browser so PDFs stay local per D9) fills the same reference-text box with `[PDF p. N]` markers for the user to trim.
+- **Cost we accept:** typing markers by hand; one new dependency for a secondary path.
+- **Revisit if:** PDF import's paragraph detection is unreliable, or typing markers proves tedious in real use.
+
+## D14. Reference text lives in the background, not in a pane
+- **Status:** Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
+- **Context:** Sprint 3 needs to place the passage; this is a companion to a paper book, not a reading app (Day 0).
+- **Alternatives:** collapsible passage above the notes; three columns (passage | notes | chat).
+- **Why:** the reader reads the paper book; the app only needs the text to ground and check citations.
+- **Rule:** two panes, notes | chat. The reference text is editable on demand (e.g. a drawer) but never shown as a reading pane.
+- **Cost we accept:** Sprint 4 selection commands act on notes, not on displayed passage text.
+- **Revisit if:** checking citations against the text proves awkward without seeing it.
 
 ---
 

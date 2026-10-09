@@ -15,11 +15,11 @@ Time log: record actual hours in the table at the bottom. It feeds the write-up.
 
 ## MVP scope contract (D11)
 
-**The MVP is done when:** you can load a chapter PDF (or paste), write notes beside it, chat with the AI about it with every claim cited as `[¶n]` (page shown), run `/define` and `/quiz` on a selection, reload without losing anything, and export the notes to Obsidian. Used end to end on a real chapter of your own book.
+**The MVP is done when:** you can type or paste reference text from your book (with `[p. N]` page markers) or import it from a PDF, write notes beside it, chat with the AI about it with every claim cited as `[¶n]` (page shown), run `/define` and `/quiz` on a selection, reload without losing anything, and export the notes to Obsidian. Used end to end on a real chapter of your own book.
 
 | IN the MVP | OUT (after the MVP or parked) |
 |---|---|
-| PDF upload with page labels, paste fallback (D8) | Prompt caching, cost/TTFT logging (Sprint 5) |
+| Reference text typed/pasted with `[p. N]` markers; PDF import as a secondary input (D13) | Prompt caching, cost/TTFT logging (Sprint 5) |
 | Grounded chat, cite-or-abstain, `checkCitations` | `/expand`, Augment, disagreement flags (Sprint 5) |
 | Two panes; notes always in context; AI text only in chat (D6) | Model routing; the MVP uses one model (Sprint 5) |
 | `/define` (app pastes the verbatim sentence) and `/quiz` | Public demo (Sprint 5) |
@@ -44,16 +44,17 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - **Demo:** the script's output for the 3 questions, with the citation check green.
 
 ## Sprint 2 (Day 2, 3 h): input + first page
-**Goal:** a chapter from a real PDF produces a grounded streamed reply in the browser.
-- [ ] PDF upload: paragraphs with printed-page (else PDF-page) labels (D8; ask before installing the PDF library). **Verify:** a chapter PDF yields paragraphs whose page labels match the book.
-- [ ] Minimal page: upload/paste box + chat, page shown beside each `[¶n]`. **Verify:** screenshot of a grounded streamed reply.
+**Goal:** reference text from your own book produces a grounded streamed reply in the browser, with page labels.
+- [ ] Reference text with `[p. N]` markers: paragraphs labelled with the page of the last marker before them (D13). **Verify:** unit tests: markers stripped from the text, labels correct, a paragraph spanning a marker gets a page range.
+- [ ] PDF import (secondary, `pdfjs-dist`, runs in the browser): extracts text, infers paragraphs, fills the reference-text box with `[PDF p. N]` markers for you to trim (D13). **Verify:** your PDF imports with paragraph breaks that match the book on a hand-checked page.
+- [ ] Minimal page: reference-text box + chat (multi-turn), page shown beside each `[¶n]`, failed citations flagged. **Verify:** screenshot of a grounded streamed reply.
 - **Demo:** the screenshot, from your own book.
-- **Risk:** printed-page detection. If it eats more than 1 h, fall back to PDF pages only (D8 revisit).
+- **Risk:** paragraph detection from the PDF. If it eats more than 1 h, ship one paragraph per PDF page and note it.
 
 ## Sprint 3 (Day 3, 3 h): notes
 **Goal:** the product has its second pane and survives a reload.
-- [ ] Two-pane layout; notes always in context; AI text only in the chat pane (D6).
-- [ ] Persist passage + notes in localStorage behind a `store` module (D7). **Verify:** reload keeps state.
+- [ ] Two-pane layout: notes | chat. Reference text lives in the background: editable on demand, never shown as a reading pane (D14). Notes always in context; AI text only in the chat pane (D6).
+- [ ] Persist reference text, notes and chat in localStorage behind a `store` module (D7). **Verify:** reload keeps state.
 - **Demo:** write notes, ask a question that visibly uses them, reload, nothing lost.
 
 ## Sprint 4 (Day 4, 3 h): commands + export (MVP gate)
