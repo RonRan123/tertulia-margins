@@ -24,9 +24,9 @@ We want the inverse: **note-first**. The reader's notes are the primary artifact
 ## 2. Goals
 
 1. **Grounded conversation about a passage.** Every claim about the book cites the supplied text. Unsupported claims say "not in the text."
-2. **Notes steer the AI.** The user's notes are always in context and shape replies. AI text is visually distinct from user text.
+2. **Notes steer the AI.** The user's notes are always in context and shape replies. AI text lives only in the chat pane, so it is never confused with the user's notes (D6).
 3. **Commands on a selection.** `/define`, `/quiz`, `/expand` act on a selected line, Jupyter-style.
-4. **Augment, don't replace.** A terse note can be expanded with context from the text, and the AI flags where a note disagrees with the passage.
+4. **Augment, don't replace.** The AI can suggest an expansion of a terse note with context from the text, and flags where a note disagrees with the passage. Suggestions appear in chat; the user writes any note text themselves (D6).
 5. **Obsidian-compatible.** Notes export to markdown.
 6. **Portfolio-grade evidence.** A day-7 write-up with screenshots and *measured* cost-per-session and time-to-first-token (TTFT).
 
@@ -52,14 +52,15 @@ These are deliberately excluded so they cannot creep back in silently.
 
 The interaction model is the product's whole differentiation, so it is specified first.
 
-1. The user pastes a passage (a chapter or part of one).
+1. The user uploads a PDF or pastes a passage (a chapter or part of one). Upload keeps page numbers (D8).
 2. The user writes notes in the left pane as they read, exactly as they would in Obsidian.
 3. The user selects a line (in the passage or their notes) and runs a command, or asks a free-form question in the right pane.
 4. The AI replies in the right pane, citing paragraphs of the passage. Replies never edit the user's notes.
-5. The user may press **Augment** on a note: the AI proposes an expansion shown as a distinct block beneath the note, which the user accepts, edits, or discards.
-6. Export produces one markdown file: passage reference, the user's notes, accepted AI blocks (marked as such).
+5. The user may press **Augment** on a note: the AI proposes an expansion in the chat pane. Nothing is added to the notes; the user rewrites it in their own words if they want it.
+6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote.
+7. Export produces one markdown file: passage reference, the user's notes, and the marked passage quotes. No AI-written text.
 
-The invariant: **the user's words and the AI's words are never mixed without a visible boundary.**
+The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6).
 
 ## 6. Design overview
 
@@ -94,13 +95,13 @@ Browser (one page)
 
 This is the highest technical risk (see §9), so it gets a concrete mechanism rather than a hopeful prompt.
 
-1. **Paragraph IDs.** The passage is split into paragraphs and labelled `[¶1]`, `[¶2]`, ... before it goes into the prompt.
+1. **Paragraph IDs.** The passage is split into paragraphs and labelled `[¶1]`, `[¶2]`, ... before it goes into the prompt. The app also records each paragraph's page: the printed page number when it can be detected, otherwise the PDF page (D8). The model cites `[¶n]`; the UI shows the page beside it, so the model never has to guess a page number.
 2. **Cite or abstain.** The system prompt requires every claim about the book to cite `[¶n]` and to quote at most a short span. If the text does not support an answer, the model says "not in the text."
 3. **Deterministic check.** After streaming, `checkCitations` verifies each quoted span actually appears in the cited paragraph (after whitespace/quote normalization). Failures are flagged in the UI, not hidden.
 
 Step 3 is the key idea: it turns "is the model hallucinating?" from a vibe into a number we can put in the write-up.
 
-*Objection: "Won't strict grounding make the AI useless for background, like an author's biography?"* Possibly. Whether the AI may use labelled outside knowledge is an open product decision (Q2).
+*Objection: "Won't strict grounding make the AI useless for background, like an author's biography?"* Possibly. For the MVP we accept that cost: the AI is strictly passage-only (D5). Labelled outside knowledge is a post-MVP addition (PLAN.md Parking lot).
 
 ### 6.3 Context and cost
 
@@ -108,7 +109,7 @@ The prompt is ordered stable-to-volatile: system prompt, then passage, then note
 
 ### 6.4 Model routing
 
-Different commands have different needs. `/define` needs speed; `/tensions` needs depth. Routing by command lets us measure that trade-off directly. Starting hypothesis (to be validated on day 4, see Q3):
+Different commands have different needs. `/define` needs speed; `/tensions` needs depth. Routing by command lets us measure that trade-off directly. The MVP uses a single model for everything (D11). Routing is a day-5 item. Starting hypothesis (to be validated then, see Q3):
 
 | Command | Need | Candidate |
 |---|---|---|
@@ -141,20 +142,20 @@ Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md). Summary:
 | Day | Version | Done when |
 |---|---|---|
 | 0 | Homework | Manual Claude test + competitor notes written (seeds prompts and spec) |
-| 1–2 | v0 | Paste chapter, stream grounded conversation, citations checked |
-| 3–4 | v1 | Notes pane + chat pane, `/define` `/quiz` `/expand` on selection, persisted |
-| 5 | v2 | Augment button, disagreement flags, markdown export. **Complete product.** |
+| 1–2 | v0 | Upload or paste a chapter, stream grounded conversation, citations checked |
+| 3–4 | v1 | **MVP.** Notes pane + chat pane, `/define` `/quiz` on selection, persisted, markdown export (D11) |
+| 5 | v2 | Prompt caching and per-call logging, `/expand`, Augment (chat suggestion), disagreement flags, model routing, public demo |
 | 6 | v3 | Book-level memory |
 | 7 | v4 | `/tensions` on one book, eval set, cost readout, write-up |
 
-**Cut line:** if v1 is not done by end of day 4, v3 and v4 are dropped. v2 is a complete, usable tool.
+**Cut line:** if the MVP (v1) is not done by end of day 4, everything after it is dropped except the write-up. v1 is a complete, usable tool.
 
 ## 9. Risks
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Model invents quotes/page numbers | High | ¶ IDs + deterministic citation check (§6.2) |
-| Getting text in is harder than Obsidian habit | Medium | Paste only for v0–v2; revisit after real use |
+| Getting text in is harder than Obsidian habit | Medium | PDF upload (D8) with paste as fallback; revisit after real use |
 | Editor rabbit hole | Medium | Plain textarea is a non-goal boundary (§3) |
 | Scope creep into "tensions across works" | High | Non-goal; v4 is one book |
 | Ronith loses the thread of the code | Medium | Working agreement in CLAUDE.md; `/decide`, `/explain` skills |
@@ -164,13 +165,13 @@ Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md). Summary:
 
 Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 
-- **Q1. Storage.** Browser localStorage (zero backend, works on Vercel) vs local files/SQLite (needs a server with a disk). *Recommendation: localStorage behind a small `store` module, plus markdown export.*
-- **Q2. Outside knowledge.** May the AI use general knowledge (author, history) if labelled "outside the text"? Or strictly the passage?
+- **Q1. Storage.** *Resolved (D7): browser localStorage behind a small `store` module, plus markdown export.*
+- **Q2. Outside knowledge.** *Resolved (D5): strictly the passage for the MVP; labelled outside knowledge is added later.*
 - **Q3. Model per command.** Confirm the §6.4 routing after measuring.
-- **Q4. Hosting.** Public Vercel demo (needs a public-domain sample book and API-cost protection) vs local-only with recorded screenshots.
+- **Q4. Hosting.** *Resolved (D9): public Vercel demo where visitors bring their own API key; public-domain sample text only.*
 - **Q5. v3 approach.** Long-context + caching vs chunked retrieval.
-- **Q6. Write-up audience.** Recruiters, LLM engineers, or readers? This decides which numbers lead.
-- **Q7. Day-0 findings.** What did the manual test and NotebookLM/Readwise comparison reveal? (They may rewrite §5.)
+- **Q6. Write-up audience.** *Resolved (D10): LLM engineers, with a one-paragraph product story and screenshots up top.*
+- **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*
 
 ---
 
@@ -190,7 +191,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 
 - **Passage:** the text the user pasted; the only source of truth about the book.
 - **Note:** text the user wrote. Never edited by the AI.
-- **AI block:** AI-written text, always visually marked.
-- **¶n:** paragraph ID used for citations.
-- **Augment:** AI proposes an expansion of a note; the user accepts or discards.
+- **Passage quote:** a verbatim snippet of the passage with its `[¶n]`, pasted into the notes by the app and visibly marked. Not AI-written.
+- **¶n:** paragraph ID used for citations. Each ¶ also carries a page label (printed page if detected, else PDF page).
+- **Augment:** the AI suggests an expansion of a note in chat; the user writes any note text themselves.
 - **TTFT:** time to first token of a streamed reply.
