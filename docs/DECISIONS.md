@@ -131,6 +131,15 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Rule:** recognise `[p. N]` with or without the dot, explicit ranges `[pp. N-M]` (hyphen or en dash), roman-numeral pages (`[p. xii]`, any case), and the `PDF` prefix on each.
 - **Also decided (Sprint 2 review):** editing the reference text mid-conversation is not handled in the MVP; route size caps wait for the public demo (Sprint 5). Both are in the Parking lot.
 
+## D16. Marginalia-first redesign: after the MVP, not in Sprint 4
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Ronith finds the two-pane UI sparse and the chat not very useful. He wants the AI to react unprompted to his notes with probing questions in a margin column (chat minimized), and notes rendered as markdown. Touches D6, D11, DESIGN §3.
+- **Alternatives:** swap marginalia into Sprint 4 in place of `/define` and `/quiz` (about +1.5 h, auto-trigger on blur, one reaction per block); button-triggered margin reactions first (about 3 h).
+- **Why:** the MVP gate stays intact; Sprint 4 ships `/define`, `/quiz` and export as planned and real use informs the redesign.
+- **Rules:** markdown-rendered notes is a separate step after marginalia (about 30 lines of our own renderer, no new dependency, not a rich-text editor). Marginalia replaces or absorbs Augment and disagreement flags where they overlap.
+- **Cost we accept:** the MVP ships with the interface Ronith dislikes.
+- **Revisit if:** Sprint 4 real-chapter use shows the chat and commands are unusable (then pull marginalia forward). D6 must be amended (distinct AI-only margin area, notes still never edited) before building.
+
 ---
 
 ## Template
