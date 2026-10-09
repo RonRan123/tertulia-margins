@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ask": "node --env-file-if-exists=.env.local scripts/ask.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -22,5 +24,6 @@
     "eslint-config-next": "16.4.0",
     "typescript": "^5",
     "vitest": "^5.0.3"
-  }
+  },
+  "type": "module"
 }

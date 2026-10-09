@@ -96,6 +96,16 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** no disagreement flags until Day 5, though prompt rule 3 already pushes back; notes move to Obsidian by export, not live.
 - **Revisit if:** the MVP isn't done by end of Day 4 (cut everything after it), or the export step proves annoying (then the vault-file option in the parking lot).
 
+## D12. MVP model and API client: Sonnet 5.5 at effort `low`, via `@anthropic-ai/sdk`
+- **Status:** Accepted (2026-10-08, Ronith)
+- **Context:** D11 says one model for the MVP; `core/converse` needs a way to call Claude.
+- **Alternatives (model):** Opus 5.5 ($4/$20 per MTok; thinking can't be disabled, slower first token); Haiku 5.5 ($0.10/$0.50; close-reading quality unproven). Sonnet 5.5 is $2/$10, cache reads $0.20 (prices from the `claude-api` skill, cached 2026-10-06).
+- **Alternatives (client):** hand-rolled `fetch` + SSE parsing (~60 lines, no dependency).
+- **Why:** TTFT matters most when replying to notes while reading; cost is cents per turn on any of the three. The SDK owns streaming, retries and typed errors, where hand-rolled bugs hide.
+- **Details:** server-side refusal fallback on (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) so a mis-flagged refusal is retried instead of returning nothing.
+- **Cost we accept:** one dependency; possibly shallower readings than Opus.
+- **Revisit if:** Sprint 5's Q3 measurement shows Opus reads meaningfully better, or TTFT at `low` is still slow.
+
 ---
 
 ## Template

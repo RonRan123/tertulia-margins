@@ -38,7 +38,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 ## Sprint 1 (Day 1, 3 h): skeleton + grounded reply
 **Goal:** a script asks a question about a passage and streams back a cited, checked answer.
 - [x] Scaffold Next.js + TS, lint, Vitest (no Tailwind). **Verify:** `npm run build` and `npm test` pass.
-- [ ] `core/converse` streams a reply for a passage + question. **Verify:** script prints streamed tokens and TTFT.
+- [x] `core/converse` streams a reply for a passage + question. **Verify:** script prints streamed tokens and TTFT.
 - [ ] Paragraph IDs + cite-or-abstain prompt (`prompts/system.md`, already drafted). **Verify:** 3 hand questions answered with `[¶n]`.
 - [ ] `checkCitations`. **Verify:** unit tests: real quote passes, invented quote fails.
 - **Demo:** the script's output for the 3 questions, with the citation check green.
