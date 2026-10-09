@@ -176,6 +176,19 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** reactions in Sprints 5–6 run on unreviewed prompts.
 - **Revisit if:** reactions are off-voice badly enough to hide whether the feature works.
 
+## D20. Sprint 5–6 shape: routed reactions, commands stay in chat, blocks split the notes text, excerpt anchors
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** D18 left four choices open: who picks a reaction's kind, where command replies go, how blocks are stored, how reactions stay attached.
+- **Alternatives:** the reader always picks the kind from a menu; Define/Quiz replies as margin threads; blocks as an array with IDs; anchors by position.
+- **Rules:**
+  - *Kind, router style:* clicking React runs a router call that picks the most useful kind (question, pushback, connection), then the matching prompt writes the reaction. Right-clicking React opens a menu to pick the kind yourself (no router call). The notes' own browser context menu is untouched.
+  - *Commands:* `/define` and `/quiz` replies stay in the chat drawer.
+  - *Blocks:* notes stay one markdown string; a block is a chunk separated by blank lines. No storage migration; export and the AI see the same text.
+  - *Anchors:* a reaction stores the exact excerpt it reacted to and finds it in the notes; if the text is rewritten, the reaction stays, marked "note changed".
+- **Why:** routing gets the right kind without asking, while the menu keeps control one click away; one string keeps every existing feature working.
+- **Cost we accept:** two model calls per routed reaction (router first, so a little more latency and cost); a blank line inside a code block splits it.
+- **Revisit if:** the router picks badly or the extra latency shows (then a faster model for the router, Q3), or reactions detach too often.
+
 ---
 
 ## Template
