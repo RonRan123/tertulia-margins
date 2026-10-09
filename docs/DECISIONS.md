@@ -140,6 +140,20 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** the MVP ships with the interface Ronith dislikes.
 - **Revisit if:** Sprint 4 real-chapter use shows the chat and commands are unusable (then pull marginalia forward). D6 must be amended (distinct AI-only margin area, notes still never edited) before building.
 
+## D17. Sprint 4 shape: toolbar commands, context-aware `/define` quote, export with frontmatter
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Sprint 4 builds the command table, `/define`, `/quiz` and export; each hid a product choice.
+- **Alternatives:** commands typed in the chat box, or both; up to 3 quoted sentences, or appended at the end of the notes; export with the full reference text, or notes only; command instructions kept in `system.md`.
+- **Rules:**
+  - *Trigger:* select text in the notes, click Define or Quiz in a toolbar above the notes. The command shows in chat as `/define <word>`. Quiz with no selection covers all notes; with a selection, that part.
+  - *`/define` quote (code, not the model; D6):* one passage sentence containing the word, inserted as a blockquote on the line after the selection, e.g. `> “…sentence…” [¶4, p. 12]`. Choose the occurrence by context: the nearest `[¶n]` or page cite in the notes around the selection picks the closest occurrence (word on p. 5 and p. 50, nearby note cites p. 48 → the p. 50 sentence). No nearby cite → first occurrence. Word not in the passage → nothing inserted.
+  - *Export:* the notes as written, plus YAML frontmatter (export date, reference page range). No AI text, no reference text.
+  - *Prompts:* a command is a row `{name, promptFile, maxTokens}`; `prompts/define.md` and `prompts/quiz.md` hold Ronith's existing `<commands>` lines moved verbatim.
+  - *Process (this sprint):* Claude commits each verified step and reports evidence.
+- **Why:** keeps the "on selection" idea from DESIGN §2, puts the quote next to the thought it serves, and keeps the vault file the reader's own words.
+- **Cost we accept:** the context heuristic can pick wrong when notes cite several places; the quote is visible and editable, so the reader can fix it.
+- **Revisit if:** the picked sentence is often wrong in real use.
+
 ---
 
 ## Template

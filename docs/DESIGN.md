@@ -57,8 +57,8 @@ The interaction model is the product's whole differentiation, so it is specified
 3. The user selects a line (in the passage or their notes) and runs a command, or asks a free-form question in the right pane.
 4. The AI replies in the right pane, citing paragraphs of the passage. Replies never edit the user's notes.
 5. The user may press **Augment** on a note: the AI proposes an expansion in the chat pane. Nothing is added to the notes; the user rewrites it in their own words if they want it.
-6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote.
-7. Export produces one markdown file: passage reference, the user's notes, and the marked passage quotes. No AI-written text.
+6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote. Commands run from a toolbar above the notes on the selected text; `/define` picks the occurrence nearest the cites around the selection, else the first (D17).
+7. Export produces one markdown file: frontmatter (date, reference page range), then the user's notes with their inline passage quotes. No AI-written text, no reference text (D17).
 
 The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6).
 
