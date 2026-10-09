@@ -9,13 +9,14 @@ const MODEL = "claude-sonnet-5-5";
 
 export type Book = { title?: string; author?: string; edition?: string };
 export type Turn = { role: "user" | "assistant"; content: string };
-export type ConverseRequest = { passage: string; question: string; history?: Turn[]; book?: Book };
+export type ConverseRequest = { passage: string; question: string; notes?: string; history?: Turn[]; book?: Book };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
 export type ConverseRequestError =
   | "body_invalid"
   | "passage_missing"
   | "passage_empty" // only page markers: nothing to ground on
   | "question_missing"
+  | "notes_invalid"
   | "history_invalid"
   | "book_invalid";
 
@@ -45,10 +46,12 @@ function systemPrompt(book: Book = {}): string {
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, history, book } = body;
+  const { passage, question, notes, history, book } = body;
   if (!isText(passage)) return { error: "passage_missing" };
   if (!isText(question)) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
+  const isNotesValid = notes === undefined || typeof notes === "string";
+  if (!isNotesValid) return { error: "notes_invalid" };
 
   const isTurn = (t: unknown) => isRecord(t) && (t.role === "user" || t.role === "assistant") && isText(t.content);
   const isHistoryValid = history === undefined || (Array.isArray(history) && history.every(isTurn));
@@ -61,6 +64,7 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   return {
     passage,
     question,
+    notes,
     history: ((history ?? []) as Turn[]).map(({ role, content }) => ({ role, content })),
     book: book === undefined ? undefined : pickBook(book as Book),
   };
@@ -74,11 +78,7 @@ const pickBook = ({ title, author, edition }: Book): Book => ({ title, author, e
 // Aborting `signal` (the client went away) stops the upstream request.
 export async function* converse(request: ConverseRequest, signal?: AbortSignal): AsyncGenerator<string, ConverseStats> {
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  // Page markers are stripped here: the model sees [¶n] only; pages are for the reader (D13).
-  const paragraphs = parsePassage(request.passage).map((p) => p.text);
-  const labelled = paragraphs
-    .map((p, i) => `[¶${i + 1}] ${p}`)
-    .join("\n\n");
+  const { paragraphs, system, messages } = buildContext(request);
   const start = performance.now();
   let ttftMs: number | null = null;
   let text = "";
@@ -89,12 +89,8 @@ export async function* converse(request: ConverseRequest, signal?: AbortSignal):
     output_config: { effort: "low" },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default", // retry a mis-flagged refusal on another model (D12)
-    // Stable to volatile (DESIGN §6.3): instructions, then the passage, then the conversation.
-    system: [
-      { type: "text", text: systemPrompt(request.book) },
-      { type: "text", text: `<passage>\n${labelled}\n</passage>` },
-    ],
-    messages: [...(request.history ?? []), { role: "user", content: request.question }],
+    system,
+    messages,
   }, { signal });
 
   for await (const event of stream) {
@@ -113,6 +109,22 @@ export async function* converse(request: ConverseRequest, signal?: AbortSignal):
     usage: final.usage,
     citations: checkCitations(text, paragraphs),
   };
+}
+
+// What the model sees, ordered stable to volatile (DESIGN §6.3) so a cache prefix stays valid:
+// instructions, the passage, the reader's notes (only if any), then the conversation and the question.
+export function buildContext(request: ConverseRequest) {
+  // Page markers are stripped here: the model sees [¶n] only; pages are for the reader (D13).
+  const paragraphs = parsePassage(request.passage).map((p) => p.text);
+  const labelled = paragraphs.map((p, i) => `[¶${i + 1}] ${p}`).join("\n\n");
+  const notes = request.notes?.trim() ?? "";
+  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+    { type: "text", text: systemPrompt(request.book) },
+    { type: "text", text: `<passage>\n${labelled}\n</passage>` },
+  ];
+  if (notes !== "") system.push({ type: "text", text: `<notes>\n${notes}\n</notes>` });
+  const messages: Turn[] = [...(request.history ?? []), { role: "user", content: request.question }];
+  return { paragraphs, system, messages };
 }
 
 // SDK errors → self-describing codes the UI can show.

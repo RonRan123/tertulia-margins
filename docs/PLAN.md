@@ -53,8 +53,8 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 
 ## Sprint 3 (Day 3, 3 h): notes
 **Goal:** the product has its second pane and survives a reload.
-- [ ] Two-pane layout: notes | chat. Reference text lives in the background: editable on demand, never shown as a reading pane (D14). Notes always in context; AI text only in the chat pane (D6).
-- [ ] Persist reference text, notes and chat in localStorage behind a `store` module (D7). **Verify:** reload keeps state.
+- [x] Two-pane layout: notes | chat. Reference text lives in the background: editable on demand, never shown as a reading pane (D14). Notes always in context; AI text only in the chat pane (D6).
+- [x] Persist reference text, notes and chat in localStorage behind a `store` module (D7). **Verify:** reload keeps state.
 - **Demo:** write notes, ask a question that visibly uses them, reload, nothing lost.
 
 ## Sprint 4 (Day 4, 3 h): commands + export (MVP gate)
@@ -92,6 +92,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Quiz depth (difficulty levels, "explain this answer"), mindmap, flashcards, Merriam-Webster API (Day 0 notes)
 - Goodreads/Reddit counterpoints; book-club personas; user-picked models and difficulty-based routing
 - Reference text edited mid-conversation renumbers paragraphs, so earlier `[¶n]` in the chat history can point at different text (D15 note; ignored for the MVP)
+- Quotes the AI takes from the reader's notes are flagged `citation_missing` by `checkCitations` (Sprint 3 test; Ronith: leave it for now). Option later: pass notes to the check and exempt verbatim note quotes
 - Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
 

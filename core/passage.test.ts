@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { labelCitations, parsePassage } from "./passage.ts";
+import { citedPages, labelCitations, parsePassage } from "./passage.ts";
 
 test("no markers: paragraphs split on blank lines, no pages", () => {
   expect(parsePassage("One.\n\n  \nTwo,\nstill two.\n\n")).toEqual([{ text: "One." }, { text: "Two,\nstill two." }]);
@@ -49,9 +49,16 @@ test("the Pride and Prejudice sample still has 35 paragraphs", () => {
 
 test("labelCitations adds page labels beside [¶n]", () => {
   const paragraphs = [{ text: "A", page: "p. 101" }, { text: "B", page: "pp. 101–102" }, { text: "C" }];
-  expect(labelCitations("See [¶1], [¶3], [¶9] and [¶1-2].", paragraphs)).toBe(
+  const reply = "See [¶1], [¶3], [¶9] and [¶1-2].";
+  expect(labelCitations(reply, citedPages(reply, paragraphs))).toBe(
     "See [¶1 · p. 101], [¶3], [¶9] and [¶1-2 · p. 101, pp. 101–102].",
   );
+});
+
+test("citedPages keeps only the labels a reply cites, both ends of a range", () => {
+  const paragraphs = Array.from({ length: 3000 }, (_, i) => ({ text: `P${i + 1}`, page: `p. ${i + 1}` }));
+  expect(citedPages("See [¶5], [¶10–12] and [¶9999]; no cite here.", paragraphs)).toEqual({ 5: "p. 5", 10: "p. 10", 12: "p. 12" });
+  expect(citedPages("No citations.", paragraphs)).toEqual({});
 });
 
 test("D15 marker spellings: no dot, explicit range, roman numerals, PDF prefix", () => {

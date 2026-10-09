@@ -1,18 +1,113 @@
 body {
   margin: 0;
-  padding: 1rem;
   font-family: system-ui, sans-serif;
 }
 
+/* A column filling the window: the panes take what the header (one line or wrapped) leaves. */
 main {
-  max-width: 48rem;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100dvh;
+  max-width: 90rem;
   margin: 0 auto;
+  padding: 1rem;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.25rem;
+}
+
+h2 {
+  font-size: 1rem;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Two panes, notes | chat (D14); stacked on narrow screens. minmax(0, 1fr): a long unbroken
+   word must wrap, not widen its pane. */
+.panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.notes,
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  font-size: 0.85rem;
+}
+
+.notes textarea {
+  flex: 1;
+  resize: none;
+  padding: 0.5rem;
+  font-family: ui-monospace, monospace;
+}
+
+.chat .messages {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+}
+
+@media (max-width: 48rem) {
+  main {
+    height: auto;
+  }
+
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .notes textarea {
+    min-height: 16rem;
+  }
 }
 
 textarea {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
+  overflow-wrap: anywhere;
+}
+
+/* D14: the reference text is edited in a dialog, never shown as a reading pane. */
+dialog.reference {
+  width: min(48rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+}
+
+dialog.reference::backdrop {
+  background: rgb(0 0 0 / 0.3);
+}
+
+.reference-summary {
+  font-weight: 400;
+  color: #666;
 }
 
 .reference-header {
@@ -31,6 +126,7 @@ textarea {
 .message {
   margin: 0.75rem 0;
   padding: 0.5rem 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .message p {

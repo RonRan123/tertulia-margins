@@ -64,12 +64,29 @@ function pageLabel(start: Marker | undefined, end: Marker | undefined): string |
   return `${prefix(start)}pp. ${start.page}–${last}`;
 }
 
+// Page labels by paragraph number ({ 12: "p. 101" }): only what a reply's citations need.
+export type PageLabels = Record<number, string>;
+
+// What a finished reply keeps: the labels of the paragraphs it cites (both ends of a range), so
+// editing the reference text later doesn't change old replies, and storage holds a few labels per
+// reply, not one per paragraph of the book.
+export function citedPages(reply: string, paragraphs: Paragraph[]): PageLabels {
+  const pages: PageLabels = {};
+  for (const [, from, to] of reply.matchAll(citationPattern())) {
+    for (const n of [Number(from), Number(to ?? from)]) {
+      const page = paragraphs[n - 1]?.page;
+      if (page !== undefined) pages[n] = page;
+    }
+  }
+  return pages;
+}
+
 // "[¶12]" → "[¶12 · p. 101]"; a range shows the pages of its first and last paragraph.
 // Citations of unlabelled or nonexistent paragraphs are left as written.
-export function labelCitations(reply: string, paragraphs: Paragraph[]): string {
+export function labelCitations(reply: string, pages: PageLabels): string {
   return reply.replace(citationPattern(), (citation, from: string, to?: string) => {
-    const pages = [paragraphs[Number(from) - 1]?.page, paragraphs[Number(to ?? from) - 1]?.page];
-    const labels = [...new Set(pages.filter((p) => p !== undefined))];
+    const ends = [pages[Number(from)], pages[Number(to ?? from)]];
+    const labels = [...new Set(ends.filter((p) => p !== undefined))];
     if (labels.length === 0) return citation;
     return `${citation.slice(0, -1)} · ${labels.join(", ")}]`;
   });
