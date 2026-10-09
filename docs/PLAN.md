@@ -60,27 +60,27 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 ## Sprint 4 (Day 4, 3 h): commands + export (MVP gate)
 **Goal:** the MVP definition above is true.
 - [x] Command table + `/define` (app pastes the verbatim sentence with `[¶n]`/page, D6) and `/quiz` on selection. **Verify:** each command end to end in the browser.
-- [ ] Export to markdown. **Verify:** file opens cleanly in Obsidian.
+- [ ] Export to markdown. **Verify:** file opens cleanly in Obsidian. *Built and tested (`993eb40`); Obsidian check deprioritized by D18.*
 - [ ] Use it on a real chapter and write down what felt wrong (feeds Sprint 5 priorities).
-- **MVP gate:** done, or cut everything after it except the write-up.
+- **MVP gate:** superseded by D18 (Ronith: "this project is not ready"); the marginalia milestone below replaces it.
 
-## Sprint 5 (Day 5, 3 h): after the MVP (priority order; what doesn't fit goes to the Parking lot)
+## Sprint 5 (Day 5, 3 h): marginalia (D18)
+**Goal:** the AI collaborates in the margin instead of a chat pane.
+- [ ] Layout: notes | margin column; chat collapses into a drawer (still available). D6 as amended by D18: AI text only in the margin or chat, visually distinct, never in the notes.
+- [ ] React: a button acts on the selection or the paragraph at the cursor; one reaction (probing question, pushback cited `[¶n]`, or connection to another passage) appears in the margin, anchored to that excerpt. `prompts/react.md` drafted by Claude (D19); Ronith refines it in Sprint 7. **Verify:** three reactions on a real chapter, each of a different kind, citations checked.
+- [ ] Threads: reply to a reaction; the AI answers in that thread. Reactions and threads persist across reload (store). **Verify:** reply, reload, thread intact.
+- **Demo:** write notes, React on three passages, reply to one, reload.
+
+## Sprint 6 (Day 6, 3 h): blocks + visual redesign (D18)
+**Goal:** notes read like Obsidian; the page looks intentional.
+- [ ] Notes become Jupyter-style blocks: every block rendered with `marked`, the block being edited shows raw markdown. Existing notes split into blocks on load; export still produces the same file. **Verify:** headings, lists, quotes, bold and links render; editing a block and clicking away re-renders it; reload keeps everything.
+- [ ] Reactions anchor to blocks (a block's reactions sit beside it); Define/Quiz/React act on the current block or selection.
+- [ ] Visual redesign of notes, margin and drawer (typography, spacing, AI-vs-user distinction). **Verify:** before/after screenshots.
+
+## Sprint 7 (Day 7, 3 h): measure + write-up
+- [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
-- [ ] Marginalia (D16): AI reacts to note blocks with probing questions in a distinct margin column; chat shrinks to a drawer. Amend D6 first; may absorb Augment and disagreement flags below. Then markdown-rendered notes as its own step.
-- [ ] `/expand` on selection.
-- [ ] Augment: proposed expansion shown in chat; nothing written to the notes (D6).
-- [ ] Flag notes that disagree with the passage.
-- [ ] Model routing per command (Q3).
-- [ ] Public demo deploy, bring-your-own API key (D9, ~1 h): bundled public-domain sample, key never stored or logged server-side. **Verify:** a fresh browser with a pasted key runs a grounded conversation on the sample.
-
-## Sprint 6 (Day 6, 3 h): book-level memory (stretch)
-- [ ] `/decide` long-context vs retrieval (Q5) using a measurement.
-- [ ] Implement chosen approach. **Verify:** question answerable only from another chapter is answered with a correct cite.
-
-## Sprint 7 (Day 7, 3 h): tensions, evals, write-up (stretch)
-- [ ] `/tensions` over one book.
-- [ ] Eval script (DESIGN.md §7). **Verify:** prints a scorecard.
-- [ ] Cost-per-session readout in UI.
+- [ ] Eval script (DESIGN.md §7), including reaction quality spot-checks. **Verify:** prints a scorecard.
 - [ ] Write-up for LLM engineers (D10): product-story paragraph and screenshots first, then citation validity, cost per session, TTFT cached vs uncached, and design trade-offs.
 
 ---
@@ -100,9 +100,11 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Export: notes that start with their own `---` frontmatter get a second block (Obsidian shows it as a rule); the page range uses first/last label in order, so out-of-order markers read "p. 5 to p. 4"
 - Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
-- **UX redesign: marginalia-first (Ronith, 2026-10-09; decided in D16: after the MVP, scheduled in Sprint 5, markdown notes as a separate step after it).** The current two-pane setup feels sparse and like a plain-text notebook. Two ideas, to be run through `/decide` before any work:
-  1. *Markdown-rendered notes.* Notes show formatted (headings, bold, quotes, lists) instead of plain text. Tension: DESIGN §3 lists a rich-text editor as a non-goal, so the options likely range from live-preview of a textarea to rendering on blur.
-  2. *Auto-responding marginalia.* Shrink the chat to an on-demand tool. Instead, the AI automatically reacts to sections or quotes in the notes with probing questions that push the reader's thinking, without being prompted, as margin comments beside the note.
+- ~~UX redesign: marginalia-first~~ → scheduled by D18 (Sprints 5–6)
+- Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
+- Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
+- Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI
+- Public demo deploy, bring-your-own API key (D9, ~1 h); needs the route size caps above (moved out by D18)
   - Open questions for the `/decide`: (a) D6 says AI text lives only in the chat pane, so margin comments need a visibly distinct AI-only area that never edits notes, and the invariant needs restating; (b) trigger and cost (on pause, per paragraph, on a button?), since auto-calls multiply spend and interact with caching (Sprint 5); (c) probing questions vs. grounded claims: do they need `[¶n]` citations and `checkCitations`?; (d) how this relates to Augment and disagreement flags (Sprint 5), which may fold into it; (e) whether it replaces `/define` and `/quiz` in Sprint 4 or sits beside them.
 
 ## Time log

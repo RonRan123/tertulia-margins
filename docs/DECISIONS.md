@@ -42,7 +42,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** v2 is done and there is time, or real use shows the passage alone is too thin. Preferred shape then: option B (labelled, opt-in, skipped by `checkCitations`).
 
 ## D6. The AI never writes into the notes (Q7)
-- **Status:** Accepted (2026-10-08, Ronith)
+- **Status:** Accepted (2026-10-08, Ronith); amended by D18 (AI text may also appear in the margin column)
 - **Context:** Day 0: Claude's app was verbose, led the conversation, and buried the user's notes. Ronith's rule: the user stays in the driver seat, and the notes must not drift toward being AI-run.
 - **Alternatives:** amend §5 but allow user-initiated pinning of chat text into notes (~1 h); keep Augment blocks beneath notes with accept/edit/discard.
 - **Why:** the notes pane stays trustworthy by construction. A passage snippet pasted by code, not the model, can be checked by `checkCitations`; AI suggestions stay in chat and the user retypes them in their own words.
@@ -153,6 +153,28 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** keeps the "on selection" idea from DESIGN §2, puts the quote next to the thought it serves, and keeps the vault file the reader's own words.
 - **Cost we accept:** the context heuristic can pick wrong when notes cite several places; the quote is visible and editable, so the reader can fix it.
 - **Revisit if:** the picked sentence is often wrong in real use.
+
+## D18. Re-plan after Sprint 4: marginalia first, then blocks; export deprioritized (amends D6, D11, D16)
+- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing")
+- **Context:** after Sprint 4, the two-pane notes | chat UI feels unappealing and the chat not very useful. Ronith wants notes rendered like Obsidian and the AI to collaborate in the margin. Export is built (Sprint 4) but no longer a priority.
+- **Alternatives:** rendering by true live preview (CodeMirror 6, ~5 h) or a side-by-side preview; reactions triggered on leaving a block or after a typing pause; our own markdown renderer; blocks first, or both in one sprint.
+- **Rules:**
+  - *Marginalia (Sprint 5):* a React button acts on the selection, or on the paragraph at the cursor. One reaction appears in a margin column beside the notes, anchored to that excerpt. A reaction can be a probing question, a pushback (where the note disagrees with or overreaches the text, cited `[¶n]`), or a connection to another passage. Each reaction is a thread the reader can reply to. The chat becomes a collapsed drawer.
+  - *D6 amended:* AI text may appear in the margin column, visually distinct from the notes; it still never enters the notes.
+  - *Blocks (Sprint 6):* notes become Jupyter-style blocks. Every block renders as markdown, and the one being edited shows raw text. Rendering uses `marked` (new dependency, approved). Not a rich-text editor: each block is still plain markdown text (DESIGN §3 stands).
+  - *Pushed to the Parking lot:* `/expand`, model routing, public demo, book-level memory, `/tensions`. Augment and disagreement flags are absorbed by React. Caching and logging move to Sprint 7 to feed the write-up.
+- **Why:** prove the AI's value as a margin collaborator before polishing the editor; a button keeps cost and noise low while the reaction prompt is tuned.
+- **Cost we accept:** Sprint 5's margin sits beside a plain textarea, so reactions can't line up with their text exactly; the MVP gate in D11 is effectively replaced by the marginalia milestone.
+- **Revisit if:** the button feels like a chore (then a smarter trigger: threads across blocks, or a periodic pass over all notes, Parking lot).
+
+## D19. Claude drafts new prompts now; Ronith refines them in Sprint 7 (amends D2)
+- **Status:** Accepted (2026-10-09, Ronith: "you can create the prompts and in a final sprint stage, I'll review and refine them")
+- **Context:** Sprint 5 needs a new reaction prompt; under D2 every prompt waited on Ronith, which would stall the build.
+- **Alternatives:** Claude proposes each prompt and waits for approval (D2 as written).
+- **Why:** keeps Sprints 5–6 moving; prompt quality is tuned once, with real use and evals in hand.
+- **Rules:** Claude may create new `prompts/*.md` files and keeps them in Ronith's voice, building on `system.md`. Existing prompt text (`system.md`, `define.md`, `quiz.md`) changes only with his approval. Every Claude-drafted prompt gets an owner comment saying so.
+- **Cost we accept:** reactions in Sprints 5–6 run on unreviewed prompts.
+- **Revisit if:** reactions are off-voice badly enough to hide whether the feature works.
 
 ---
 

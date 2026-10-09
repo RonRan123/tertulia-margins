@@ -56,11 +56,11 @@ The interaction model is the product's whole differentiation, so it is specified
 2. The user writes notes in the left pane as they read, exactly as they would in Obsidian.
 3. The user selects a line (in the passage or their notes) and runs a command, or asks a free-form question in the right pane.
 4. The AI replies in the right pane, citing paragraphs of the passage. Replies never edit the user's notes.
-5. The user may press **Augment** on a note: the AI proposes an expansion in the chat pane. Nothing is added to the notes; the user rewrites it in their own words if they want it.
+5. The user may press **React** on a note (the selection or the paragraph at the cursor): the AI answers in the margin column beside the notes with a probing question, a pushback cited `[¶n]`, or a connection to another passage. Each reaction is a thread the user can reply to. Nothing is added to the notes. The chat stays available in a collapsed drawer (D18; replaces Augment).
 6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote. Commands run from a toolbar above the notes on the selected text; `/define` picks the occurrence nearest the cites around the selection, else the first (D17).
 7. Export produces one markdown file: frontmatter (date, reference page range), then the user's notes with their inline passage quotes. No AI-written text, no reference text (D17).
 
-The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6).
+The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6). AI text lives in the margin or the chat drawer, visually distinct (D18).
 
 ## 6. Design overview
 
@@ -147,11 +147,13 @@ Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md), organised as one spri
 | 0 | Homework | Manual Claude test + competitor notes written (seeds prompts and spec) |
 | 1–2 | v0 | Upload or paste a chapter, stream grounded conversation, citations checked |
 | 3–4 | v1 | **MVP.** Notes pane + chat pane, `/define` `/quiz` on selection, persisted, markdown export (D11) |
-| 5 | v2 | Prompt caching and per-call logging, `/expand`, Augment (chat suggestion), disagreement flags, model routing, public demo |
-| 6 | v3 | Book-level memory |
-| 7 | v4 | `/tensions` on one book, eval set, cost readout, write-up |
+| 5 | v2 | Marginalia: React button, reactions (question, pushback, connection) as threads in a margin column, chat in a drawer (D18) |
+| 6 | v3 | Notes as Jupyter-style blocks rendered with `marked`; visual redesign (D18) |
+| 7 | v4 | Prompt caching and logging, eval set, write-up |
 
-**Cut line:** if the MVP (v1) is not done by end of day 4, everything after it is dropped except the write-up. v1 is a complete, usable tool.
+Book-level memory, `/tensions`, `/expand`, model routing and the public demo moved to the PLAN.md Parking lot (D18).
+
+**Cut line:** ~~if the MVP (v1) is not done by end of day 4, everything after it is dropped except the write-up.~~ Superseded by D18: v1 shipped but isn't the product yet; v2 (marginalia) is the milestone that must land before the write-up.
 
 ## 9. Risks
 
