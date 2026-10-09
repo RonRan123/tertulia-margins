@@ -40,7 +40,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - [x] Scaffold Next.js + TS, lint, Vitest (no Tailwind). **Verify:** `npm run build` and `npm test` pass.
 - [x] `core/converse` streams a reply for a passage + question. **Verify:** script prints streamed tokens and TTFT.
 - [x] Paragraph IDs + cite-or-abstain prompt (`prompts/system.md`, already drafted). **Verify:** 3 hand questions answered with `[¶n]`.
-- [ ] `checkCitations`. **Verify:** unit tests: real quote passes, invented quote fails.
+- [x] `checkCitations`. **Verify:** unit tests: real quote passes, invented quote fails.
 - **Demo:** the script's output for the 3 questions, with the citation check green.
 
 ## Sprint 2 (Day 2, 3 h): input + first page

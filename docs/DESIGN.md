@@ -98,6 +98,7 @@ This is the highest technical risk (see §9), so it gets a concrete mechanism ra
 1. **Paragraph IDs.** The passage is split into paragraphs and labelled `[¶1]`, `[¶2]`, ... before it goes into the prompt. The app also records each paragraph's page: the printed page number when it can be detected, otherwise the PDF page (D8). The model cites `[¶n]`; the UI shows the page beside it, so the model never has to guess a page number.
 2. **Cite or abstain.** The system prompt requires every claim about the book to cite `[¶n]` and to quote at most a short span. If the text does not support an answer, the model says "not in the text."
 3. **Deterministic check.** After streaming, `checkCitations` verifies each quoted span actually appears in the cited paragraph (after whitespace/quote normalization). Failures are flagged in the UI, not hidden.
+   Rules (Ronith, Sprint 1): a quote is checked against the citations in its own sentence (none → `citation_missing`); a range like `[¶18-19]` passes if the quote is in any paragraph of it; quotes under 3 words are scare-quotes and are skipped; a cite to a paragraph that doesn't exist is `citation_not_found`; otherwise `quote_not_in_paragraph`. Normalization ignores case, curly vs straight quotes, `_italics_` markers, spacing and trailing punctuation; `…` splits a quote into fragments that must each appear.
 
 Step 3 is the key idea: it turns "is the model hallucinating?" from a vibe into a number we can put in the write-up.
 

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import { checkCitations, type CitationCheck } from "./citations.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
@@ -14,6 +15,7 @@ export type ConverseStats = {
   ttftMs: number | null; // time to first text token; null if no text came back
   totalMs: number;
   usage: Anthropic.Beta.BetaUsage;
+  citations: CitationCheck[];
 };
 
 // Paragraphs are separated by blank lines. [¶n] is 1-based: paragraphs[n - 1].
@@ -34,11 +36,13 @@ function systemPrompt(book: Book = {}): string {
 // The single entry point: yields reply text as it streams, returns stats when done.
 export async function* converse(request: ConverseRequest): AsyncGenerator<string, ConverseStats> {
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  const labelled = splitParagraphs(request.passage)
+  const paragraphs = splitParagraphs(request.passage);
+  const labelled = paragraphs
     .map((p, i) => `[¶${i + 1}] ${p}`)
     .join("\n\n");
   const start = performance.now();
   let ttftMs: number | null = null;
+  let text = "";
 
   const stream = client.beta.messages.stream({
     model: MODEL,
@@ -53,6 +57,7 @@ export async function* converse(request: ConverseRequest): AsyncGenerator<string
   for await (const event of stream) {
     if (event.type !== "content_block_delta" || event.delta.type !== "text_delta") continue;
     ttftMs ??= performance.now() - start;
+    text += event.delta.text;
     yield event.delta.text;
   }
 
@@ -63,5 +68,6 @@ export async function* converse(request: ConverseRequest): AsyncGenerator<string
     ttftMs,
     totalMs: performance.now() - start,
     usage: final.usage,
+    citations: checkCitations(text, paragraphs),
   };
 }

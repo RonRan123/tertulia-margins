@@ -20,3 +20,7 @@ const stats = step.value;
 const ms = (n: number | null) => (n === null ? "n/a" : `${Math.round(n)} ms`);
 console.log(`\n\n--- ${stats.model} | stop: ${stats.stopReason} | TTFT ${ms(stats.ttftMs)} | total ${ms(stats.totalMs)}`);
 console.log(`--- tokens in ${stats.usage.input_tokens} / out ${stats.usage.output_tokens}`);
+
+const failed = stats.citations.filter((c) => c.status !== "ok");
+console.log(`--- citations: ${stats.citations.length - failed.length}/${stats.citations.length} quotes verified`);
+for (const c of failed) console.log(`    ${c.status} [¶${c.cited.join(",")}] "${c.quote}"`);
