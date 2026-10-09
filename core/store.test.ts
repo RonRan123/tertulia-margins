@@ -23,6 +23,18 @@ const state: AppState = {
     { role: "user", content: "Why?" },
     { role: "assistant", content: "Because [¶1].", pages: { 1: "p. 1" }, citations: [] },
   ],
+  reactions: [
+    {
+      id: "r1",
+      excerpt: "My note",
+      kind: "pushback",
+      messages: [
+        { role: "assistant", content: "But [¶2] says “Two.”", pages: { 2: "p. 1" }, citations: [] },
+        { role: "user", content: "Fair." },
+        { role: "assistant", content: "So what changes?" },
+      ],
+    },
+  ],
 };
 
 test("save then load round-trips the state", () => {
@@ -51,7 +63,24 @@ test("malformed messages are dropped and unknown fields stripped", () => {
     reference: "R",
     notes: "N",
     messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }],
+    reactions: [],
   });
+});
+
+test("an old save without reactions loads with none; a save without them stores none", () => {
+  const { storage } = memoryStorage({ [KEY]: JSON.stringify({ reference: "R", notes: "N", messages: [] }) });
+  expect(loadState(storage).reactions).toEqual([]);
+  saveState(storage, { reference: "R", notes: "N", messages: [] });
+  expect(loadState(storage).reactions).toEqual([]);
+});
+
+test("a reaction still streaming is not saved; a reply still streaming drops only that pair", () => {
+  const { storage } = memoryStorage();
+  const [thread] = state.reactions!;
+  const streamingReply = { ...thread, messages: [...thread.messages, { role: "user" as const, content: "And?" }, { role: "assistant" as const, content: "Ha", isStreaming: true }] };
+  const streamingOpening = { id: "r2", excerpt: "N", kind: "question" as const, messages: [{ role: "assistant" as const, content: "Wh", isStreaming: true }] };
+  saveState(storage, { ...state, reactions: [streamingReply, streamingOpening] });
+  expect(loadState(storage).reactions).toEqual([thread]);
 });
 
 test("a reply still streaming is not saved, nor its question", () => {

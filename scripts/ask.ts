@@ -12,7 +12,7 @@ const [title, author] = (titleAuthor ?? "").split("|").map((s) => s.trim() || un
 const reply = converse({ passage: readFileSync(file, "utf8"), question, book: { title, author } });
 let step = await reply.next();
 while (!step.done) {
-  process.stdout.write(step.value);
+  if (step.value.type === "text") process.stdout.write(step.value.text);
   step = await reply.next();
 }
 

@@ -1,8 +1,9 @@
-// The only module that touches storage (D7): reference text, notes and chat survive a reload.
+// The only module that touches storage (D7): reference text, notes, chat and margin reactions survive a reload.
 // Storage is injected ({ getItem, setItem }) so the page passes localStorage and tests pass a fake.
 import type { CitationCheck } from "./citations.ts";
 import type { Turn } from "./converse.ts";
 import type { PageLabels } from "./passage.ts";
+import { isReactionKind, type ReactionKind } from "./reactions.ts";
 
 // An assistant message keeps the page labels of the paragraphs it cites (see citedPages), so
 // editing the reference text later doesn't change old replies' labels. Only those few labels:
@@ -13,12 +14,18 @@ export type ChatMessage = Turn & {
   error?: string;
   isStreaming?: boolean;
 };
-export type AppState = { reference: string; notes: string; messages: ChatMessage[] };
+// A margin reaction (D18, D20) is a thread anchored to the exact excerpt it reacted to.
+// `messages` starts with the AI's reaction, then (reader reply, AI answer) pairs. A reply's
+// request sends `messages` as `history` (with `reaction: { excerpt, kind }`).
+export type Reaction = { id: string; excerpt: string; kind: ReactionKind; messages: ChatMessage[] };
+// loadState always fills `reactions`. It is optional only until the page keeps reactions (Sprint 5
+// UI): until then a save without it stores none.
+export type AppState = { reference: string; notes: string; messages: ChatMessage[]; reactions?: Reaction[] };
 export type KeyValueStorage = { getItem(key: string): string | null; setItem(key: string, value: string): void };
 export type StoreError = "save_failed"; // storage full, blocked (private mode) or unavailable
 
 export const STORAGE_KEY = "tertulia-margins:v1"; // the page listens for other tabs writing it
-export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [] });
+export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], reactions: [] });
 
 // Missing, corrupt or unreadable storage falls back to empty state: loading never throws.
 export function loadState(storage: KeyValueStorage): AppState {
@@ -34,13 +41,15 @@ export function loadState(storage: KeyValueStorage): AppState {
     reference: typeof saved.reference === "string" ? saved.reference : "",
     notes: typeof saved.notes === "string" ? saved.notes : "",
     messages: finishedMessages(messages),
+    reactions: Array.isArray(saved.reactions) ? finishedReactions(saved.reactions.filter(isReaction).map(pickReaction)) : [],
   };
 }
 
 export function saveState(storage: KeyValueStorage, state: AppState): StoreError | undefined {
-  const { reference, notes, messages } = state;
+  const { reference, notes, messages, reactions = [] } = state;
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify({ reference, notes, messages: finishedMessages(messages) }));
+    const saved = { reference, notes, messages: finishedMessages(messages), reactions: finishedReactions(reactions) };
+    storage.setItem(STORAGE_KEY, JSON.stringify(saved));
   } catch {
     return "save_failed";
   }
@@ -52,6 +61,29 @@ function finishedMessages(messages: ChatMessage[]): ChatMessage[] {
   const last = messages.at(-1);
   const isLastStreaming = last?.role === "assistant" && last.isStreaming === true;
   return isLastStreaming ? messages.slice(0, -2) : messages;
+}
+
+// The same rule per thread: an AI answer still streaming isn't saved, nor the reader's reply that
+// prompted it; a reaction still streaming its opening message isn't saved at all.
+function finishedReactions(reactions: Reaction[]): Reaction[] {
+  return reactions
+    .map((r) => {
+      const last = r.messages.at(-1);
+      const isLastStreaming = last?.role === "assistant" && last.isStreaming === true;
+      return isLastStreaming ? { ...r, messages: r.messages.slice(0, r.messages.length === 1 ? 0 : -2) } : r;
+    })
+    .filter((r) => r.messages.length > 0);
+}
+
+const isReaction = (r: unknown): r is Reaction =>
+  isRecord(r) && typeof r.id === "string" && typeof r.excerpt === "string" && isReactionKind(r.kind) && Array.isArray(r.messages);
+
+// Like chat: malformed messages are dropped, then the thread keeps its shape (the opening
+// reaction, then pairs). A thread with no valid opening reaction is dropped.
+function pickReaction({ id, excerpt, kind, messages }: Reaction): Reaction {
+  const kept = messages.filter(isMessage).map(pickMessage);
+  const isOpeningValid = kept[0]?.role === "assistant";
+  return { id, excerpt, kind, messages: isOpeningValid ? [kept[0], ...pairs(kept.slice(1))] : [] };
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);

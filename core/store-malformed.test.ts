@@ -60,3 +60,28 @@ test("dropping a malformed message drops its partner too, so roles keep alternat
   );
   expect(messages).toEqual([user("Q2"), ai("A2"), user("Q4"), ai("A4")]);
 });
+
+test("malformed reactions are dropped, and threads keep their shape (opening reaction, then pairs)", () => {
+  const user = (content: string) => ({ role: "user", content });
+  const ai = (content: string) => ({ role: "assistant", content });
+  const reaction = (fields: object) => ({ id: "r", excerpt: "E", kind: "question", messages: [ai("A")], ...fields });
+  const { reactions } = loadState(
+    storageWith({
+      reference: "One.",
+      notes: "",
+      messages: [],
+      reactions: [
+        null,
+        "text",
+        reaction({ id: 3 }),
+        reaction({ excerpt: undefined }),
+        reaction({ kind: "rant" }),
+        reaction({ messages: "x" }),
+        reaction({ messages: [] }), // no opening reaction
+        reaction({ messages: [user("Q"), ai("A")] }), // opens with the reader: not a reaction
+        reaction({ id: "kept", extra: 1, messages: [ai("A"), user("Q1"), { role: "assistant" }, user("Q2"), ai("A2"), user("Q3")] }),
+      ],
+    }),
+  );
+  expect(reactions).toEqual([{ id: "kept", excerpt: "E", kind: "question", messages: [ai("A"), user("Q2"), ai("A2")] }]);
+});

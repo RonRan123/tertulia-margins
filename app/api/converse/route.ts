@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       try {
         let step = await reply.next();
         while (!step.done) {
-          send({ type: "text", text: step.value });
+          send(step.value); // converse yields wire events ("kind", "text"), so they pass straight through
           step = await reply.next();
         }
         send({ type: "done", stats: step.value });
