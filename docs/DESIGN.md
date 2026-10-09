@@ -94,6 +94,8 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 
 **Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
 
+**Blocks are views of one string (D20).** `core/blocks.ts` splits the notes on runs of blank lines into blocks with offsets; an edit replaces only its block's slice, so the original separators (and export) stay byte-for-byte. Each block renders with `marked` (GFM, single newlines as line breaks); raw HTML is escaped as text, links other than http(s), mailto and relative ones lose their link, and `[¶n]` cites get a `cite` span.
+
 **Reactions go through `converse()` too (D18, D20).** A request with `reaction: {excerpt, kind?}` is a margin reaction. With no `kind`, a short non-streamed router call (`prompts/react-router.md`) picks question, pushback or connection; `converse()` yields the kind (the route sends it as a `kind` event), then streams the reply from `prompts/react-<kind>.md`, citations checked as usual. Kinds are a table in `core/reactions.ts`, like commands, next to the anchoring helpers (`reactTarget`, `findExcerpt`). A reply in a thread sends the kind it already has (no router call), the thread as `history` and the reply as `question`.
 
 ### 6.2 Grounding: how we stop invented quotes
