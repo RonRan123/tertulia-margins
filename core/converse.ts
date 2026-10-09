@@ -2,14 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
+import { COMMANDS, isCommandName, type Command } from "./commands.ts";
 import { parsePassage } from "./passage.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
+const CHAT_MAX_TOKENS = 16000; // a command uses its row's maxTokens instead
 
 export type Book = { title?: string; author?: string; edition?: string };
 export type Turn = { role: "user" | "assistant"; content: string };
-export type ConverseRequest = { passage: string; question: string; notes?: string; history?: Turn[]; book?: Book };
+// `question` is what the reader sees in chat (e.g. "/define gravitas"); `command` says what to run.
+export type ConverseRequest = { passage: string; question: string; notes?: string; history?: Turn[]; book?: Book; command?: Command };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
 export type ConverseRequestError =
   | "body_invalid"
@@ -18,7 +21,10 @@ export type ConverseRequestError =
   | "question_missing"
   | "notes_invalid"
   | "history_invalid"
-  | "book_invalid";
+  | "book_invalid"
+  | "command_invalid" // not { name, selection: string }
+  | "command_unknown"
+  | "selection_missing"; // /define needs a selected word
 
 export type ConverseStats = {
   model: string;
@@ -36,17 +42,21 @@ export type ConverseEvent =
   | { type: "done"; stats: ConverseStats }
   | { type: "error"; code: ConverseErrorCode };
 
-// prompts/system.md is Ronith's: drop the owner comment, fill {{placeholders}} from the book.
+// prompts/*.md are Ronith's: drop the owner comment before sending.
+function readPrompt(file: string): string {
+  const raw = readFileSync(join(process.cwd(), "prompts", file), "utf8");
+  return raw.replace(/^\s*<!--[\s\S]*?-->\s*/, "");
+}
+
+// Fills system.md's {{placeholders}} from the book.
 function systemPrompt(book: Book = {}): string {
-  const raw = readFileSync(join(process.cwd(), "prompts", "system.md"), "utf8");
-  const withoutComment = raw.replace(/^\s*<!--[\s\S]*?-->\s*/, "");
-  return withoutComment.replace(/\{\{(\w+)\}\}/g, (_, key: string) => book[key as keyof Book] ?? "unknown");
+  return readPrompt("system.md").replace(/\{\{(\w+)\}\}/g, (_, key: string) => book[key as keyof Book] ?? "unknown");
 }
 
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, notes, history, book } = body;
+  const { passage, question, notes, history, book, command } = body;
   if (!isText(passage)) return { error: "passage_missing" };
   if (!isText(question)) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
@@ -61,12 +71,19 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isBookValid = book === undefined || (isRecord(book) && [book.title, book.author, book.edition].every(isOptionalString));
   if (!isBookValid) return { error: "book_invalid" };
 
+  const isCommandShaped = command === undefined || (isRecord(command) && typeof command.selection === "string");
+  if (!isCommandShaped) return { error: "command_invalid" };
+  if (command !== undefined && !isCommandName(command.name)) return { error: "command_unknown" };
+  const isSelectionMissing = command?.name === "define" && !isText(command.selection);
+  if (isSelectionMissing) return { error: "selection_missing" };
+
   return {
     passage,
     question,
     notes,
     history: ((history ?? []) as Turn[]).map(({ role, content }) => ({ role, content })),
     book: book === undefined ? undefined : pickBook(book as Book),
+    ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
   };
 }
 
@@ -78,14 +95,14 @@ const pickBook = ({ title, author, edition }: Book): Book => ({ title, author, e
 // Aborting `signal` (the client went away) stops the upstream request.
 export async function* converse(request: ConverseRequest, signal?: AbortSignal): AsyncGenerator<string, ConverseStats> {
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  const { paragraphs, system, messages } = buildContext(request);
+  const { paragraphs, system, messages, maxTokens } = buildContext(request);
   const start = performance.now();
   let ttftMs: number | null = null;
   let text = "";
 
   const stream = client.beta.messages.stream({
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     output_config: { effort: "low" },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default", // retry a mis-flagged refusal on another model (D12)
@@ -113,6 +130,9 @@ export async function* converse(request: ConverseRequest, signal?: AbortSignal):
 
 // What the model sees, ordered stable to volatile (DESIGN §6.3) so a cache prefix stays valid:
 // instructions, the passage, the reader's notes (only if any), then the conversation and the question.
+// A command's instructions go in the last user turn, not the system blocks, so that prefix is the
+// same for chat and every command. That turn is <command>prompt file</command>, <selection> (if
+// any), then the question as shown in chat. History holds only what the reader saw, so it stays plain.
 export function buildContext(request: ConverseRequest) {
   // Page markers are stripped here: the model sees [¶n] only; pages are for the reader (D13).
   const paragraphs = parsePassage(request.passage).map((p) => p.text);
@@ -123,8 +143,17 @@ export function buildContext(request: ConverseRequest) {
     { type: "text", text: `<passage>\n${labelled}\n</passage>` },
   ];
   if (notes !== "") system.push({ type: "text", text: `<notes>\n${notes}\n</notes>` });
-  const messages: Turn[] = [...(request.history ?? []), { role: "user", content: request.question }];
-  return { paragraphs, system, messages };
+  const messages: Turn[] = [...(request.history ?? []), { role: "user", content: userTurn(request) }];
+  const maxTokens = request.command ? COMMANDS[request.command.name].maxTokens : CHAT_MAX_TOKENS;
+  return { paragraphs, system, messages, maxTokens };
+}
+
+function userTurn({ question, command }: ConverseRequest): string {
+  if (!command) return question;
+  const instructions = `<command>\n${readPrompt(COMMANDS[command.name].promptFile).trim()}\n</command>`;
+  const selection = command.selection.trim();
+  const selectionBlock = selection && `<selection>\n${selection}\n</selection>`;
+  return [instructions, selectionBlock, question].filter(Boolean).join("\n\n");
 }
 
 // SDK errors → self-describing codes the UI can show.

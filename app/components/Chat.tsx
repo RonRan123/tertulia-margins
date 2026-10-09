@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Dispatch, type Ref, type SetStateAction } from "react";
 import type { CitationCheck } from "@/core/citations.ts";
+import { commandLabel, type Command } from "@/core/commands.ts";
 import type { ConverseEvent, Turn } from "@/core/converse.ts";
 import { citedPages, labelCitations, parsePassage } from "@/core/passage.ts";
 import type { ChatMessage as Message } from "@/core/store.ts";
@@ -13,20 +14,36 @@ type ChatProps = {
   notes: string;
   messages: Message[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
+  // The page owns isBusy too: the notes toolbar disables its commands while a reply streams.
+  isBusy: boolean;
+  setIsBusy: (isBusy: boolean) => void;
+  ref?: Ref<ChatHandle>; // lets the notes toolbar run a command through the same send()
 };
 
-export function Chat({ reference, notes, messages, setMessages }: ChatProps) {
+export type ChatHandle = { run: (command: Command) => void };
+
+export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBusy, ref }: ChatProps) {
   const [question, setQuestion] = useState("");
-  const [isBusy, setIsBusy] = useState(false);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [hasAskedToClear, setHasAskedToClear] = useState(false); // then focus returns to "Clear conversation"
   const questionBox = useRef<HTMLTextAreaElement>(null);
+  const messageList = useRef<HTMLOListElement>(null);
   const hasReference = reference.trim() !== "";
+
+  // Bring a newly added message into view. Keyed on the count, not the content, so streamed
+  // deltas don't pull the list back down while the user scrolls up to read.
+  useEffect(() => {
+    messageList.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
+  }, [messages.length]);
 
   const updateLast = (patch: (m: Message) => Message) =>
     setMessages((ms) => [...ms.slice(0, -1), patch(ms[ms.length - 1])]);
 
-  async function send() {
+  // A command shows as its label ("/define melancholy") here and in history; the full selection
+  // goes only in `command`.
+  useImperativeHandle(ref, () => ({ run: (command) => send(commandLabel(command), command) }));
+
+  async function send(question: string, command?: Command) {
     const isReady = question.trim() !== "" && hasReference && !isBusy;
     if (!isReady) return;
     // Messages come in (question, reply) pairs. A failed or empty reply is dropped with the
@@ -39,10 +56,10 @@ export function Chat({ reference, notes, messages, setMessages }: ChatProps) {
     }
     const paragraphs = parsePassage(reference); // as sent, for the finished reply's page labels
     setMessages([...messages, { role: "user", content: question }, { role: "assistant", content: "", isStreaming: true }]);
-    setQuestion("");
+    if (!command) setQuestion("");
     setIsBusy(true);
     try {
-      const requestError = await streamReply({ passage: reference, question, notes, history }, (event) => {
+      const requestError = await streamReply({ passage: reference, question, notes, history, command }, (event) => {
         if (event.type === "text") updateLast((m) => ({ ...m, content: m.content + event.text }));
         // An empty reply (e.g. a refusal) is an error, not a blank bubble.
         if (event.type === "done")
@@ -98,7 +115,7 @@ export function Chat({ reference, notes, messages, setMessages }: ChatProps) {
           </button>
         )}
       </div>
-      <ol className="messages">
+      <ol className="messages" ref={messageList}>
         {messages.map((m, i) => (
           <li key={i} className={m.role === "user" ? "message user" : "message ai"}>
             <span className="who">{m.role === "user" ? "You" : "AI"}</span>
@@ -111,7 +128,7 @@ export function Chat({ reference, notes, messages, setMessages }: ChatProps) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          send(question);
         }}
       >
         <textarea
@@ -123,7 +140,7 @@ export function Chat({ reference, notes, messages, setMessages }: ChatProps) {
             const isSubmit = e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
             if (!isSubmit) return;
             e.preventDefault();
-            send();
+            send(question);
           }}
           placeholder={hasReference ? "Ask about the text or your notes (Enter to send)" : "Add reference text first (button at the top)"}
           disabled={!hasReference}
@@ -155,7 +172,7 @@ function CitationWarnings({ citations }: { citations?: CitationCheck[] }) {
 // Returns an error code if the request was rejected (e.g. "passage_missing"), a line was not JSON
 // ("bad_response"), or the stream ended without a "done" or "error" line ("stream_incomplete").
 async function streamReply(
-  body: { passage: string; question: string; notes: string; history: Turn[] },
+  body: { passage: string; question: string; notes: string; history: Turn[]; command?: Command },
   onEvent: (event: ConverseEvent) => void,
 ): Promise<string | undefined> {
   const response = await fetch("/api/converse", {

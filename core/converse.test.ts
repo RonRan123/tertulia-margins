@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
+import { COMMANDS } from "./commands.ts";
 import { buildContext, errorCode, parseConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
@@ -65,6 +66,36 @@ test("book must be an object with optional string fields", () => {
   expect(errorOf({ ...valid, book: "Emma" })).toBe("book_invalid");
   expect(errorOf({ ...valid, book: { title: 3 } })).toBe("book_invalid");
   expect(errorOf({ ...valid, book: {} })).toBeUndefined();
+});
+
+test("command must be a known name with a string selection; /define needs a selection", () => {
+  expect(errorOf({ ...valid, command: "define" })).toBe("command_invalid");
+  expect(errorOf({ ...valid, command: { name: "define" } })).toBe("command_invalid");
+  expect(errorOf({ ...valid, command: { name: "expand", selection: "x" } })).toBe("command_unknown");
+  expect(errorOf({ ...valid, command: { name: "toString", selection: "x" } })).toBe("command_unknown");
+  expect(errorOf({ ...valid, command: { name: "define", selection: " " } })).toBe("selection_missing");
+  expect(errorOf({ ...valid, command: { name: "quiz", selection: "" } })).toBeUndefined();
+  const body = { ...valid, command: { name: "define", selection: "levity", extra: 1 } };
+  expect(parseConverseRequest(body)).toMatchObject({ command: { name: "define", selection: "levity" } });
+  expect(parseConverseRequest(body)).not.toHaveProperty("command.extra");
+  expect(parseConverseRequest(valid)).not.toHaveProperty("command");
+});
+
+test("a command's prompt goes in the last user turn; system blocks and history are unchanged", () => {
+  const history = [{ role: "user" as const, content: "/quiz" }, { role: "assistant" as const, content: "A1" }];
+  const chat = buildContext({ ...valid, notes: "Mine", history });
+  const define = buildContext({ ...valid, notes: "Mine", history, question: "/define levity", command: { name: "define", selection: "levity" } });
+  expect(define.system).toEqual(chat.system);
+  expect(chat.system[0].text).not.toContain("define <word>");
+  expect(define.messages.slice(0, -1)).toEqual(history);
+  const turn = define.messages.at(-1)!.content;
+  expect(turn).toMatch(/^<command>\nIf the user types "define <word>"[^]*<\/command>\n\n<selection>\nlevity\n<\/selection>\n\n\/define levity$/);
+  expect(turn).not.toContain("OWNER");
+  expect(define.maxTokens).toBe(COMMANDS.define.maxTokens);
+  expect(chat.maxTokens).toBe(16000);
+
+  const quiz = buildContext({ ...valid, question: "/quiz", command: { name: "quiz", selection: "" } });
+  expect(quiz.messages.at(-1)!.content).toMatch(/^<command>\nIf "quiz"[^]*<\/command>\n\n\/quiz$/);
 });
 
 test("a mid-stream overloaded error (no HTTP status) maps to overloaded", () => {

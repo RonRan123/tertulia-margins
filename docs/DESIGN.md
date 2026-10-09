@@ -87,11 +87,11 @@ The route answers with NDJSON (one JSON event per line: `text` deltas, then `don
 
 **Next.js is a thin shell.** All product logic lives in `core/` as plain TypeScript with no framework imports. The route handler only parses input and streams output. This keeps framework "magic" out of the parts Ronith needs to understand, and means `core/` can be tested without a server.
 
-**One deep module, not many shallow ones.** `converse()` is the single entry point: it takes `{passage, question, history, book}` (notes join in Sprint 3, command and selection in Sprint 4) and returns a stream of text, then stats with the citation checks. The route streams these to the browser as NDJSON. Context assembly, model routing, and citation checking are internal details. The UI never knows which model ran.
+**One deep module, not many shallow ones.** `converse()` is the single entry point: it takes `{passage, question, notes, history, book, command}`, where the optional `command` is `{name, selection}` and `question` is what chat shows (e.g. `/define levity`), and returns a stream of text, then stats with the citation checks. The route streams these to the browser as NDJSON. Context assembly, model routing, and citation checking are internal details. The UI never knows which model ran.
 
 **Prompts are data, not code.** Each command's instructions live in `prompts/<command>.md`. Ronith writes and tunes these directly; they are the most important "code" in the project and the part that should carry his voice and judgment.
 
-**Commands are a table, not a class hierarchy.** A command is `{name, promptFile, model, maxTokens}`. Adding a command is adding a row.
+**Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
 
 ### 6.2 Grounding: how we stop invented quotes
 
@@ -108,7 +108,7 @@ Step 3 is the key idea: it turns "is the model hallucinating?" from a vibe into 
 
 ### 6.3 Context and cost
 
-The prompt is ordered stable-to-volatile: system prompt, then passage, then notes, then the conversation. The passage is the largest and most stable part, so it is the prefix we **prompt-cache**. Caching should cut both cost and TTFT on every turn after the first; we will measure the before/after, since it makes a concrete write-up result.
+The prompt is ordered stable-to-volatile: system prompt, then passage, then notes, then the conversation. A command's instructions ride in the last user turn, not the system prompt, so the prefix is the same for chat and every command. The passage is the largest and most stable part, so it is the prefix we **prompt-cache**. Caching should cut both cost and TTFT on every turn after the first; we will measure the before/after, since it makes a concrete write-up result.
 
 ### 6.4 Model routing
 

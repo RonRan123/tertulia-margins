@@ -59,7 +59,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 
 ## Sprint 4 (Day 4, 3 h): commands + export (MVP gate)
 **Goal:** the MVP definition above is true.
-- [ ] Command table + `/define` (app pastes the verbatim sentence with `[¶n]`/page, D6) and `/quiz` on selection. **Verify:** each command end to end in the browser.
+- [x] Command table + `/define` (app pastes the verbatim sentence with `[¶n]`/page, D6) and `/quiz` on selection. **Verify:** each command end to end in the browser.
 - [ ] Export to markdown. **Verify:** file opens cleanly in Obsidian.
 - [ ] Use it on a real chapter and write down what felt wrong (feeds Sprint 5 priorities).
 - **MVP gate:** done, or cut everything after it except the write-up.
@@ -93,7 +93,10 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Quiz depth (difficulty levels, "explain this answer"), mindmap, flashcards, Merriam-Webster API (Day 0 notes)
 - Goodreads/Reddit counterpoints; book-club personas; user-picked models and difficulty-based routing
 - Reference text edited mid-conversation renumbers paragraphs, so earlier `[¶n]` in the chat history can point at different text (D15 note; ignored for the MVP)
-- Quotes the AI takes from the reader's notes are flagged `citation_missing` by `checkCitations` (Sprint 3 test; Ronith: leave it for now). Option later: pass notes to the check and exempt verbatim note quotes
+- Quotes the AI takes from the reader's notes are flagged `citation_missing` by `checkCitations` (Sprint 3 test; Ronith: leave it for now). Option later: pass notes to the check and exempt verbatim note quotes. Sprint 4 QA: 3 of 4 `/define`/`/quiz` replies showed such false warnings (also `quote_not_in_paragraph` when the model put a `[¶n]` beside a note quote), so commands make this common. Options: a prompt rule, or the checker exemption
+- `checkCitations` recognises `[¶n]` and `[¶n-m]` only; the app's `/define` quotes read `[¶4, p. 12]`, so a reply copying that shape would be flagged `citation_missing` (not seen in QA yet)
+- `/quiz` prompt doesn't mention the `<selection>` block; the model infers scope from it (QA: worked). Ronith may want a line in `prompts/quiz.md`
+- Define: the quote is inserted with no undo (Cmd+Z); a reply's definition isn't scrolled into view in the notes
 - Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
 - **UX redesign: marginalia-first (Ronith, 2026-10-09; decided in D16: after the MVP, scheduled in Sprint 5, markdown notes as a separate step after it).** The current two-pane setup feels sparse and like a plain-text notebook. Two ideas, to be run through `/decide` before any work:

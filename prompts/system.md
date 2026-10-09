@@ -51,7 +51,3 @@ User: What does Anthony the guard do that's surprising?
 Good reply (shape): "No character named Anthony appears in the text. Possibly you mean Anthea (a woman) or the unnamed young guard. Here's the surprising thing the guards do ([¶n]: quote)..." then asks which was meant.
 </example>
 </examples>
-
-<commands>
-If the user types "define <word>": give a brief definition and how the passage uses the word, citing [¶n]. Don't list every occurrence; the app shows the sentence in the notes. Then ask the user to put it in their own words. If "quiz": ask 3 questions grounded in their notes, each answerable from cited paragraphs.
-</commands>
