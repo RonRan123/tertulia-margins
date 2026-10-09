@@ -59,7 +59,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** browser-only storage loses data in real use, or notes need to live directly in the Obsidian vault (then option B).
 
 ## D8. Citations show page numbers; input becomes PDF upload
-- **Status:** Accepted (2026-10-08, Ronith: readers rely on the page numbers printed in the book; otherwise use paragraph and PDF page numbers)
+- **Status:** Amended by D13 (2026-10-09). Originally Accepted (2026-10-08, Ronith: readers rely on the page numbers printed in the book; otherwise use paragraph and PDF page numbers)
 - **Context:** pasted text has no reliable page numbers, but Ronith wants citations a reader can find in the physical book. Touches D3 and D4.
 - **Alternatives:** page markers typed into pasted text (~0.5 h, no dependency); `[¶n]` only for the MVP.
 - **Why:** page numbers are what readers use to locate a passage.
@@ -95,6 +95,50 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **After the MVP, in order:** caching and per-call logging (feeds D10), `/expand`, Augment, disagreement flags, model routing, public demo (D9). Items that don't fit go to the parking lot.
 - **Cost we accept:** no disagreement flags until Day 5, though prompt rule 3 already pushes back; notes move to Obsidian by export, not live.
 - **Revisit if:** the MVP isn't done by end of Day 4 (cut everything after it), or the export step proves annoying (then the vault-file option in the parking lot).
+
+## D12. MVP model and API client: Sonnet 5.5 at effort `low`, via `@anthropic-ai/sdk`
+- **Status:** Accepted (2026-10-08, Ronith)
+- **Context:** D11 says one model for the MVP; `core/converse` needs a way to call Claude.
+- **Alternatives (model):** Opus 5.5 ($4/$20 per MTok; thinking can't be disabled, slower first token); Haiku 5.5 ($0.10/$0.50; close-reading quality unproven). Sonnet 5.5 is $2/$10, cache reads $0.20 (prices from the `claude-api` skill, cached 2026-10-06).
+- **Alternatives (client):** hand-rolled `fetch` + SSE parsing (~60 lines, no dependency).
+- **Why:** TTFT matters most when replying to notes while reading; cost is cents per turn on any of the three. The SDK owns streaming, retries and typed errors, where hand-rolled bugs hide.
+- **Details:** server-side refusal fallback on (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) so a mis-flagged refusal is retried instead of returning nothing.
+- **Cost we accept:** one dependency; possibly shallower readings than Opus.
+- **Revisit if:** Sprint 5's Q3 measurement shows Opus reads meaningfully better, or TTFT at `low` is still slow.
+
+## D13. Page labels come from typed `[p. N]` markers; PDF import is secondary (amends D8)
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Ronith's PDF was produced by calibre from an ebook: 137 pages with a text layer but no printed page numbers, and its pages don't match the paper edition. D8's printed-page detection can't work on it.
+- **Alternatives:** approximate book pages interpolated from a typed chapter range (~0.5 h, off by a page or two); PDF page numbers only.
+- **Why:** readers locate passages by the paper book's page; only the reader knows it, so the reader types it.
+- **Rule:** a `[p. N]` marker labels every paragraph after it until the next marker; a paragraph containing a marker gets a range. Markers are stripped before the text reaches the model. PDF import (`pdfjs-dist`, in the browser so PDFs stay local per D9) fills the same reference-text box with `[PDF p. N]` markers for the user to trim.
+- **Cost we accept:** typing markers by hand; one new dependency for a secondary path.
+- **Revisit if:** PDF import's paragraph detection is unreliable, or typing markers proves tedious in real use.
+
+## D14. Reference text lives in the background, not in a pane
+- **Status:** Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
+- **Context:** Sprint 3 needs to place the passage; this is a companion to a paper book, not a reading app (Day 0).
+- **Alternatives:** collapsible passage above the notes; three columns (passage | notes | chat).
+- **Why:** the reader reads the paper book; the app only needs the text to ground and check citations.
+- **Rule:** two panes, notes | chat. The reference text is editable on demand (e.g. a drawer) but never shown as a reading pane.
+- **Cost we accept:** Sprint 4 selection commands act on notes, not on displayed passage text.
+- **Revisit if:** checking citations against the text proves awkward without seeing it.
+
+## D15. Page-marker syntax
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** review found `[p 101]`, `[pp. 10-11]` and `[p. xii]` reaching the model as plain text.
+- **Alternatives:** keep `[p. N]`, `[p.N]`, `[PDF p. N]` only; tolerate a missing dot and explicit ranges but no roman numerals.
+- **Rule:** recognise `[p. N]` with or without the dot, explicit ranges `[pp. N-M]` (hyphen or en dash), roman-numeral pages (`[p. xii]`, any case), and the `PDF` prefix on each.
+- **Also decided (Sprint 2 review):** editing the reference text mid-conversation is not handled in the MVP; route size caps wait for the public demo (Sprint 5). Both are in the Parking lot.
+
+## D16. Marginalia-first redesign: after the MVP, not in Sprint 4
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Ronith finds the two-pane UI sparse and the chat not very useful. He wants the AI to react unprompted to his notes with probing questions in a margin column (chat minimized), and notes rendered as markdown. Touches D6, D11, DESIGN §3.
+- **Alternatives:** swap marginalia into Sprint 4 in place of `/define` and `/quiz` (about +1.5 h, auto-trigger on blur, one reaction per block); button-triggered margin reactions first (about 3 h).
+- **Why:** the MVP gate stays intact; Sprint 4 ships `/define`, `/quiz` and export as planned and real use informs the redesign.
+- **Rules:** markdown-rendered notes is a separate step after marginalia (about 30 lines of our own renderer, no new dependency, not a rich-text editor). Marginalia replaces or absorbs Augment and disagreement flags where they overlap.
+- **Cost we accept:** the MVP ships with the interface Ronith dislikes.
+- **Revisit if:** Sprint 4 real-chapter use shows the chat and commands are unusable (then pull marginalia forward). D6 must be amended (distinct AI-only margin area, notes still never edited) before building.
 
 ---
 
