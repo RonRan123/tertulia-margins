@@ -81,11 +81,13 @@ Browser (one page)
   prompts/  (markdown files the user owns and edits)
 ```
 
+The route answers with NDJSON (one JSON event per line: `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
+
 ### 6.1 Why it is shaped like this
 
 **Next.js is a thin shell.** All product logic lives in `core/` as plain TypeScript with no framework imports. The route handler only parses input and streams output. This keeps framework "magic" out of the parts Ronith needs to understand, and means `core/` can be tested without a server.
 
-**One deep module, not many shallow ones.** `converse()` is the single entry point: it takes `{command, passage, notes, selection, history}` and returns a stream. Context assembly, model routing, and citation checking are internal details. The UI never knows which model ran.
+**One deep module, not many shallow ones.** `converse()` is the single entry point: it takes `{passage, question, history, book}` (notes join in Sprint 3, command and selection in Sprint 4) and returns a stream of text, then stats with the citation checks. The route streams these to the browser as NDJSON. Context assembly, model routing, and citation checking are internal details. The UI never knows which model ran.
 
 **Prompts are data, not code.** Each command's instructions live in `prompts/<command>.md`. Ronith writes and tunes these directly; they are the most important "code" in the project and the part that should carry his voice and judgment.
 

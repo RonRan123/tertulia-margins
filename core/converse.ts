@@ -2,12 +2,22 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
+import { parsePassage } from "./passage.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
 
 export type Book = { title?: string; author?: string; edition?: string };
-export type ConverseRequest = { passage: string; question: string; book?: Book };
+export type Turn = { role: "user" | "assistant"; content: string };
+export type ConverseRequest = { passage: string; question: string; history?: Turn[]; book?: Book };
+export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
+export type ConverseRequestError =
+  | "body_invalid"
+  | "passage_missing"
+  | "passage_empty" // only page markers: nothing to ground on
+  | "question_missing"
+  | "history_invalid"
+  | "book_invalid";
 
 export type ConverseStats = {
   model: string;
@@ -18,13 +28,12 @@ export type ConverseStats = {
   citations: CitationCheck[];
 };
 
-// Paragraphs are separated by blank lines. [¶n] is 1-based: paragraphs[n - 1].
-export function splitParagraphs(passage: string): string[] {
-  return passage
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-}
+// The wire format of POST /api/converse: one JSON object per line (NDJSON),
+// a "text" event per delta, then "done" or "error".
+export type ConverseEvent =
+  | { type: "text"; text: string }
+  | { type: "done"; stats: ConverseStats }
+  | { type: "error"; code: ConverseErrorCode };
 
 // prompts/system.md is Ronith's: drop the owner comment, fill {{placeholders}} from the book.
 function systemPrompt(book: Book = {}): string {
@@ -33,10 +42,40 @@ function systemPrompt(book: Book = {}): string {
   return withoutComment.replace(/\{\{(\w+)\}\}/g, (_, key: string) => book[key as keyof Book] ?? "unknown");
 }
 
+// Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
+export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
+  if (!isRecord(body)) return { error: "body_invalid" };
+  const { passage, question, history, book } = body;
+  if (!isText(passage)) return { error: "passage_missing" };
+  if (!isText(question)) return { error: "question_missing" };
+  if (parsePassage(passage).length === 0) return { error: "passage_empty" };
+
+  const isTurn = (t: unknown) => isRecord(t) && (t.role === "user" || t.role === "assistant") && isText(t.content);
+  const isHistoryValid = history === undefined || (Array.isArray(history) && history.every(isTurn));
+  if (!isHistoryValid) return { error: "history_invalid" };
+
+  const isOptionalString = (v: unknown) => v === undefined || typeof v === "string";
+  const isBookValid = book === undefined || (isRecord(book) && [book.title, book.author, book.edition].every(isOptionalString));
+  if (!isBookValid) return { error: "book_invalid" };
+
+  return {
+    passage,
+    question,
+    history: ((history ?? []) as Turn[]).map(({ role, content }) => ({ role, content })),
+    book: book === undefined ? undefined : pickBook(book as Book),
+  };
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const isText = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+const pickBook = ({ title, author, edition }: Book): Book => ({ title, author, edition });
+
 // The single entry point: yields reply text as it streams, returns stats when done.
-export async function* converse(request: ConverseRequest): AsyncGenerator<string, ConverseStats> {
+// Aborting `signal` (the client went away) stops the upstream request.
+export async function* converse(request: ConverseRequest, signal?: AbortSignal): AsyncGenerator<string, ConverseStats> {
   const client = new Anthropic(); // reads ANTHROPIC_API_KEY
-  const paragraphs = splitParagraphs(request.passage);
+  // Page markers are stripped here: the model sees [¶n] only; pages are for the reader (D13).
+  const paragraphs = parsePassage(request.passage).map((p) => p.text);
   const labelled = paragraphs
     .map((p, i) => `[¶${i + 1}] ${p}`)
     .join("\n\n");
@@ -50,9 +89,13 @@ export async function* converse(request: ConverseRequest): AsyncGenerator<string
     output_config: { effort: "low" },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default", // retry a mis-flagged refusal on another model (D12)
-    system: systemPrompt(request.book),
-    messages: [{ role: "user", content: `<passage>\n${labelled}\n</passage>\n\n${request.question}` }],
-  });
+    // Stable to volatile (DESIGN §6.3): instructions, then the passage, then the conversation.
+    system: [
+      { type: "text", text: systemPrompt(request.book) },
+      { type: "text", text: `<passage>\n${labelled}\n</passage>` },
+    ],
+    messages: [...(request.history ?? []), { role: "user", content: request.question }],
+  }, { signal });
 
   for await (const event of stream) {
     if (event.type !== "content_block_delta" || event.delta.type !== "text_delta") continue;
@@ -70,4 +113,14 @@ export async function* converse(request: ConverseRequest): AsyncGenerator<string
     usage: final.usage,
     citations: checkCitations(text, paragraphs),
   };
+}
+
+// SDK errors → self-describing codes the UI can show.
+export function errorCode(error: unknown): ConverseErrorCode {
+  if (error instanceof Anthropic.RateLimitError) return "rate_limited";
+  if (error instanceof Anthropic.AuthenticationError) return "auth_failed";
+  // A mid-stream overloaded error arrives as an SSE event: no HTTP status, only the error type.
+  const isOverloaded = error instanceof Anthropic.APIError && (error.status === 529 || error.type === "overloaded_error");
+  if (isOverloaded) return "overloaded";
+  return "api_error";
 }

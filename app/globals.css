@@ -3,3 +3,63 @@ body {
   padding: 1rem;
   font-family: system-ui, sans-serif;
 }
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.reference-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+}
+
+.message {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.message p {
+  margin: 0.25rem 0;
+  white-space: pre-wrap;
+}
+
+.who {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #666;
+}
+
+/* D6: AI text is always visually distinct from the user's words. */
+.message.ai {
+  background: #eef3fb;
+  border-left: 3px solid #4a72b8;
+  font-family: Georgia, serif;
+}
+
+.warning {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  font-family: system-ui, sans-serif;
+  color: #9a3412;
+}
+
+form button {
+  margin-top: 0.25rem;
+}
