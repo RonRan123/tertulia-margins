@@ -45,7 +45,7 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 
 ## Sprint 2 (Day 2, 3 h): input + first page
 **Goal:** reference text from your own book produces a grounded streamed reply in the browser, with page labels.
-- [ ] Reference text with `[p. N]` markers: paragraphs labelled with the page of the last marker before them (D13). **Verify:** unit tests: markers stripped from the text, labels correct, a paragraph spanning a marker gets a page range.
+- [x] Reference text with `[p. N]` markers: paragraphs labelled with the page of the last marker before them (D13). **Verify:** unit tests: markers stripped from the text, labels correct, a paragraph spanning a marker gets a page range.
 - [ ] PDF import (secondary, `pdfjs-dist`, runs in the browser): extracts text, infers paragraphs, fills the reference-text box with `[PDF p. N]` markers for you to trim (D13). **Verify:** your PDF imports with paragraph breaks that match the book on a hand-checked page.
 - [ ] Minimal page: reference-text box + chat (multi-turn), page shown beside each `[¶n]`, failed citations flagged. **Verify:** screenshot of a grounded streamed reply.
 - **Demo:** the screenshot, from your own book.
@@ -91,6 +91,8 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Open and save a vault `.md` file via the File System Access API (Chromium only; D7 revisit option, ~+0.5-1 h)
 - Quiz depth (difficulty levels, "explain this answer"), mindmap, flashcards, Merriam-Webster API (Day 0 notes)
 - Goodreads/Reddit counterpoints; book-club personas; user-picked models and difficulty-based routing
+- Reference text edited mid-conversation renumbers paragraphs, so earlier `[¶n]` in the chat history can point at different text (D15 note; ignored for the MVP)
+- Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
 
 ## Time log

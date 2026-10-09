@@ -124,6 +124,13 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** Sprint 4 selection commands act on notes, not on displayed passage text.
 - **Revisit if:** checking citations against the text proves awkward without seeing it.
 
+## D15. Page-marker syntax
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** review found `[p 101]`, `[pp. 10-11]` and `[p. xii]` reaching the model as plain text.
+- **Alternatives:** keep `[p. N]`, `[p.N]`, `[PDF p. N]` only; tolerate a missing dot and explicit ranges but no roman numerals.
+- **Rule:** recognise `[p. N]` with or without the dot, explicit ranges `[pp. N-M]` (hyphen or en dash), roman-numeral pages (`[p. xii]`, any case), and the `PDF` prefix on each.
+- **Also decided (Sprint 2 review):** editing the reference text mid-conversation is not handled in the MVP; route size caps wait for the public demo (Sprint 5). Both are in the Parking lot.
+
 ---
 
 ## Template

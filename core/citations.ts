@@ -10,7 +10,8 @@ export type CitationCheck = { quote: string; cited: number[]; status: CitationSt
 
 const MIN_QUOTE_WORDS = 3; // shorter spans are scare-quotes, not citations
 const QUOTE = /[“"]([^“”"]+)[”"]/g;
-const CITATION = /\[¶(\d+)(?:\s*[-–]\s*(\d+))?\]/g;
+// A fresh global RegExp per call: a shared one would carry `lastIndex` state between callers.
+export const citationPattern = () => /\[¶(\d+)(?:\s*[-–]\s*(\d+))?\]/g;
 // Split after . ! ? but not after a title like "Mr." (period-ending abbreviations).
 const SENTENCE_END = /(?<!\b(?:Mr|Mrs|Ms|Dr|St)\.)(?<=[.!?])\s+|\n+/;
 
@@ -22,7 +23,7 @@ export function checkCitations(reply: string, paragraphs: string[]): CitationChe
 
   const checks: CitationCheck[] = [];
   for (const sentence of sentences) {
-    const cited = [...sentence.matchAll(CITATION)].flatMap(([, from, to]) => range(Number(from), Number(to ?? from)));
+    const cited = [...sentence.matchAll(citationPattern())].flatMap(([, from, to]) => range(Number(from), Number(to ?? from)));
     for (const [, index] of sentence.matchAll(/\u0000(\d+)\u0000/g)) {
       const quote = quotes[Number(index)];
       const isScareQuote = quote.trim().split(/\s+/).length < MIN_QUOTE_WORDS;
@@ -43,13 +44,13 @@ function statusOf(quote: string, cited: number[], paragraphs: string[]): Citatio
   return isFound ? "ok" : "quote_not_in_paragraph";
 }
 
-// Compare text, not typography: case, curly quotes, _italics_ markers, spacing, trailing punctuation.
+// Compare text, not typography: case, curly quotes, _italics_ and *markdown* markers, spacing, trailing punctuation.
 function normalize(text: string): string {
   return text
     .toLowerCase()
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/_/g, "")
+    .replace(/[_*]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[.,;:!?]+$/, "");
