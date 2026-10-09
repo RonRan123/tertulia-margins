@@ -137,7 +137,7 @@ Evals run as a script, not by eye, so every prompt change can be re-scored.
 
 ## 8. Milestones
 
-Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md). Summary:
+Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md), organised as one sprint per day (Sprint n = Day n) with an explicit MVP in/out list. Summary:
 
 | Day | Version | Done when |
 |---|---|---|
