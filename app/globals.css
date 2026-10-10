@@ -167,20 +167,67 @@ main {
   background: var(--ai);
 }
 
-/* Notes | margin (D18). minmax(0, …): a long unbroken word must wrap, not widen its column. */
+/* Notes | margin (D18): one scroll; every row is a grid of the same two columns, so the cells'
+   backgrounds and the margin rule run unbroken from row to row. A row's height is its block's
+   alone: its cards (.cards) are lifted out of the flow and placed beside the block by Notes
+   (useMarginLayout), like comments in Google Docs. minmax(0, …): a long unbroken word must
+   wrap, not widen its column. */
 .panes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.row {
   display: grid;
   grid-template-columns: minmax(0, var(--notes-w)) var(--margin-w);
   justify-content: center;
-  flex: 1;
-  min-height: 0;
 }
 
-.notes {
+.row.fill {
+  flex: 1;
+}
+
+.notes-rows {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  flex: 1 0 auto;
+}
+
+.notes-cell {
+  min-width: 0;
   background: var(--sheet);
+}
+
+.margin-cell {
+  position: relative; /* the dot and the cards are placed from this cell's top */
+  border-left: var(--margin-rule);
+}
+
+/* --shift: how far below its block's top the stack is pushed (set by Notes). */
+.cards {
+  position: absolute;
+  top: var(--s2);
+  left: var(--s4);
+  right: var(--s4);
+  z-index: 2; /* over the later rows' margin cells (and dots) it is pushed down across */
+  display: grid;
+  gap: var(--s3);
+  transform: translateY(var(--shift, 0px));
+}
+
+/* The toolbar row stays put while the notes scroll under it. */
+.toolbar-row {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.toolbar-row .margin-cell {
+  padding: var(--s2) var(--s4) var(--s3);
+  background: var(--paper);
 }
 
 .toolbar {
@@ -216,25 +263,187 @@ main {
   border-bottom: 1px solid var(--rule);
 }
 
-/* The reader's writing surface: the notes face, no box. */
-.notes textarea {
-  flex: 1;
-  resize: none;
+/* Blocks (D18): the reader's notes in the book face. A rendered block and the textarea that
+   edits it share box and type, so opening a block doesn't move the text. */
+.block {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: var(--s2) var(--s6);
   font: 400 1.125rem/1.65 var(--serif);
   color: var(--ink);
   background: transparent;
   border: 0;
+  border-left: 2px solid transparent; /* the tick that marks the current block */
   border-radius: 0;
-  padding: var(--s4) var(--s6);
+  overflow-wrap: anywhere;
+  cursor: text;
 }
 
-.notes textarea::placeholder {
-  color: var(--ink-soft);
-  font-style: italic;
+.toolbar-row .notes-cell {
+  padding-bottom: var(--s2);
 }
 
-.notes textarea:focus-visible {
+.block:hover {
+  background: color-mix(in srgb, var(--rule) 35%, transparent);
+}
+
+.block.is-current {
+  border-left-color: color-mix(in srgb, var(--ai) 40%, transparent);
+}
+
+.block:focus-visible {
+  outline: none;
+  border-left-color: var(--focus);
+}
+
+.block.editor {
+  resize: none;
+  field-sizing: content;
+  min-height: calc(1.125rem * 1.65 + 2 * var(--s2));
+  overflow: hidden;
+  background: color-mix(in srgb, var(--paper) 70%, var(--sheet));
+  border-left-color: var(--ink-soft);
+}
+
+.block.editor:focus-visible {
   outline: none; /* the writing surface shows its caret instead */
+}
+
+/* Markdown inside a rendered block. */
+.block > :first-child {
+  margin-top: 0;
+}
+
+.block > :last-child {
+  margin-bottom: 0;
+}
+
+.block p,
+.block ul,
+.block ol,
+.block pre,
+.block table {
+  margin: 0 0 var(--s2);
+}
+
+.block h1,
+.block h2,
+.block h3,
+.block h4 {
+  margin: var(--s2) 0 var(--s1);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.block h1 {
+  font-size: 1.5rem;
+}
+
+.block h2 {
+  font-size: 1.25rem;
+}
+
+.block h3,
+.block h4 {
+  font-size: 1.0625rem;
+}
+
+.block ul,
+.block ol {
+  padding-left: var(--s6);
+}
+
+/* Passage quotes (app-inserted, D6): italic, softer, a book-binding rule. */
+.block blockquote {
+  margin: var(--s1) 0 var(--s2);
+  padding-left: var(--s4);
+  border-left: 2px solid var(--quote);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.block blockquote p {
+  margin: 0;
+}
+
+.block a {
+  color: var(--ink);
+  text-decoration-color: var(--ink-soft);
+  text-underline-offset: 3px;
+}
+
+.block a:hover {
+  text-decoration-color: var(--ink);
+}
+
+.block code {
+  font-size: 0.9em;
+  padding: 0 0.2em;
+  background: color-mix(in srgb, var(--rule) 60%, transparent);
+  border-radius: 3px;
+}
+
+.block pre {
+  padding: var(--s2) var(--s3);
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--rule) 40%, transparent);
+  border-radius: var(--radius);
+}
+
+.block pre code {
+  padding: 0;
+  background: none;
+}
+
+.block hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.block table {
+  border-collapse: collapse;
+}
+
+.block th,
+.block td {
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--rule);
+}
+
+.cite {
+  font: 500 0.75rem var(--sans);
+  font-style: normal;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* "Write a note…": always after the last block; with no notes it says how to start. */
+.ghost {
+  display: block;
+  width: 100%;
+  padding: var(--s2) var(--s6) var(--s4);
+  font: italic 400 1.125rem/1.65 var(--serif);
+  color: var(--ink-soft);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  cursor: text;
+}
+
+.ghost:hover {
+  color: var(--ink);
+}
+
+.ghost:focus-visible {
+  outline: none;
+  border-left-color: var(--focus);
+}
+
+.ghost.is-empty {
+  padding-top: var(--s4);
 }
 
 /* React split button and kind menu */
@@ -286,14 +495,43 @@ main {
   color: var(--ink-soft);
 }
 
-/* The margin: a double rule like a legal pad's, then the AI's cards. */
-.margin {
-  display: grid;
-  gap: var(--s4);
-  align-content: start;
-  padding: var(--s4);
-  overflow-y: auto;
-  border-left: var(--margin-rule);
+/* The margin's one decoration: a dot on the rule at a block with reactions. The button is a
+   larger, invisible hit area around the 7px dot. */
+.dot {
+  position: absolute;
+  top: calc(var(--s2) + (1.125rem * 1.65 - 21px) / 2);
+  left: -12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  height: 21px;
+  padding: 0 0 0 7px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.dot:hover::before,
+.dot[aria-pressed="true"]::before {
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px color-mix(in srgb, var(--ai) 35%, transparent);
+}
+
+.dot-count {
+  font: 600 0.6875rem/1 var(--sans);
+  color: var(--ai);
+  background: var(--paper);
+  padding: 1px 2px;
 }
 
 .card {
@@ -389,6 +627,52 @@ main {
 
 .card .link {
   margin-top: var(--s1);
+}
+
+.card .less {
+  margin-left: var(--s3);
+}
+
+/* Collapsed (not the current block's): the opening clamped to 4 lines, one click to open. */
+.card.is-collapsed {
+  background: color-mix(in srgb, var(--ai-wash) 60%, transparent);
+}
+
+.card .expand {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.card .clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.card .more {
+  display: block;
+  margin-top: var(--s1);
+  font-size: 0.8125rem;
+  color: var(--ai);
+}
+
+.card .expand:hover .more {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.margin-cell > .empty {
+  padding-top: var(--s2);
+  font-size: 0.8125rem;
 }
 
 .detached-divider {
@@ -578,13 +862,22 @@ dialog.reference form button {
   }
 
   .panes {
+    overflow-y: visible;
+  }
+
+  .row {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .row:not(.toolbar-row) {
+    position: relative; /* the dot moves to the block's top-right corner */
+  }
+
+  .toolbar-row .margin-cell {
+    display: none;
+  }
+
   .toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 5;
     padding-inline: var(--s4);
   }
 
@@ -597,15 +890,32 @@ dialog.reference form button {
     padding-inline: var(--s4);
   }
 
-  .notes textarea {
-    min-height: 50dvh;
-    padding: var(--s4);
+  .block,
+  .ghost {
+    padding-inline: var(--s4);
   }
 
-  .margin {
-    overflow-y: visible;
+  /* Cards stack under their block, indented, keeping their --ai rule. */
+  .margin-cell {
+    position: static;
+    padding: 0 var(--s4) var(--s3) calc(var(--s4) + var(--s3));
     border-left: 0;
-    border-top: var(--margin-rule);
+    background: var(--sheet);
+  }
+
+  .margin-cell:empty {
+    display: none;
+  }
+
+  .cards {
+    position: static;
+    transform: none;
+  }
+
+  .dot {
+    top: var(--s2);
+    right: var(--s2);
+    left: auto;
   }
 
   /* A full-screen sheet over everything, header included; Close (or Esc) brings the page back. */

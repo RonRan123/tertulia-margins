@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { appendBlock, blockAt, blockForExcerpt, removeBlock, renderMarkdown, replaceBlock, splitBlocks } from "./blocks.ts";
+import { appendBlock, blockAt, closeBlock, commandTarget, layoutRows, removeBlock, renderMarkdown, replaceBlock, splitBlocks, stackCards } from "./blocks.ts";
 
 const texts = (notes: string) => splitBlocks(notes).map((b) => b.text);
 
@@ -80,13 +80,61 @@ test("blockAt finds the block under a caret, or nothing on a separator", () => {
   expect(blockAt(blocks, notes.length)?.text).toBe("two");
 });
 
-test("blockForExcerpt: the block where the excerpt starts, or undefined when detached", () => {
+test("a command targets the trimmed selection, else the whole block under the caret", () => {
+  const notes = "First idea.\n\nSecond line one\nsecond line two.\n\n\nThird.";
+  const at = (text: string) => notes.indexOf(text);
+  expect(commandTarget(notes, at("Second") - 2, at("one") + 3)).toBe("Second line one");
+  expect(commandTarget(notes, at("\n\nSecond"), at("Second"))).toBeUndefined(); // only whitespace selected
+  const caret = (n: number) => commandTarget(notes, n, n);
+  expect(caret(at("line two"))).toBe("Second line one\nsecond line two.");
+  expect(caret(at("Second"))).toBe("Second line one\nsecond line two."); // at a block's start
+  expect(caret(at("two.") + 4)).toBe("Second line one\nsecond line two."); // at its end
+  expect(caret(0)).toBe("First idea.");
+  expect(caret(notes.length)).toBe("Third.");
+  expect(caret(at("Third") - 1)).toBeUndefined(); // on a blank line
+  expect(commandTarget("", 0, 0)).toBeUndefined();
+  expect(commandTarget("A.\n   \nB.", 8, 8)).toBe("B."); // a spaces-only line still separates
+});
+
+test("closeBlock removes a block left empty or blank, and keeps any other", () => {
+  const notes = "one\n\n\n\ntwo";
+  expect(closeBlock(notes, { start: 5, end: 5 })).toBe("one\n\ntwo"); // emptied middle block
+  expect(closeBlock("one\n\n  ", { start: 5, end: 7 })).toBe("one"); // blank last block
+  expect(closeBlock(notes, { start: 0, end: 3 })).toBe(notes);
+  expect(closeBlock("", { start: 0, end: 0 })).toBe("");
+});
+
+const rowTexts = (rows: { text: string; isEditing: boolean }[]) => rows.map((r) => (r.isEditing ? `[${r.text}]` : r.text));
+
+test("layoutRows: one row per block; the block being edited stays one row", () => {
+  const notes = "one\n\ntwo\n\nsplit\n\nthree";
+  expect(rowTexts(layoutRows(notes, []).rows)).toEqual(["one", "two", "split", "three"]);
+  const editing = { start: notes.indexOf("two"), end: notes.indexOf("split") + 5 }; // a blank line typed while editing
+  expect(rowTexts(layoutRows(notes, [], editing).rows)).toEqual(["one", "[two\n\nsplit]", "three"]);
+});
+
+test("layoutRows: an empty block being edited still gets its row, in place", () => {
+  const notes = "one\n\n\n\ntwo";
+  expect(rowTexts(layoutRows(notes, [], { start: 5, end: 5 }).rows)).toEqual(["one", "[]", "two"]);
+  expect(rowTexts(layoutRows(notes, [], { start: notes.length, end: notes.length }).rows)).toEqual(["one", "two", "[]"]);
+  expect(rowTexts(layoutRows("", [], { start: 0, end: 0 }).rows)).toEqual(["[]"]);
+});
+
+test("layoutRows: reactions sit beside the row where their excerpt starts; detached go last", () => {
   const notes = "First idea.\n\nSecond line one\nsecond line two.\n\nThird.";
-  const blocks = splitBlocks(notes);
-  expect(blockForExcerpt(notes, blocks, "line two")).toBe(1);
-  expect(blockForExcerpt(notes, blocks, "Second line one second line two.")).toBe(1); // rewrapped
-  expect(blockForExcerpt(notes, blocks, "idea.\n\nSecond")).toBe(0); // spans blocks: where it starts
-  expect(blockForExcerpt(notes, blocks, "rewritten away")).toBeUndefined();
+  const reactions = [
+    { id: "a", excerpt: "Third." },
+    { id: "b", excerpt: "line two" },
+    { id: "c", excerpt: "Second line one second line two." }, // rewrapped: still found
+    { id: "d", excerpt: "idea.\n\nSecond" }, // spans blocks: where it starts
+    { id: "e", excerpt: "rewritten away" },
+  ];
+  const { rows, detached } = layoutRows(notes, reactions);
+  expect(rows.map((r) => r.reactions.map((p) => p.reaction.id))).toEqual([["d"], ["c", "b"], ["a"]]);
+  expect(rows[2].reactions[0]).toMatchObject({ start: notes.indexOf("Third."), end: notes.length });
+  expect(detached.map((r) => r.id)).toEqual(["e"]);
+  const editing = { start: notes.indexOf("Second"), end: notes.length }; // one edit row over two blocks
+  expect(layoutRows(notes, reactions, editing).rows.map((r) => r.reactions.length)).toEqual([1, 3]);
 });
 
 test("renderMarkdown: headings, emphasis, lists, blockquote, table, code, line breaks", () => {
@@ -97,7 +145,11 @@ test("renderMarkdown: headings, emphasis, lists, blockquote, table, code, line b
   expect(renderMarkdown("line one\nline two")).toBe("<p>line one<br>line two</p>\n");
   expect(renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |")).toContain("<td>1</td>");
   expect(renderMarkdown("```\nx < y\n```")).toBe("<pre><code>x &lt; y\n</code></pre>\n");
-  expect(renderMarkdown("[link](https://example.com)")).toBe('<p><a href="https://example.com">link</a></p>\n');
+  expect(renderMarkdown("[link](https://example.com)")).toBe(
+    '<p><a target="_blank" rel="noopener noreferrer" href="https://example.com">link</a></p>\n',
+  );
+  expect(renderMarkdown("see https://example.com")).toContain('<a target="_blank" rel="noopener noreferrer" href="https://example.com">');
+  expect(renderMarkdown("`<a href=x>`")).toBe("<p><code>&lt;a href=x&gt;</code></p>\n"); // code stays escaped, untouched
 });
 
 test("a passage quote renders as a blockquote with its cite", () => {
@@ -133,4 +185,14 @@ test("cites are wrapped in text, but not inside code", () => {
   expect(renderMarkdown("```\n[¶7]\n```")).toBe("<pre><code>[¶7]\n</code></pre>\n");
   expect(renderMarkdown("[plain] and [¶] alone")).toBe("<p>[plain] and [¶] alone</p>\n");
   expect(renderMarkdown('<a title="[¶8]">')).toBe("<p>&lt;a title=&quot;[¶8]&quot;&gt;</p>\n"); // escaped, not wrapped
+});
+
+test("margin stacks start at their block's top; one that would overlap is pushed below the one before", () => {
+  expect(stackCards([], 12)).toEqual([]);
+  // Room between blocks: each stack sits at its anchor.
+  expect(stackCards([{ anchor: 0, height: 50 }, { anchor: 100, height: 30 }], 12)).toEqual([0, 100]);
+  // A tall stack pushes the next ones down, and the push carries on down the margin.
+  expect(stackCards([{ anchor: 0, height: 200 }, { anchor: 40, height: 30 }, { anchor: 80, height: 30 }], 12)).toEqual([0, 212, 254]);
+  // Once there is room again, a stack returns to its anchor.
+  expect(stackCards([{ anchor: 0, height: 20 }, { anchor: 10, height: 20 }, { anchor: 500, height: 20 }], 12)).toEqual([0, 32, 500]);
 });

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { blockAt, commandTarget, splitBlocks } from "@/core/blocks.ts";
 import { defineQuote, insertAfterLine, isDefinable, trimPhrase } from "@/core/commands.ts";
 import { exportMarkdown } from "@/core/export.ts";
-import { reactTarget, type ReactionKind } from "@/core/reactions.ts";
+import type { ReactionKind } from "@/core/reactions.ts";
 import {
   loadState,
   saveState,
@@ -15,7 +16,8 @@ import {
   type StoreError,
 } from "@/core/store.ts";
 import { Chat, type ChatHandle } from "./components/Chat";
-import { Margin, type MarginHandle } from "./components/Margin";
+import { MarginCell, useReactions } from "./components/Margin";
+import { Notes, type NotesHandle } from "./components/Notes";
 import { ReactButton } from "./components/ReactButton";
 import { ReferenceText, type ReferenceTextHandle } from "./components/ReferenceText";
 
@@ -53,12 +55,11 @@ export default function Home() {
   const [isBusy, setIsBusy] = useState(false); // a chat reply is streaming (reactions stream on their own)
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while the drawer is closed
-  const [caret, setCaret] = useState<number>(); // the notes caret, for the margin's active card
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const notesBox = useRef<HTMLTextAreaElement>(null);
+  const notesView = useRef<NotesHandle>(null);
   const chat = useRef<ChatHandle>(null);
-  const margin = useRef<MarginHandle>(null);
+  const margin = useReactions({ reference, notes, setReactions });
   const referenceText = useRef<ReferenceTextHandle>(null);
   const chatToggle = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
@@ -110,57 +111,43 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onEscape);
   }, [isChatOpen]);
 
-  // Selects a range of the notes; blur then focus scrolls it into view.
-  function showExcerpt(start: number, end: number) {
-    const box = notesBox.current;
-    if (!box) return;
-    box.focus();
-    box.setSelectionRange(start, end);
-    box.blur();
-    box.focus();
-    setCaret(start);
-  }
-
-  // React (D18, D20) acts on the selection, or on the paragraph at the cursor. `kind` absent: the router picks.
+  // React (D18, D20) acts on the selection in the block being edited, or on the whole block last
+  // edited or focused. `kind` absent: the router picks.
   function react(kind?: ReactionKind) {
-    const box = notesBox.current;
-    if (!box) return;
     clearStatus();
     if (!hasReference) return showStatus("Add reference text first."); // Cmd/Ctrl+Enter skips the disabled button
-    const { selectionStart: start, selectionEnd: end } = box;
-    const excerpt = reactTarget(notes, start, end);
-    if (!excerpt) return showStatus("Put the cursor in a note, or select some text, then React.");
+    const target = notesView.current?.target();
+    const excerpt = target && commandTarget(notes, target.start, target.end);
+    if (!target || !excerpt) return showStatus("Click a note, or select some text in one, then React.");
     // Select exactly what is sent, so the reader sees it.
-    const from = end > start ? notes.indexOf(excerpt, start) : notes.lastIndexOf(excerpt, start);
-    const isAroundCursor = from !== -1 && from + excerpt.length >= start;
-    if (isAroundCursor) showExcerpt(from, from + excerpt.length);
-    margin.current?.react(excerpt, kind);
+    if (target.isEditing) {
+      const { start, end } = target;
+      const from = end > start ? notes.indexOf(excerpt, start) : notes.lastIndexOf(excerpt, start);
+      const isAroundCaret = from !== -1 && from + excerpt.length >= start;
+      if (isAroundCaret) notesView.current?.select(from, from + excerpt.length);
+    }
+    margin.react(excerpt, kind);
   }
 
-  // Commands act on the notes selection, read at click time (D17). Define first pastes the
+  // Commands act on the same target as React, read at click time (D17). Define first pastes the
   // passage sentence under the selection (app code, not the AI: D6), then asks chat to define.
   function runCommand(name: "define" | "quiz") {
-    const box = notesBox.current;
-    if (!box) return;
     clearStatus(); // a previous command's message would describe the wrong run
     if (notes.trim() === "") return showStatus("Write a note first.");
-    const { selectionStart: start, selectionEnd: end } = box;
-    if (name === "quiz") return runInChat({ name, selection: notes.slice(start, end).trim() });
+    const target = notesView.current?.target();
+    // Quiz with nothing targeted covers all the notes (D17).
+    if (name === "quiz") return runInChat({ name, selection: (target && commandTarget(notes, target.start, target.end)) ?? "" });
 
-    const selection = trimPhrase(notes.slice(start, end)); // "**Netherfield**" → "Netherfield"
-    if (selection === "") return showStatus("Select a word or phrase in your notes, then Define.");
+    // A caret alone stands for its whole block.
+    const isCaret = target !== undefined && target.start === target.end;
+    const range = isCaret ? blockAt(splitBlocks(notes), target.start) : target;
+    const selection = range ? trimPhrase(notes.slice(range.start, range.end)) : ""; // "**Netherfield**" → "Netherfield"
+    if (!range || selection === "") return showStatus("Select a word or phrase in a note, then Define.");
     if (!isDefinable(selection)) return showStatus("Define works on a word or short phrase: one line, up to 4 words.");
-    const quote = defineQuote(reference, notes, start, end);
+    const quote = defineQuote(reference, notes, range.start, range.end);
     if (quote) {
-      const inserted = insertAfterLine(notes, end, quote);
-      setNotes(inserted.notes);
-      // The textarea is controlled: move the caret once React has rendered the new value.
-      // Blur then focus scrolls the caret into view.
-      requestAnimationFrame(() => {
-        box.setSelectionRange(inserted.caret, inserted.caret);
-        box.blur();
-        box.focus();
-      });
+      const inserted = insertAfterLine(notes, range.end, quote);
+      notesView.current?.edit(inserted.notes, inserted.caret); // the block stays open, caret after the quote
       showStatus(`Quote from ${quote.slice(quote.lastIndexOf("[") + 1, -1)} added below your note.`);
     } else {
       showStatus(`“${selection}” isn't in the reference text, so no quote was added.`);
@@ -223,7 +210,7 @@ export default function Home() {
 
   const isNotesEmpty = notes.trim() === "";
   const isUnreadShown = hasUnread && !isChatOpen;
-  const trackCaret = (box: HTMLTextAreaElement) => setCaret(box.selectionStart);
+  const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
 
   return (
     <main>
@@ -249,76 +236,83 @@ export default function Home() {
       </header>
       {/* Below the header, so the drawer never covers the Chat toggle. */}
       <div className="workspace" data-chat-open={isChatOpen || undefined}>
+        {/* One scroll: each row is a block and the reactions beside it, so card tops line up
+            with block tops (D18). */}
         <div className="panes">
-          <section className="notes">
-            {/* Every control here acts on the notes. mousedown is cancelled so focus and the
-                highlighted selection stay in the notes. */}
-            <div className="toolbar">
-              <ReactButton title={reactTitle} onReact={react} />
-              {(["define", "quiz"] as const).map((name) => (
+          <div className="row toolbar-row">
+            <div className="notes-cell">
+              {/* Every control here acts on the notes. mousedown is cancelled so focus and the
+                  highlighted selection stay in the block being edited. */}
+              <div className="toolbar">
+                <ReactButton title={reactTitle} onReact={react} />
+                {(["define", "quiz"] as const).map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    disabled={commandTitle !== undefined}
+                    title={commandTitle}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => runCommand(name)}
+                  >
+                    {name === "define" ? "Define" : "Quiz"}
+                  </button>
+                ))}
+                <span className="divider" aria-hidden="true" />
                 <button
-                  key={name}
                   type="button"
-                  disabled={commandTitle !== undefined}
-                  title={commandTitle}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => runCommand(name)}
+                  disabled={isNotesEmpty}
+                  title={isNotesEmpty ? "Nothing to export yet" : undefined}
+                  onClick={() => {
+                    const file = exportMarkdown(notes, reference, new Date());
+                    download(file.filename, file.content);
+                  }}
                 >
-                  {name === "define" ? "Define" : "Quiz"}
+                  Export .md
                 </button>
-              ))}
-              <span className="divider" aria-hidden="true" />
-              <button
-                type="button"
-                disabled={isNotesEmpty}
-                title={isNotesEmpty ? "Nothing to export yet" : undefined}
-                onClick={() => {
-                  const file = exportMarkdown(notes, reference, new Date());
-                  download(file.filename, file.content);
-                }}
-              >
-                Export .md
-              </button>
-              <span className="notes-status" aria-live="polite">
-                {status}
-              </span>
+                <span className="notes-status" aria-live="polite">
+                  {status}
+                </span>
+                <span className="sr-only" aria-live="polite">
+                  {margin.announcement}
+                </span>
+              </div>
+              {!hasReference && (
+                <p className="empty-reference">
+                  Add the chapter you&apos;re reading so the AI can check what it says.{" "}
+                  <button type="button" className="link" onClick={() => referenceText.current?.open()}>
+                    Add reference text
+                  </button>
+                </p>
+              )}
             </div>
-            {!hasReference && (
-              <p className="empty-reference">
-                Add the chapter you&apos;re reading so the AI can check what it says.{" "}
-                <button type="button" className="link" onClick={() => referenceText.current?.open()}>
-                  Add reference text
-                </button>
-              </p>
-            )}
-            <label htmlFor="notes-text" className="sr-only">
-              Notes
-            </label>
-            {/* The user's own words and app-pasted passage quotes only (D6): the AI never writes here. */}
-            <textarea
-              ref={notesBox}
-              id="notes-text"
-              value={notes}
-              onChange={(e) => editNotes(e.target.value)}
-              onSelect={(e) => trackCaret(e.currentTarget)}
-              onKeyUp={(e) => trackCaret(e.currentTarget)}
-              onKeyDown={(e) => {
-                const isReactShortcut = e.key === "Enter" && (e.metaKey || e.ctrlKey);
-                if (!isReactShortcut) return;
-                e.preventDefault();
-                react();
-              }}
-              placeholder="Write what you notice as you read. Put the cursor in a note and press React to hear back."
-            />
-          </section>
-          <Margin
-            ref={margin}
-            reference={reference}
+            <div className="margin-cell">
+              {reactions.length === 0 && <p className="empty">Reactions to your notes appear here, beside the note they answer.</p>}
+            </div>
+          </div>
+          <Notes
+            ref={notesView}
             notes={notes}
             reactions={reactions}
-            setReactions={setReactions}
-            caret={caret}
-            onShowExcerpt={showExcerpt}
+            onChange={editNotes}
+            onReactShortcut={() => react()}
+            renderMargin={(row, isCurrent) => (
+              <MarginCell
+                items={row.reactions}
+                isCurrent={isCurrent}
+                margin={margin}
+                hasReference={hasReference}
+                onShowExcerpt={showExcerpt}
+              />
+            )}
+            renderDetached={(detached) => (
+              <MarginCell
+                items={detached.map((reaction) => ({ reaction }))}
+                isDetached
+                margin={margin}
+                hasReference={hasReference}
+                onShowExcerpt={showExcerpt}
+              />
+            )}
           />
         </div>
         {/* Not modal: the notes stay usable underneath. Inert while closed, so it is out of the tab order. */}

@@ -5,11 +5,12 @@
 // A blank line inside a ``` fence splits the fence too (accepted cost, D20).
 // Browser-safe and pure: the UI imports all of this.
 import { Marked, type Tokens } from "marked";
-import { findExcerpt } from "./reactions.ts";
+import { placeReactions } from "./reactions.ts";
 
 // notes.slice(start, end) === text. A block never starts or ends on a line break; with CRLF notes,
 // the last line's "\r" is left in the separator.
 export type Block = { text: string; start: number; end: number };
+type Range = { start: number; end: number };
 
 export function splitBlocks(notes: string): Block[] {
   const blocks: Block[] = [];
@@ -30,8 +31,9 @@ export function splitBlocks(notes: string): Block[] {
   return blocks;
 }
 
-// `block` must come from splitBlocks(notes). Every byte outside the block is kept.
-export function replaceBlock(notes: string, block: Block, newText: string): string {
+// `block` must come from splitBlocks(notes), or be the range of a block being edited. Every byte
+// outside the block is kept.
+export function replaceBlock(notes: string, block: Range, newText: string): string {
   return notes.slice(0, block.start) + newText + notes.slice(block.end);
 }
 
@@ -47,7 +49,7 @@ export function appendBlock(notes: string, text: string): string {
 
 // Removes the block and the separator after it; the last block takes the separator before it
 // instead, so the notes' trailing blank lines stay as they were.
-export function removeBlock(notes: string, block: Block): string {
+export function removeBlock(notes: string, block: Range): string {
   const blocks = splitBlocks(notes);
   const next = blocks.find((b) => b.start >= block.end);
   if (next) return notes.slice(0, block.start) + notes.slice(next.start);
@@ -61,13 +63,73 @@ export function blockAt(blocks: Block[], offset: number): Block | undefined {
   return blocks.find((b) => offset >= b.start && offset <= b.end);
 }
 
-// Which block a reaction belongs beside: the index of the block where its excerpt starts.
-// Undefined → the excerpt is no longer in the notes (detached, "Your note changed").
-export function blockForExcerpt(notes: string, blocks: Block[], excerpt: string): number | undefined {
-  const range = findExcerpt(notes, excerpt);
-  if (!range) return undefined;
-  const index = blocks.findIndex((b) => range.start >= b.start && range.start < b.end);
-  return index === -1 ? undefined : index;
+// What a command (React, Quiz, Define) acts on: the trimmed selection; with a caret and no
+// selection, the whole block under it (D20). Undefined when that is empty (a caret on a blank line).
+export function commandTarget(notes: string, start: number, end: number): string | undefined {
+  const selection = notes.slice(start, end).trim();
+  if (selection !== "") return selection;
+  const isOnlyWhitespaceSelected = end > start;
+  if (isOnlyWhitespaceSelected) return undefined;
+  return blockAt(splitBlocks(notes), start)?.text.trim() || undefined;
+}
+
+// Leaving a block: one left empty (or only whitespace) is removed with its separator, so an
+// abandoned block leaves no stray blank lines. Any other block leaves the notes as they are.
+export function closeBlock(notes: string, block: Range): string {
+  const isEmpty = notes.slice(block.start, block.end).trim() === "";
+  return isEmpty ? removeBlock(notes, block) : notes;
+}
+
+// One row of the notes view: a block and the reactions beside it.
+export type Row<R> = Block & { isEditing: boolean; reactions: { reaction: R; start: number; end: number }[] };
+
+// The notes view (D20): one row per block, except that the block being edited stays one row
+// while it is open, even after a blank line typed into it (it splits once it closes), and shows
+// even when empty. A reaction sits beside the row where its excerpt starts, in note order;
+// `detached` are those whose excerpt is gone ("Your note changed").
+export function layoutRows<R extends { excerpt: string }>(
+  notes: string,
+  reactions: R[],
+  editing?: Range,
+): { rows: Row<R>[]; detached: R[] } {
+  const rows: Row<R>[] = [];
+  const editRow: Row<R> | undefined = editing && {
+    ...editing,
+    text: notes.slice(editing.start, editing.end),
+    isEditing: true,
+    reactions: [],
+  };
+  let isEditRowPlaced = false;
+  for (const block of splitBlocks(notes)) {
+    const isInEditRow = editing !== undefined && block.start < editing.end && block.end > editing.start;
+    const isPastEditRow = editing !== undefined && block.start >= editing.end;
+    if (editRow && !isEditRowPlaced && (isInEditRow || isPastEditRow)) {
+      rows.push(editRow);
+      isEditRowPlaced = true;
+    }
+    if (!isInEditRow) rows.push({ ...block, isEditing: false, reactions: [] });
+  }
+  if (editRow && !isEditRowPlaced) rows.push(editRow);
+
+  const { placed, detached } = placeReactions(notes, reactions);
+  for (const item of placed) {
+    const row = rows.find((r) => item.start >= r.start && item.start < r.end);
+    if (row) row.reactions.push(item);
+    else detached.push(item.reaction);
+  }
+  return { rows, detached };
+}
+
+// The margin on wide screens, like comments in Google Docs (D18): each block's stack of cards
+// wants to start at its block's top (`anchor`); one that would overlap the stack before it is
+// pushed down to just below it, `gap` apart. Stacks in note order; returns each stack's top.
+export function stackCards(stacks: { anchor: number; height: number }[], gap: number): number[] {
+  let nextFree = -Infinity;
+  return stacks.map(({ anchor, height }) => {
+    const top = Math.max(anchor, nextFree);
+    nextFree = top + height + gap;
+    return top;
+  });
 }
 
 // ---- Rendering a block as markdown (D18) ----
@@ -121,7 +183,9 @@ const markdown = new Marked({
   ],
 });
 
-// One block's markdown → HTML, synchronously, safe for dangerouslySetInnerHTML.
+// One block's markdown → HTML, synchronously, safe for dangerouslySetInnerHTML. Links open in a
+// new tab, so following one never leaves the notes. Raw HTML and code are escaped, so every
+// "<a href=" in the output is one marked rendered from a markdown link.
 export function renderMarkdown(text: string): string {
-  return markdown.parse(text, { async: false });
+  return markdown.parse(text, { async: false }).replaceAll("<a href=", '<a target="_blank" rel="noopener noreferrer" href=');
 }

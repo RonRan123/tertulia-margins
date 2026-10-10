@@ -25,26 +25,6 @@ export function parseRouterKind(answer: string): ReactionKind {
   return match ? (match[1].toLowerCase() as ReactionKind) : "question";
 }
 
-// What React acts on: the trimmed selection, or with no selection the blank-line-separated
-// paragraph (block, D20) around the cursor. Undefined when that is empty (cursor on a blank line).
-export function reactTarget(notes: string, selectionStart: number, selectionEnd: number): string | undefined {
-  const selection = notes.slice(selectionStart, selectionEnd).trim();
-  if (selection !== "") return selection;
-  const isOnlyWhitespaceSelected = selectionEnd > selectionStart;
-  if (isOnlyWhitespaceSelected) return undefined;
-
-  const blankLines = /\n(?:[^\S\n]*\n)+/g; // one or more blank lines between paragraphs
-  let start = 0;
-  for (const match of notes.matchAll(blankLines)) {
-    const [from, to] = [match.index, match.index + match[0].length];
-    const isCursorInside = selectionStart > from && selectionStart < to; // on the blank line itself
-    if (isCursorInside) return undefined;
-    if (to <= selectionStart) start = to;
-    if (from >= selectionStart) return notes.slice(start, from).trim() || undefined;
-  }
-  return notes.slice(start).trim() || undefined;
-}
-
 // Where a reaction's excerpt is in the notes now (D20: anchor by text, not position).
 // Exact match first; then one that differs only in whitespace (a rewrapped line). Undefined → "note changed".
 export function findExcerpt(notes: string, excerpt: string): { start: number; end: number } | undefined {

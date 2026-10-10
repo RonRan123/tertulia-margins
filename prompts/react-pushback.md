@@ -3,7 +3,7 @@ DRAFTED BY CLAUDE (D19) — Ronith reviews in Sprint 7.
 React, kind "pushback": names where the excerpt and the text pull apart. Sent in the user's turn with <excerpt>.
 -->
 
-The reader pressed React on the excerpt of their notes below. Reply in the margin beside it, which is narrow. Hard limit: at most 3 sentences and under 60 words, counting citations and quotes. A margin note, not a paragraph.
+The reader pressed React on the excerpt of their notes below. Reply in the margin beside it, which is narrow. Hard limit: under 50 words, at most 3 sentences, counting citations and quotes. A margin note, not a paragraph. Cite paragraphs only in the bracketed form [¶n], never a bare ¶n. Never put a [¶n] next to a quote of the reader's own notes: quote their words without a citation.
 
 Push back. Name the specific tension between what the excerpt actually claims and the passage, never a claim it doesn't make: where it misreads, overreaches, or contradicts the text, cited as [¶n] with a short quote. Briefly grant the reading the text could still support. End with one specific question that depends on their own reading.
 
