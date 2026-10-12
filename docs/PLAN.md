@@ -47,6 +47,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] Viewer: pdfjs viewer with selectable text; floating toolbar: zoom out, fit width, zoom in, page box "N of M", download, search with highlighted matches and "n / total". A cite in chat or an open card ("[¶3 · PDF p. 2]") opens the PDF at that page. **Verify:** headless Chrome on two public-domain test PDFs (4 pages each; one from `cupsfilter`, one typeset by Chrome): upload rendered all pages with a text layer and filled the reference text; zoom in/out/fit changed the page width (456 → 507 → 344 → 456 px); page box 3 scrolled page 3 to the top; search "Bennet" found 20 matches, highlights on the words; reload kept the PDF; a `PDF p. 2` cite clicked from the chat view opened page 2; a second upload showed the replace banner; light and dark screenshots; 119 tests, lint, build green.
 - [x] *Also (Ronith, mid-step):* the top bar spans the full width above the sidebar (ChatPDF-style), so toggling the sidebar never moves it; the app name moved into the bar and the sidebar's « was removed.
 
+### R3b: reference-text cap (D32)
+- [x] Cap the reference text at 25K tokens (chars ÷ 4): over it, React, chat and thread replies pause with a message, and the route refuses `reference_too_long` before any paid call. A PDF over the cap asks which pages to use (prefilled with as many from page 1 as fit); "Choose PDF pages" under the book reopens it. **Verify:** 4 new core tests (estimate, page count/slice, fit, route refusal), 123 tests, lint, build green; headless Chrome: a 38K-token reference showed the notice and disabled React and chat; a 191-page PDF opened the picker at pages 1–41 (~24K tokens); a range past the end disabled Use; pages 3–5 became the reference text and the AI came back.
+
 ### R4+ (not scheduled): grounded linking
 - [ ] Link a cite to the actual text, not just its page: regex for the quoted words around the cited page(s), then AI as a fallback (Ronith's "future iteration"). **Decide first:** Q10.
 
@@ -80,7 +83,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Highlight the cited text on the PDF page (needs pdfjs rendering instead of the built-in viewer; D23 revisit)
 - Bring back Define/Quiz with behaviour Ronith likes (D24): where the reply lands, and whether Define pastes a quote
 - R1c QA: ~~margin cards show their excerpt as raw markdown~~ (fixed in R1d); links in the notes aren't clickable (no Cmd-click yet); on phones cards list under the notes, not under each paragraph (D25)
-- R3: a whole book's PDF text becomes the reference text, and every AI call sends all of it (the status line shows ~tokens). For long books that is expensive per turn: decide between trimming to a chapter, prompt caching (Sprint 7) and retrieval (Q5)
+- ~~R3: a whole book's PDF text becomes the reference text, and every AI call sends all of it~~ (capped by D32; the real fix is below)
+- Send only the relevant parts of a book (Ronith, D32): structured XML of the book (chapters, pages, paragraphs) and choosing which parts go with each call, instead of one capped reference text. Was: R3 (the status line shows ~tokens). For long books that is expensive per turn: decide between trimming to a chapter, prompt caching (Sprint 7) and retrieval (Q5)
 - R3 QA: pdfjs logs one "offsetParent is not set -- cannot scroll" console message when a PDF loads while its view is hidden; harmless (one fix attempt made; the jump and fit work)
 - R3 QA: PDF text-layer quality depends on the PDF (a `cupsfilter` PDF splits "fi" ligatures, so "Netherfield" isn't found there)
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."

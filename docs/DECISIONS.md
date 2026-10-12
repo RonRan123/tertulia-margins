@@ -302,6 +302,15 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** one notes file per book until a later step.
 - **Revisit if:** one file per book gets unwieldy for long books.
 
+## D32. A 25K-token cap on the reference text; pick PDF pages to fit it
+- **Status:** Accepted (2026-10-12, Ronith: "add a blocker for the time being so that the whole book doesn't get parsed with each use of AI")
+- **Context:** R3 fills the reference text from a whole PDF, and every chat turn and reaction sends all of it: a 300-page book is ~150K tokens, ~30¢ a turn on Sonnet 5.5's $2/MTok input (D12's price, to re-check before Sprint 7).
+- **Alternatives:** caps of 10K (~2¢/turn) or 50K (~10¢/turn) tokens; block only and trim the text by hand.
+- **Rules:** `core/passage` estimates tokens as characters ÷ 4 and caps the reference text at 25K tokens (~100K characters, 2–3 chapters, ~5¢ a turn). Over the cap, React, chat and thread replies are disabled with a message saying the size and how to fix it, and the route refuses the request (`reference_too_long`) before any paid call. When a PDF's text is over the cap, the upload asks which PDF pages to use (prefilled with as many pages from the start as fit); "Choose PDF pages" under the book reopens that choice. The PDF itself still shows in full.
+- **Why:** a hard ceiling on cost per turn while grounding stays whole-text, until a better way to send only the relevant parts exists.
+- **Cost we accept:** the AI sees only the chosen pages; re-picking pages as the reader moves on.
+- **Revisit if:** Ronith's exploration of structured XML and sending only parts of the book (Parking lot) lands, or prompt caching (Sprint 7) makes larger references cheap.
+
 ---
 
 ## Template

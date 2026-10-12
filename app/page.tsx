@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { commandTarget } from "@/core/blocks.ts";
+import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
 import {
@@ -108,7 +109,15 @@ export default function Home() {
   const margin = useReactions({ reference, notes, setReactions });
   const referenceText = useRef<ReferenceTextHandle>(null);
   const hasReference = reference.trim() !== "";
-  const reactTitle = !hasReference ? "Add reference text first" : undefined;
+  const isTooLong = isReferenceTooLong(reference);
+  // Why the AI can't be asked right now (React, chat, thread replies), or undefined. D32: over the
+  // cap, every call would send too much text.
+  const aiBlock = !hasReference
+    ? "Add reference text first."
+    : isTooLong
+      ? `The reference text is ~${Math.round(estimateTokens(reference) / 1000)}K tokens, over the ${REFERENCE_TOKEN_LIMIT / 1000}K limit, so the AI is paused. Choose fewer PDF pages or trim it.`
+      : undefined;
+  const reactTitle = aiBlock;
 
   // A status message clears itself after a few seconds, or on the next notes edit.
   const showStatus = (message: string) => {
@@ -140,7 +149,7 @@ export default function Home() {
   // edited or focused. `kind` absent: the router picks.
   function react(kind?: ReactionKind) {
     clearStatus();
-    if (!hasReference) return showStatus("Add reference text first."); // Cmd/Ctrl+Enter skips the disabled button
+    if (aiBlock) return showStatus(aiBlock); // Cmd/Ctrl+Enter skips the disabled button
     const target = notesView.current?.target();
     const excerpt = target && commandTarget(notes, target.start, target.end);
     if (!target || !excerpt) return showStatus("Click a note, or select some text in one, then React.");
@@ -276,6 +285,10 @@ export default function Home() {
     showPdf();
     pdfPane.current?.pick();
   };
+  const choosePages = () => {
+    showPdf();
+    pdfPane.current?.choosePages();
+  };
   // A cite's page: the page as given (D23); R4 matches the cited text instead. If the PDF view is
   // hidden, the viewer holds the page until it is shown and fitted (PdfViewer).
   const openPage = (page: number) => {
@@ -381,6 +394,7 @@ export default function Home() {
             referenceRef={referenceText}
             canExport={!isNotesEmpty}
             onAddPdf={addPdf}
+        onChoosePages={choosePages}
             onExport={() => {
               const file = exportMarkdown(notes, reference, new Date());
               download(file.filename, file.content);
@@ -400,6 +414,14 @@ export default function Home() {
                     </button>
                   </p>
                 )}
+                {isTooLong && (
+                  <p className="empty-reference warning">
+                    {aiBlock}{" "}
+                    <button type="button" className="link" onClick={choosePages}>
+                      Choose PDF pages
+                    </button>
+                  </p>
+                )}
                 <Notes
                   ref={notesView}
                   notes={notes}
@@ -411,7 +433,7 @@ export default function Home() {
                       items={row.reactions}
                       isCurrent={isCurrent}
                       margin={margin}
-                      hasReference={hasReference}
+                      blockReason={aiBlock}
                       onShowExcerpt={showExcerpt}
                     />
                   )}
@@ -420,7 +442,7 @@ export default function Home() {
                       items={detached.map((reaction) => ({ reaction }))}
                       isDetached
                       margin={margin}
-                      hasReference={hasReference}
+                      blockReason={aiBlock}
                       onShowExcerpt={showExcerpt}
                     />
                   )}
@@ -439,6 +461,7 @@ export default function Home() {
                 </div>
                 <div className="chat-pane">
                   <Chat
+                    blockReason={aiBlock}
                     reference={reference}
                     notes={notes}
                     messages={messages}

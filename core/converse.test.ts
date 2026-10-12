@@ -227,3 +227,8 @@ test("reaction validation: shape, excerpt, kind, replies, and no command alongsi
   expect(parseConverseRequest(reply)).toMatchObject({ reaction: { excerpt: "Mine", kind: "question" } });
   expect(parseConverseRequest(reply)).not.toHaveProperty("reaction.extra");
 });
+
+test("a reference text over the D32 cap is refused before any call", () => {
+  const passage = "[p. 1] " + "word ".repeat(25_000);
+  expect(parseConverseRequest({ passage, question: "Why?" })).toEqual({ error: "reference_too_long" });
+});

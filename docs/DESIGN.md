@@ -47,6 +47,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Light theme by default (white, gray, light blue); dark behind a toggle | palette from the system setting | D28 |
 | PDF view: pdfjs viewer with a floating toolbar (zoom, page, download, search) | browser's built-in viewer (D23) | D29 |
 | Top bar of icon + label toggles, ChatPDF-style | text switcher (D26) | D30 |
+| Reference text capped at 25K tokens; PDF page picker | whole reference text every call | D32 |
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
@@ -233,6 +234,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q8. PDF by URL (R3).** Fetching from the browser fails on most sites (CORS); a server route that fetches it works but is an open proxy on the public demo (D9). Options: browser fetch with a clear error, a size-capped route, or upload only.
 - **Q9. Book data model (R2).** *Resolved (D31): one notes file per book; v1's state becomes "My first book".*
 - **Q10. Page mismatch (R3+).** PDF pages often differ from the paper book (D13). A per-book page offset, the grounded text match from §6.1, or both?
+- **Q12. Sending parts of a book.** D32 caps the reference text at 25K tokens; Ronith wants to explore structured XML and sending only the relevant parts per call (relates to Q5).
 - **Q11. v2 time box.** How many hours the overhaul gets before Sprint 7 (D21).
 
 ---

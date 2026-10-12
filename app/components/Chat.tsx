@@ -18,6 +18,7 @@ import { streamMessage } from "@/lib/converse-client.ts";
 // The page owns the messages so it can persist them (D7). Notes go with every question (D6:
 // they steer the reply, but the AI's text stays here in the chat, never in the notes).
 type ChatProps = {
+  blockReason?: string; // why the AI can't be asked now (no reference text, or over the D32 cap)
   reference: string;
   notes: string;
   messages: Message[];
@@ -25,14 +26,13 @@ type ChatProps = {
   onReplyEnd?: () => void; // the page shows an unread dot while chat is hidden
 };
 
-export function Chat({ reference, notes, messages, setMessages, onReplyEnd }: ChatProps) {
+export function Chat({ blockReason, reference, notes, messages, setMessages, onReplyEnd }: ChatProps) {
   const [isBusy, setIsBusy] = useState(false); // a reply is streaming
   const [question, setQuestion] = useState("");
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [hasAskedToClear, setHasAskedToClear] = useState(false); // then focus returns to "Clear conversation"
   const questionBox = useRef<HTMLTextAreaElement>(null);
   const messageList = useRef<HTMLOListElement>(null);
-  const hasReference = reference.trim() !== "";
 
   // Bring a newly added message into view. Keyed on the count, not the content, so streamed
   // deltas don't pull the list back down while the user scrolls up to read.
@@ -44,7 +44,7 @@ export function Chat({ reference, notes, messages, setMessages, onReplyEnd }: Ch
     setMessages((ms) => [...ms.slice(0, -1), patch(ms[ms.length - 1])]);
 
   async function send(question: string) {
-    const isReady = question.trim() !== "" && hasReference && !isBusy;
+    const isReady = question.trim() !== "" && !blockReason && !isBusy;
     if (!isReady) return;
     // Messages come in (question, reply) pairs. A failed or empty reply is dropped with the
     // question that prompted it, so history never has two user turns in a row.
@@ -131,11 +131,11 @@ export function Chat({ reference, notes, messages, setMessages, onReplyEnd }: Ch
             e.preventDefault();
             send(question);
           }}
-          placeholder={hasReference ? "Ask about the text or your notes (Enter to send)" : "Add reference text first (button at the top)"}
-          disabled={!hasReference}
+          placeholder={blockReason ?? "Ask about the text or your notes (Enter to send)"}
+          disabled={blockReason !== undefined}
           rows={3}
         />
-        <button type="submit" disabled={isBusy || !question.trim() || !hasReference}>
+        <button type="submit" disabled={isBusy || !question.trim() || blockReason !== undefined}>
           {isBusy ? "Replying…" : "Send"}
         </button>
       </form>

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
 import { COMMANDS, isCommandName, type Command } from "./commands.ts";
-import { parsePassage } from "./passage.ts";
+import { isReferenceTooLong, parsePassage } from "./passage.ts";
 import { isReactionKind, parseRouterKind, REACTIONS, ROUTER, type ReactionKind, type ReactionRequest } from "./reactions.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
@@ -30,6 +30,7 @@ export type ConverseRequestError =
   | "body_invalid"
   | "passage_missing"
   | "passage_empty" // only page markers: nothing to ground on
+  | "reference_too_long" // over the D32 cap: refused before any paid call
   | "question_missing"
   | "notes_invalid"
   | "history_invalid"
@@ -82,6 +83,7 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isQuestionOptional = isFirstReaction && (question === undefined || typeof question === "string");
   if (!isText(question) && !isQuestionOptional) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
+  if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
   const isNotesValid = notes === undefined || typeof notes === "string";
   if (!isNotesValid) return { error: "notes_invalid" };
 

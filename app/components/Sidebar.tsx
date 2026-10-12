@@ -26,13 +26,14 @@ type SidebarProps = {
   onReferenceChange: (value: string) => void;
   referenceRef: Ref<ReferenceTextHandle>;
   onAddPdf: () => void;
+  onChoosePages: () => void;
   canExport: boolean;
   onExport: () => void;
 };
 
 const BUSY_TITLE = "Wait for the current reply to finish";
 
-export function Sidebar({ id, books, currentId, isBusy, actions, reference, onReferenceChange, referenceRef, onAddPdf, canExport, onExport }: SidebarProps) {
+export function Sidebar({ id, books, currentId, isBusy, actions, reference, onReferenceChange, referenceRef, onAddPdf, onChoosePages, canExport, onExport }: SidebarProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [renaming, setRenaming] = useState<string>(); // id of the book whose title is being edited
   const [confirmingDelete, setConfirmingDelete] = useState<string>();
@@ -134,6 +135,9 @@ export function Sidebar({ id, books, currentId, isBusy, actions, reference, onRe
                 <div className="book-actions">
                   <button type="button" className="book-action" onClick={onAddPdf}>
                     Add or replace PDF
+                  </button>
+                  <button type="button" className="book-action" onClick={onChoosePages}>
+                    Choose PDF pages
                   </button>
                   <ReferenceText ref={referenceRef} value={reference} onChange={onReferenceChange} />
                   <button

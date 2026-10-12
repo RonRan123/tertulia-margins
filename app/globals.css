@@ -1011,6 +1011,27 @@ main[data-view="chat"] .panes {
   border-bottom: 1px solid var(--rule);
 }
 
+.pdf-range input {
+  width: 3.5rem;
+  padding: 2px 6px;
+  font: inherit;
+  text-align: center;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.range-note {
+  color: var(--ink-soft);
+}
+
+.range-note.warning {
+  margin: 0;
+  padding: 0;
+  color: var(--warn);
+}
+
 /* A cite in AI text opens the PDF at its page. */
 .cite-link {
   display: inline;

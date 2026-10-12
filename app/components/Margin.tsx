@@ -94,13 +94,13 @@ type MarginCellProps = {
   isCurrent?: boolean; // the row's block is the one commands act on: its cards open
   isDetached?: boolean; // the final row: "Your note changed"
   margin: MarginApi;
-  hasReference: boolean;
+  blockReason?: string; // why replying is impossible now (no reference text, or over the D32 cap)
   onShowExcerpt: (start: number, end: number) => void; // opens the block with the excerpt selected
 };
 
 // The margin half of one row. A block with reactions gets a dot on the margin rule (with a count
 // when there are several); hovering or clicking it opens that block's cards.
-export function MarginCell({ items, isCurrent = false, isDetached = false, margin, hasReference, onShowExcerpt }: MarginCellProps) {
+export function MarginCell({ items, isCurrent = false, isDetached = false, margin, blockReason, onShowExcerpt }: MarginCellProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const isOpen = isCurrent || isHovered || isPinned;
@@ -132,7 +132,7 @@ export function MarginCell({ items, isCurrent = false, isDetached = false, margi
                 reaction={reaction}
                 isActive={isOpen && !isDetached}
                 isChoosing={margin.choosing.has(reaction.id)}
-                replyTitle={hasReference ? undefined : "Add reference text first"}
+                replyTitle={blockReason}
                 onShowExcerpt={hasRange ? () => onShowExcerpt(start, end) : undefined}
                 onReply={(question) => margin.reply(reaction, question)}
                 onDelete={() => margin.remove(reaction.id)}
