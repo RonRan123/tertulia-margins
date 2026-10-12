@@ -32,6 +32,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 
 - [x] *R1b (D24):* Define and Quiz removed from the toolbar and chat; core command code and prompts kept. **Verify:** 124 tests, lint, build green.
 
+- [x] *R1c (D25):* notes become one CodeMirror editor with Obsidian-style live preview; blocks retired; margin cards level with their paragraph. **Verify:** headless Chrome on public-domain text: symbols hidden off the active line and shown on it; typing saves; Cmd+Z restores the exact text; React on a list paragraph streamed a cited reaction into a new card; first card's top = its line's top (195px); reload keeps notes byte-identical and all cards; 112 tests (block-editing and HTML-rendering tests removed with their code), lint, build green.
+- [ ] *R1d (D26):* quiet chrome: thin top bar (☰, book title, Margin · PDF · Chat + ⤢ alone toggle), toolbar = React + ⋯ (Export, Reference text), no boxes. **Verify:** screenshots of each view; every control still reachable by keyboard.
+
 ### R2: books as folders
 - [ ] Data model: a list of books, each with its own reference text, notes, chat and reactions; the sidebar lists books, adds, renames and switches. v1's stored state becomes the first book (no data lost). **Decide first:** Q9.
 - [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for PDFs, keyed by book. **Verify:** unit tests with a fake; two books keep separate notes across reload; v1 data appears as book 1.
@@ -62,7 +65,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Quotes the AI takes from the reader's notes are flagged `citation_missing` by `checkCitations` (Sprint 3 test; Ronith: leave it for now). Option later: pass notes to the check and exempt verbatim note quotes. Sprint 4 QA: 3 of 4 `/define`/`/quiz` replies showed such false warnings (also `quote_not_in_paragraph` when the model put a `[¶n]` beside a note quote), so commands make this common. Options: a prompt rule, or the checker exemption
 - `checkCitations` recognises `[¶n]` and `[¶n-m]` only; the app's `/define` quotes read `[¶4, p. 12]`, so a reply copying that shape would be flagged `citation_missing` (not seen in QA yet)
 - `/quiz` prompt doesn't mention the `<selection>` block; the model infers scope from it (QA: worked). Ronith may want a line in `prompts/quiz.md`
-- Sprint 6 QA: a block's caret always opens at the end (clicking mid-sentence doesn't place it there); `checkCitations` flags the AI quoting the reader's notes next to a `[¶n]` (prompts now forbid it, unmeasured); a collapsed card with no replies shows a lone "· Show all"; only http(s)/mailto/relative links stay clickable, so `obsidian://` links render as text
+- ~~Sprint 6 QA: a block's caret always opens at the end (clicking mid-sentence doesn't place it there); `checkCitations` flags the AI quoting the reader's notes next to a `[¶n]` (prompts now forbid it, unmeasured); a collapsed card with no replies shows a lone "· Show all"; only http(s)/mailto/relative links stay clickable, so `obsidian://` links render as text~~ (blocks retired by D25; the `checkCitations` note-quote item still stands)
 - Sprint 5 QA: "Not in the text" (system.md's wording) appears capitalised mid-sentence ("Whether he'll go is Not in the text here."), Ronith's prompt; React on a paragraph that has a Define quote pasted under it sends the quote line in the excerpt; the router call's tokens aren't in `stats` (Sprint 7 cost logging must add them); at 48–84rem Define/Quiz don't auto-open the drawer (unread dot instead) because it would cover the margin
 - Define: the quote is inserted with no undo (Cmd+Z); running Define twice on the same word inserts the quote twice; the status line is truncated at phone width with no tooltip
 - Export: notes that start with their own `---` frontmatter get a second block (Obsidian shows it as a rule); the page range uses first/last label in order, so out-of-order markers read "p. 5 to p. 4"
@@ -72,6 +75,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Per-book page offset so PDF pages map to the paper book's pages (Q10 option)
 - Highlight the cited text on the PDF page (needs pdfjs rendering instead of the built-in viewer; D23 revisit)
 - Bring back Define/Quiz with behaviour Ronith likes (D24): where the reply lands, and whether Define pastes a quote
+- R1c QA: margin cards show their excerpt as raw markdown (`**ironic**`); links in the notes aren't clickable (no Cmd-click yet); on phones cards list under the notes, not under each paragraph (D25)
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
 - Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
 - Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI

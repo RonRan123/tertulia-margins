@@ -233,6 +233,28 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** no quick definitions or self-quizzing until they come back.
 - **Revisit if:** Ronith wants them back (Parking lot has the item).
 
+## D25. Notes are one file in a CodeMirror editor with Obsidian-style live preview (supersedes D18's blocks and D20's block storage)
+- **Status:** Accepted (2026-10-11, Ronith: "I want one simple file structure with rendering in line the way that obsidian works rather than having the block setup")
+- **Context:** Sprint 6's Jupyter-style blocks render every paragraph except the one being edited; Ronith wants one continuous file that renders as you type, like Obsidian.
+- **Alternatives:** one plain textarea with no rendering (~1 h); today's blocks with their chrome removed (~1 h). Live preview was priced at ~5 h in D18 and passed over then.
+- **Rules:**
+  - *Editor:* CodeMirror 6, the library Obsidian's live preview is built on. New dependencies (approved): `@codemirror/state`, `view`, `language`, `commands` (undo/redo), `@lezer/markdown` (GitHub-flavoured markdown parser; leaner than `@codemirror/lang-markdown`, which pulls in HTML/CSS/JS support). `marked` is removed.
+  - *Live preview* (`lib/live-preview.ts`): headings, bold, italics, inline code, strikethrough, links, quotes, bullet lists and `[¶n]` cites render in place; their symbols show only on the lines the selection touches. Decorations never change the text; raw HTML stays text.
+  - *Storage unchanged:* the notes stay one markdown string, so store, export and the AI see exactly what is typed.
+  - *Margin:* each paragraph with reactions gets a group of cards level with its first line, pushed down past earlier groups (`stackCards`). React acts on the selection or the paragraph at the caret (D18 as first specified).
+- **Why:** it is how Obsidian does it, with no change to the data or the AI's input.
+- **Cost we accept:** five new packages; links aren't clickable while editing (Obsidian needs Cmd-click too); on phones cards list under the notes instead of under each paragraph.
+- **Revisit if:** the editor fights the margin layout, or live preview misrenders common notes.
+
+## D26. Quiet chrome: a minimal frame around the notes
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants the UI "more minimalistic" after R1.
+- **Alternatives:** zero chrome (controls appear on hover or a floating corner control); just restyle today's controls.
+- **Rules:** one thin top bar: ☰, the book's title, and a compact switcher (Margin · PDF · Chat, plus a ⤢ toggle that shows the current pane alone) instead of six labelled buttons. The notes toolbar shrinks to React and a ⋯ menu (Export, Reference text). No boxes or borders; hairline dividers only.
+- **Why:** keeps every control discoverable while giving the notes the page.
+- **Cost we accept:** "Notes alone" moves behind a toggle instead of a labelled button.
+- **Revisit if:** the toggle proves hard to find.
+
 ---
 
 ## Template

@@ -28,7 +28,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Book text and PDFs stay in the reader's browser; never committed, never shipped | D7, D9, §4 |
 | Readers locate passages by the paper book's page; `[p. N]` markers are typed by the reader | D13, D15 |
 | Margin reactions (question, pushback, connection) as threads; router picks the kind | D18, D20 |
-| Notes are one markdown string shown as blocks; export is the reader's words only | D17, D20 |
+| Notes are one markdown string; export is the reader's words only | D17, D20 |
 | Product logic in `core/`, thin routes, commands and kinds as data tables | §6.1, CLAUDE.md |
 
 **What v2 changes**
@@ -41,6 +41,8 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | PDF upload or URL link as the main input | typed/pasted text first, PDF import secondary (D13) | D23; URL handling decided at R3 |
 | PDFs in IndexedDB | localStorage only (D7, amended) | D23 |
 | Define/Quiz out of the UI for now (core and prompts kept) | toolbar commands (D17) | D24 |
+| One notes file in a CodeMirror editor with Obsidian-style live preview | Jupyter-style blocks rendered with `marked` (D18, D20) | D25 |
+| Quiet chrome: thin top bar, compact switcher, React + ⋯ | six labelled view buttons, full toolbar | D26 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -65,7 +67,7 @@ We want the inverse: **note-first**. The reader's notes are the primary artifact
 
 These are deliberately excluded so they cannot creep back in silently.
 
-- **Rich-text editor.** A plain markdown textarea. Editors are a known rabbit hole.
+- **Rich-text editor.** The notes are plain markdown text. D25 adds CodeMirror live preview, which only styles that text; no WYSIWYG model, no formatting toolbar.
 - **A reading app.** The PDF view is for checking a source, not for reading the book in the app (D22 reopens the view D14 closed; this line keeps its spirit). No annotation on the PDF itself.
 - **Tensions across a body of work** (multiple books/authors). This is a research problem. v4 does one book only.
 - **Accounts, auth, multi-user, sync.** Single user, single browser.
@@ -132,7 +134,7 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 
 **The PDF view is the browser's own viewer (D23).** The PDF is stored in IndexedDB, opened as a `blob:` URL in an iframe at `#page=N`. A `[p. N]` cite (or a `[¶n]` whose paragraph has a page label) opens the PDF view at that page. MVP: the page number as given. Later: match the cited text around that page (regex, then AI) so an off-by-a-few page still lands on the right passage.
 
-**Blocks are views of one string (D20).** `core/blocks.ts` splits the notes on runs of blank lines into blocks with offsets; an edit replaces only its block's slice, so the original separators (and export) stay byte-for-byte. Each block renders with `marked` (GFM, single newlines as line breaks); raw HTML is escaped as text, links other than http(s), mailto and relative ones lose their link, and `[¶n]` cites get a `cite` span. The margin works like comments in a document: on wide screens each block's cards start level with the block and slide down past earlier cards (`stackCards` in `core/blocks.ts`), so cards never push the notes apart; on phones they sit under their block.
+**Notes are one file with live preview (D25).** The notes are one markdown string in one CodeMirror editor (`app/components/Notes.tsx`). `lib/live-preview.ts` parses it with `@lezer/markdown` (GFM) and decorates it in place: headings, bold, italics, code, links, quotes, bullets and `[¶n]` cites render, and their symbols show only on the lines the selection touches. Decorations never change the text, and raw HTML stays text. `core/blocks.ts` still splits the notes into paragraphs (runs of non-blank lines): React acts on the selection or the paragraph at the caret, and the margin groups cards by the paragraph their excerpt starts in. The margin works like comments in a document: on wide screens each group starts level with its paragraph's first line and slides down past earlier groups (`stackCards`); on phones the cards list under the notes. *(v1: Jupyter-style blocks rendered with `marked`, D18/D20; superseded.)*
 
 **Reactions go through `converse()` too (D18, D20).** A request with `reaction: {excerpt, kind?}` is a margin reaction. With no `kind`, a short non-streamed router call (`prompts/react-router.md`) picks question, pushback or connection; `converse()` yields the kind (the route sends it as a `kind` event), then streams the reply from `prompts/react-<kind>.md`, citations checked as usual. Kinds are a table in `core/reactions.ts`, like commands, next to the anchoring helpers (`reactTarget`, `findExcerpt`). A reply in a thread sends the kind it already has (no router call), the thread as `history` and the reply as `question`.
 

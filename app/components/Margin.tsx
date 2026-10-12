@@ -9,8 +9,8 @@ import { streamMessage, type MessagePatch } from "@/lib/converse-client.ts";
 import { CitationWarnings, escapeTo } from "./Chat";
 import { KIND_LABELS } from "./ReactButton";
 
-// The margin (D18, D20): one card per reaction, each a thread the reader can reply to, set in the
-// row of the block it answers (core/blocks layoutRows). The page owns `reactions` so it can
+// The margin (D18, D20, D25): one card per reaction, each a thread the reader can reply to, set
+// beside the paragraph it answers (core/blocks layoutRows). The page owns `reactions` so it can
 // persist them. Cards stream in parallel with each other and with chat: every update targets its
 // card by id, through functional setState.
 type ReactionsProps = {
@@ -106,7 +106,7 @@ export function MarginCell({ items, isCurrent = false, isDetached = false, margi
   const count = items.length;
 
   return (
-    <div className="margin-cell">
+    <div className="margin-stack">
       {count > 0 && !isDetached && (
         <button
           type="button"
@@ -120,7 +120,6 @@ export function MarginCell({ items, isCurrent = false, isDetached = false, margi
           {count > 1 && <span className="dot-count">{count}</span>}
         </button>
       )}
-      {/* On wide screens Notes positions this stack beside its block (useMarginLayout). */}
       {count > 0 && (
         <div className="cards">
           {isDetached && <p className="detached-divider">Your note changed</p>}
