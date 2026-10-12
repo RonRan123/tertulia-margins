@@ -57,9 +57,10 @@ export function saveState(storage: KeyValueStorage, state: AppState): StoreError
 // "notes+…" views put margin, PDF or chat beside the notes; the others fill the space alone.
 export const VIEWS = ["notes+margin", "notes+pdf", "notes+chat", "notes", "pdf", "chat"] as const;
 export type View = (typeof VIEWS)[number];
-export type UiState = { view: View; isSidebarOpen: boolean };
+export type Theme = "light" | "dark"; // D28: light unless the reader switches
+export type UiState = { view: View; isSidebarOpen: boolean; theme: Theme };
 export const UI_KEY = "tertulia-margins:ui";
-const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true };
+const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true, theme: "light" };
 
 export function loadUi(storage: KeyValueStorage): UiState {
   let saved: unknown;
@@ -73,6 +74,7 @@ export function loadUi(storage: KeyValueStorage): UiState {
   return {
     view: isKnownView ? (saved.view as View) : defaultUi.view,
     isSidebarOpen: typeof saved.isSidebarOpen === "boolean" ? saved.isSidebarOpen : defaultUi.isSidebarOpen,
+    theme: saved.theme === "dark" ? "dark" : "light",
   };
 }
 

@@ -44,6 +44,10 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | One notes file in a CodeMirror editor with Obsidian-style live preview | Jupyter-style blocks rendered with `marked` (D18, D20) | D25 |
 | Quiet chrome: one bar (☰ · book · Margin PDF Chat · ⤢ · React); book actions in the sidebar | six labelled view buttons, full toolbar | D26 |
 | Obsidian's default fonts: system face, 16px/1.5, 700px column | Literata + Hanken Grotesk (D20) | D27 |
+| Light theme by default (white, gray, light blue); dark behind a toggle | palette from the system setting | D28 |
+| PDF view: pdfjs viewer with a floating toolbar (zoom, page, download, search) | browser's built-in viewer (D23) | D29 |
+| Top bar of icon + label toggles, ChatPDF-style | text switcher (D26) | D30 |
+| A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -225,7 +229,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q6. Write-up audience.** *Resolved (D10): LLM engineers, with a one-paragraph product story and screenshots up top.*
 - **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*
 - **Q8. PDF by URL (R3).** Fetching from the browser fails on most sites (CORS); a server route that fetches it works but is an open proxy on the public demo (D9). Options: browser fetch with a clear error, a size-capped route, or upload only.
-- **Q9. Book data model (R2).** One notes document per book, or several (e.g. per chapter)? How v1's single passage/notes migrate into the first book.
+- **Q9. Book data model (R2).** *Resolved (D31): one notes file per book; v1's state becomes "My first book".*
 - **Q10. Page mismatch (R3+).** PDF pages often differ from the paper book (D13). A per-book page offset, the grounded text match from §6.1, or both?
 - **Q11. v2 time box.** How many hours the overhaul gets before Sprint 7 (D21).
 

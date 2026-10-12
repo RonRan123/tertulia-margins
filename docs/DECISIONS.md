@@ -265,6 +265,42 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** AI and user text no longer differ by typeface; D6's distinction now rests on colour, the tinted card and its rule.
 - **Revisit if:** AI text and notes get confused in real use (then a second face for AI text).
 
+## D28. A light theme by default, dark behind a toggle
+- **Status:** Accepted (2026-10-11, Ronith: "a minimalist non-chrome / non-dark option. think white, gray, light blue")
+- **Context:** the palette followed the system's light/dark setting, and Ronith uses dark mode; he wants a light, minimal look.
+- **Alternatives:** light only; follow the system with a toggle.
+- **Rules:** the app opens light (white main area, light-gray sidebar, gray text, light-blue accent; AI cards on a pale-blue wash with a blue rule, so D6's distinction holds). A sun/moon icon in the top bar switches to the dark palette; the choice is remembered with the layout (`core/store` UI state).
+- **Why:** light is what Ronith asked for; dark stays one click away.
+- **Cost we accept:** the system setting no longer picks the theme.
+- **Revisit if:** dark is wanted on by default at night (then "follow system").
+
+## D29. The PDF view uses pdfjs's own viewer with our toolbar (supersedes D23's built-in viewer)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants a ChatPDF-like viewer with a floating toolbar: zoom out, reset, zoom in, "1 of N" page box, download, search. The browser's built-in viewer (D23) can't be restyled.
+- **Alternatives:** the browser's built-in viewer in an iframe (~0.5 h).
+- **Rules:** `pdfjs-dist/web/pdf_viewer` (already installed: no new dependency) renders pages with a selectable text layer; its find controller highlights search matches. Our toolbar drives zoom, page and search. D23's IndexedDB storage stays; a `[p. N]` cite opens that page.
+- **Why:** matches the reference design and makes search and later highlighting of cited text possible (D23's revisit condition).
+- **Cost we accept:** about 3 h; the pdfjs viewer stylesheet joins the page.
+- **Revisit if:** rendering is slow on long books.
+
+## D30. Top bar with icons and labels, ChatPDF-style (amends D26)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith likes ChatPDF's icon top bar.
+- **Alternatives:** icons only.
+- **Rules:** left: sidebar icon (and, from R3, Upload); middle: the book's title; right: Margin, PDF and Chat as icon + label toggles (the selected one on a light-blue pill), ⤢ alone, theme, React. Icons are inline SVGs in the style of Lucide (ISC licence, credited in the source); no icon package.
+- **Why:** labels keep the switcher readable while the icons give it ChatPDF's look.
+- **Cost we accept:** a wider bar; on phones the labels hide.
+- **Revisit if:** the bar crowds at laptop widths.
+
+## D31. Books: one notes file per book; new, rename, delete; folders before the PDF (resolves Q9)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** R2 needs a data model; Ronith also chose to build folders before the PDF viewer.
+- **Alternatives:** several notes files per book (e.g. per chapter, ~+1.5 h); create and switch only; PDF first.
+- **Rules:** a book holds its title, reference text, one notes file, its chat and its margin threads (and, from R3, its PDF in IndexedDB). The sidebar lists books: "+ New book" asks for a title, a click opens one, titles rename inline, delete asks first. v1's saved state becomes the first book, "My first book". Order: R1e (theme, top bar), R2 (books), R3 (PDF viewer and upload; PDF-by-URL later).
+- **Why:** matches "the main notes" in Ronith's insights and keeps the store change small.
+- **Cost we accept:** one notes file per book until a later step.
+- **Revisit if:** one file per book gets unwieldy for long books.
+
 ---
 
 ## Template

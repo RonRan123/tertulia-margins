@@ -35,13 +35,16 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] *R1c (D25):* notes become one CodeMirror editor with Obsidian-style live preview; blocks retired; margin cards level with their paragraph. **Verify:** headless Chrome on public-domain text: symbols hidden off the active line and shown on it; typing saves; Cmd+Z restores the exact text; React on a list paragraph streamed a cited reaction into a new card; first card's top = its line's top (195px); reload keeps notes byte-identical and all cards; 112 tests (block-editing and HTML-rendering tests removed with their code), lint, build green.
 - [x] *R1d (D26, D27):* quiet chrome and Obsidian fonts: one bar (☰ · book · status · Margin PDF Chat · ⤢ · React); Reference text and Export under the book in the sidebar; one background; hairline margin rule; card excerpts without markdown symbols; system font 16px/1.5, 700px column, Obsidian heading scale. **Verify:** headless Chrome: all six views reached through the switcher and ⤢ (notes+margin, notes+pdf, notes+chat, chat, notes, back); computed editor font is the system stack at 16px/24px; every header and sidebar control is a focusable button; phone screenshot; 112 tests, lint, build green.
 
-### R2: books as folders
-- [ ] Data model: a list of books, each with its own reference text, notes, chat and reactions; the sidebar lists books, adds, renames and switches. v1's stored state becomes the first book (no data lost). **Decide first:** Q9.
-- [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for PDFs, keyed by book. **Verify:** unit tests with a fake; two books keep separate notes across reload; v1 data appears as book 1.
+- [x] *R1e (D28, D30):* light theme by default (white, light gray, light blue), dark behind a sun/moon toggle, remembered; top bar of icon + label toggles (light-blue pill when selected); icons inline after Lucide. **Verify:** headless Chrome: light and dark screenshots of margin, PDF and chat views; dark chosen, page reloaded, `data-theme` still dark; phone hides the labels; 112 tests (UI-state tests cover the theme), lint, build green.
 
-### R3: PDF view + upload or URL
-- [ ] Add a book's PDF by upload or URL; it is stored (R2) and its text fills the reference text via the existing import (D13). **Decide first:** Q8 (URL fetching).
-- [ ] PDF view: browser viewer in an iframe on a `blob:` URL; clicking a `[p. N]` cite (or a `[¶n]` with a page label) opens the PDF view at that page (D23). **Verify:** a cite opens the right PDF page in Chrome and Safari; the PDF survives reload.
+### R2: books as folders (D31)
+- [ ] Data model: a list of books, each with title, reference text, notes, chat and reactions; v1's stored state becomes "My first book" (no data lost). **Verify:** unit tests: migration from v1 state, malformed books dropped, round trip.
+- [ ] Sidebar: "+ New book" (asks for a title), click to open, rename inline, delete with a confirm. **Verify:** two books keep separate notes, chat and threads across reload; delete removes only that book.
+
+### R3: PDF view + upload (D29)
+- [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for one PDF per book. **Verify:** unit tests with a fake.
+- [ ] Upload: an Upload icon in the top bar, a drag-and-drop zone in the empty PDF pane, "Add PDF" under the book; the PDF's text fills the reference text via the existing import (asks before replacing). PDF-by-URL later (Q8).
+- [ ] Viewer: pdfjs viewer with selectable text; floating toolbar: zoom out, reset (fit width), zoom in, page box "N of M", download, search with highlighted matches. A `[p. N]` cite opens that page. **Verify:** each control on a real PDF; the PDF survives reload; screenshots light and dark.
 
 ### R4+ (not scheduled): grounded linking
 - [ ] Link a cite to the actual text, not just its page: regex for the quoted words around the cited page(s), then AI as a fallback (Ronith's "future iteration"). **Decide first:** Q10.

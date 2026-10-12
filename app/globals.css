@@ -1,19 +1,20 @@
-/* Tokens (design spec §3). The reader writes in ink; the AI writes beside it in a verdigris
-   pencil, on a tinted card with a rule (D6: AI text is always visually distinct). One system face
-   for both, as in Obsidian (D27). */
+/* Tokens. The reader writes in ink; the AI writes beside it in blue, on a tinted card with a
+   rule (D6: AI text is always visually distinct). One system face for both, as in Obsidian (D27).
+   Light by default: white, light gray, light blue (D28); dark when <html data-theme="dark">. */
 :root {
-  color-scheme: light dark;
-  --paper: #fafaf7;
-  --sheet: #ffffff;
-  --ink: #1d2230;
-  --ink-soft: #5e6472;
-  --rule: #e2e3de;
-  --ai: #2c7a70;
-  --ai-ink: #1f3f3b;
-  --ai-wash: #eff6f4; /* verdigris pencil */
-  --quote: #7a6745; /* book binding: passage quotes */
-  --warn: #9b3d12;
-  --focus: #2f5bd8;
+  color-scheme: light;
+  --paper: #f6f7f9; /* sidebar */
+  --sheet: #ffffff; /* notes, margin, panes */
+  --ink: #1f2328;
+  --ink-soft: #6b7280;
+  --rule: #e5e7eb;
+  --ai: #2b6cd4;
+  --ai-ink: #1d3557;
+  --ai-wash: #eff5ff;
+  --pill: #e3edff; /* the selected top-bar toggle */
+  --quote: #8a7650; /* book binding: passage quotes */
+  --warn: #b4441a;
+  --focus: #2b6cd4;
   /* Obsidian's default stacks (D27): one system face for notes, AI and interface. */
   --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   --font-ui: var(--font-text);
@@ -29,20 +30,20 @@
   --margin-rule: 1px solid var(--rule);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #15171c;
-    --sheet: #1b1e24;
-    --ink: #e7e5df;
-    --ink-soft: #a0a5af;
-    --rule: #2d313a;
-    --ai: #6fc3b5;
-    --ai-ink: #d3eae5;
-    --ai-wash: #18292a;
-    --quote: #c4ae84;
-    --warn: #f2a47a;
-    --focus: #93aeff;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #16181d;
+  --sheet: #1c1f25;
+  --ink: #e6e6e3;
+  --ink-soft: #9ca3af;
+  --rule: #2d313a;
+  --ai: #7fb0ff;
+  --ai-ink: #d6e4ff;
+  --ai-wash: #1b2536;
+  --pill: #22324d;
+  --quote: #c4ae84;
+  --warn: #f2a47a;
+  --focus: #7fb0ff;
 }
 
 *,
@@ -229,8 +230,11 @@ button.quiet:hover {
 }
 
 button.icon {
-  padding: var(--s1) var(--s2);
+  display: inline-flex;
+  align-items: center;
+  padding: 6px;
   line-height: 1;
+  border-radius: 6px;
 }
 
 /* One thin bar (D26): ☰, the book, status, then what sits beside the notes, ⤢ and React. */
@@ -244,6 +248,10 @@ button.icon {
 }
 
 .book-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--s1);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -261,23 +269,29 @@ button.icon {
 .view-switcher {
   display: flex;
   align-items: center;
+  gap: 2px;
 }
 
 .view-switcher button {
   position: relative; /* for the unread dot */
 }
 
-.view-switcher button[aria-pressed="true"] {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--ai);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 6px;
+/* ChatPDF-style toggles (D30): icon + label; the selected one sits on a light-blue pill. */
+button.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
 }
 
-.view-switcher button.icon[aria-pressed="true"] {
-  text-decoration: none;
+button.pill[aria-pressed="true"] {
+  background: var(--pill);
   color: var(--ai);
+}
+
+.ico {
+  flex: none;
 }
 
 /* React needs the notes on screen. */
@@ -940,7 +954,8 @@ dialog.reference form button {
   }
 
   .book-name,
-  .notes-status:empty {
+  .notes-status:empty,
+  .pill-label {
     display: none;
   }
 

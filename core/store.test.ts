@@ -98,16 +98,17 @@ test("storage that throws never crashes: load is empty, save reports save_failed
 
 test("layout round-trips under its own key and leaves the notes' key alone", () => {
   const { storage, data } = memoryStorage();
-  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false });
-  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false });
+  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
+  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
   expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
 });
 
-test("missing, corrupt or unknown layout falls back to notes + margin with the sidebar open", () => {
-  const fallback = { view: "notes+margin", isSidebarOpen: true };
+test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme", () => {
+  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light" };
   expect(loadUi(memoryStorage().storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
   expect(loadUi(throwing)).toEqual(fallback);
-  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true })).not.toThrow();
+  expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"chat","isSidebarOpen":false,"theme":"purple"}' }).storage)).toEqual({ ...fallback, view: "chat", isSidebarOpen: false });
+  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light" })).not.toThrow();
 });

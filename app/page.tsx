@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { commandTarget } from "@/core/blocks.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
@@ -21,6 +21,17 @@ import {
 import { Chat } from "./components/Chat";
 import { MarginCell, useReactions } from "./components/Margin";
 import { Notes, type NotesHandle } from "./components/Notes";
+import {
+  BookIcon,
+  ChatIcon,
+  FileTextIcon,
+  MarginIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  MoonIcon,
+  PanelLeftIcon,
+  SunIcon,
+} from "./components/icons";
 import { ReactButton } from "./components/ReactButton";
 import type { ReferenceTextHandle } from "./components/ReferenceText";
 import { Sidebar } from "./components/Sidebar";
@@ -38,10 +49,10 @@ const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
 // The view (D22, D26) is two choices: what sits beside the notes (margin, PDF or chat), and
 // whether it shows alone. Margin "alone" means the notes alone.
 type Side = "margin" | "pdf" | "chat";
-const SIDES: { side: Side; label: string }[] = [
-  { side: "margin", label: "Margin" },
-  { side: "pdf", label: "PDF" },
-  { side: "chat", label: "Chat" },
+const SIDES: { side: Side; label: string; icon: ReactNode }[] = [
+  { side: "margin", label: "Margin", icon: <MarginIcon /> },
+  { side: "pdf", label: "PDF", icon: <FileTextIcon /> },
+  { side: "chat", label: "Chat", icon: <ChatIcon /> },
 ];
 const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : "margin");
 const isAlone = (view: View) => !view.startsWith("notes+");
@@ -70,7 +81,7 @@ export default function Home() {
   const [isChangedElsewhere, setIsChangedElsewhere] = useState(false);
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
-  const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true });
+  const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -183,6 +194,11 @@ export default function Home() {
     if (isLoaded) saveUi(browserStorage, ui);
   }, [isLoaded, ui]);
 
+  // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
+  useEffect(() => {
+    document.documentElement.dataset.theme = ui.theme;
+  }, [ui.theme]);
+
   const isNotesEmpty = notes.trim() === "";
   const isUnreadShown = hasUnread && !showsChat(ui.view);
   const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
@@ -214,9 +230,12 @@ export default function Home() {
             title={ui.isSidebarOpen ? "Close sidebar" : "Open sidebar"}
             onClick={() => setSidebarOpen(!ui.isSidebarOpen)}
           >
-            ☰
+            <PanelLeftIcon />
           </button>
-          <span className="book-name">Current book</span>
+          <span className="book-name">
+            <BookIcon />
+            Current book
+          </span>
           <span className="notes-status" aria-live="polite">
             {saveError ? "Not saved: browser storage is full or blocked." : status}
           </span>
@@ -227,33 +246,43 @@ export default function Home() {
             <span className="warning">Changed in another tab: this tab&apos;s edits overwrite it. Reload to see the other version.</span>
           )}
           <div className="view-switcher" role="group" aria-label="Beside the notes">
-            {SIDES.map(({ side, label }) => {
+            {SIDES.map(({ side, label, icon }) => {
               const hasDot = side === "chat" && isUnreadShown;
               return (
                 <button
                   key={side}
                   type="button"
-                  className="quiet"
+                  className="quiet pill"
                   aria-pressed={sideOf(ui.view) === side}
                   aria-label={hasDot ? `${label}, new reply` : label}
                   onClick={() => showView(viewOf(side, isAlone(ui.view)))}
                 >
-                  {label}
+                  {icon}
+                  <span className="pill-label">{label}</span>
                   {hasDot && <span className="unread" aria-hidden="true" />}
                 </button>
               );
             })}
             <button
               type="button"
-              className="quiet icon"
+              className="quiet icon pill"
               aria-pressed={isAlone(ui.view)}
               title={isAlone(ui.view) ? "Show beside the notes" : sideOf(ui.view) === "margin" ? "Notes alone" : "Show alone"}
               aria-label="Show alone"
               onClick={() => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)))}
             >
-              ⤢
+              {isAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           </div>
+          <button
+            type="button"
+            className="quiet icon"
+            aria-label={ui.theme === "dark" ? "Light theme" : "Dark theme"}
+            title={ui.theme === "dark" ? "Light theme" : "Dark theme"}
+            onClick={() => setUi((u) => ({ ...u, theme: u.theme === "dark" ? "light" : "dark" }))}
+          >
+            {ui.theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
           {/* mousedown is cancelled inside, so the selection in the notes stays put. */}
           <div className="react-slot">
             <ReactButton title={reactTitle} onReact={react} />
