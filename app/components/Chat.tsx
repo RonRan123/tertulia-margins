@@ -27,7 +27,7 @@ type ChatProps = {
   // The page owns isBusy too: the notes toolbar disables its commands while a reply streams.
   isBusy: boolean;
   setIsBusy: (isBusy: boolean) => void;
-  onReplyEnd?: () => void; // the page shows an unread dot if the drawer is closed
+  onReplyEnd?: () => void; // the page shows an unread dot while chat is hidden
   ref?: Ref<ChatHandle>; // lets the notes toolbar run a command through the same send()
 };
 
@@ -156,7 +156,7 @@ export function Chat({ reference, notes, messages, setMessages, isBusy, setIsBus
   );
 }
 
-// Esc in an inline confirm cancels it, and only it: preventDefault tells the page not to close the drawer too.
+// Esc in an inline confirm cancels it, and only it (preventDefault: nothing further up acts on it).
 export function escapeTo(e: KeyboardEvent, cancel: () => void) {
   if (e.key !== "Escape") return;
   e.preventDefault();

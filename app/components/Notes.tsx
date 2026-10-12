@@ -187,7 +187,7 @@ export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargi
       return onReactShortcut();
     }
     if (e.key === "Escape") {
-      e.preventDefault(); // renders the block only; the page's Esc would also close the chat drawer
+      e.preventDefault(); // renders the block only
       const closed = close(block);
       if (!block.isNew && closed === notes) pendingFocus.current = block.start;
       return;

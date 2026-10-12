@@ -4,8 +4,8 @@ import { useImperativeHandle, useMemo, useRef, type Ref } from "react";
 import { pageRange, parsePassage } from "@/core/passage.ts";
 import { PdfImportButton } from "./PdfImportButton";
 
-// The reference text the AI grounds on. D14: it lives in the background, not in a reading pane:
-// a header button shows whether it is set and opens a dialog to edit it. `ref.open()` lets the
+// The reference text the AI grounds on, kept in the background for the AI: a button under the
+// book in the sidebar (D22) shows whether it is set and opens a dialog to edit it. `ref.open()` lets the
 // page's "Add reference text" prompt open the same dialog.
 export type ReferenceTextHandle = { open: () => void };
 type ReferenceTextProps = { value: string; onChange: (value: string) => void; ref?: Ref<ReferenceTextHandle> };

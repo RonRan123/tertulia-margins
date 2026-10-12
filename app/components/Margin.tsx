@@ -266,7 +266,7 @@ function Card({ reaction, isActive, isChoosing, replyTitle, onShowExcerpt, onRep
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
-                  e.preventDefault(); // closes the reply box only, not the chat drawer too
+                  e.preventDefault(); // closes the reply box only
                   return setIsReplying(false);
                 }
                 // Enter while composing (IME) confirms the composition, not the reply.

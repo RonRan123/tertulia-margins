@@ -24,11 +24,11 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 **Time box:** _Ronith to set (Q11)._ Over by 30 min on a step: stop and say what is cut.
 
 ### R1: layout shell + view switcher (one book still)
-- [ ] Grid: collapsible sidebar (1/6, open/close button), notes (3/6), right pane (2/6). The sidebar shows the current book as a placeholder entry until R2.
-- [ ] View switcher at the top: Notes + margin · Notes only · PDF only · Chat only. The chat drawer goes; chat becomes a view. PDF view shows an empty state until R3.
-- [ ] Reference-text editor and PDF import move from the header to the book entry in the sidebar.
+- [x] Grid: collapsible sidebar (1/6, open/close button), notes (3/6), right pane (2/6). The sidebar shows the current book as a placeholder entry until R2.
+- [x] View switcher at the top, two groups: *Beside notes* (Margin · PDF · Chat in the right pane) and *Alone* (Notes · PDF · Chat filling the space). The chat drawer goes; chat becomes a view. PDF view shows an empty state until R3.
+- [x] Reference-text editor and PDF import move from the header to the book entry in the sidebar.
 - *Decided (D22):* "only" views fill the space beside the sidebar; view and sidebar state remembered across reloads; phones: sidebar overlay, one pane at a time.
-- **Verify:** each view switches without losing notes, a streaming reply or a margin thread; sidebar toggles; `npm test` and `npm run build` pass; screenshots of all four views.
+- **Verify:** each view switches without losing notes, a streaming reply or a margin thread; sidebar toggles; `npm test` and `npm run build` pass; screenshots of all views. *Done (headless Chrome, public-domain text): all six views and phone captured; a chat reply asked in Notes with chat kept streaming while Notes only was shown, finished, showed the unread dot, and was intact on return; view and closed sidebar survived reload; 124 tests, lint, build green.*
 
 ### R2: books as folders
 - [ ] Data model: a list of books, each with its own reference text, notes, chat and reactions; the sidebar lists books, adds, renames and switches. v1's stored state becomes the first book (no data lost). **Decide first:** Q9.

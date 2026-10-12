@@ -21,9 +21,7 @@
   --s4: 1rem;
   --s6: 1.5rem;
   --s8: 2rem;
-  --notes-w: 38rem;
-  --margin-w: 20rem;
-  --drawer-w: 26rem; /* notes + margin + drawer = 84rem: the side-by-side breakpoint below and in page.tsx */
+  --notes-w: 38rem; /* the notes' reading width when they are alone */
   --radius: 4px;
   --margin-rule: 3px double color-mix(in srgb, var(--ai) 45%, transparent);
 }
@@ -125,11 +123,92 @@ textarea {
   color: var(--ink-soft);
 }
 
-/* Page: a column filling the window; the panes take what the header leaves and scroll on their own. */
+/* Page (D22): sidebar 1/6 | the rest (header, then the workspace). The workspace splits 3:2, so
+   with the sidebar open the notes take 3/6 of the window and the side pane 2/6. Each pane scrolls
+   on its own. */
 main {
   display: flex;
-  flex-direction: column;
   height: 100dvh;
+}
+
+.sidebar {
+  flex: 0 0 calc(100% / 6);
+  min-width: 13rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  overflow-y: auto;
+  background: var(--paper);
+  border-right: 1px solid var(--rule);
+}
+
+main:not([data-sidebar-open]) .sidebar,
+.sidebar-backdrop {
+  display: none;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.sidebar h1 {
+  margin: 0;
+  font: italic 400 1.125rem var(--serif);
+}
+
+.sidebar h2 {
+  margin: 0;
+  font: 600 0.75rem var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.books {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2);
+  border-radius: var(--radius);
+}
+
+.book.is-current {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+}
+
+.book-title {
+  font: 500 0.9375rem var(--serif);
+}
+
+.book .reference-button {
+  text-align: left;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.main-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+button.icon {
+  padding: var(--s1) var(--s2);
+  line-height: 1;
 }
 
 .app-header {
@@ -142,19 +221,37 @@ main {
   border-bottom: 1px solid var(--rule);
 }
 
-.app-header h1 {
-  margin: 0;
-  font: italic 400 1.125rem var(--serif);
-}
-
 .reference-summary {
   font-weight: 400;
   color: var(--ink-soft);
 }
 
-.chat-toggle {
-  position: relative;
-  margin-left: auto;
+.view-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+}
+
+.view-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.view-group-label {
+  margin-right: var(--s1);
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.view-group button {
+  position: relative; /* for the unread dot */
+}
+
+.view-group button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--sheet);
 }
 
 .unread {
@@ -182,8 +279,7 @@ main {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, var(--notes-w)) var(--margin-w);
-  justify-content: center;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 }
 
 .row.fill {
@@ -702,52 +798,82 @@ main {
   }
 }
 
-/* The area under the header: the panes, and the chat drawer anchored to it, so the drawer never
-   covers the header's Chat toggle. clip: the closed drawer, pushed off to the right, adds no scroll. */
+/* The area under the header. Which panes show is the view (main's data-view, D22): "notes+…"
+   views put the notes in the 3/5 column and margin, PDF or chat in the 2/5 one (the margin is the
+   rows' second column, so the panes span both); the others show one thing across both columns.
+   Hidden panes stay mounted (display: none), so streams, threads and edits carry on. */
 .workspace {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr); /* one row the height of the window: each pane scrolls inside it */
+  flex: 1;
+  min-height: 0;
+}
+
+.panes {
+  grid-column: 1 / -1;
+}
+
+.side-pane {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sheet);
+  border-left: 1px solid var(--rule);
+}
+
+.pdf-pane,
+.chat-pane {
+  display: none;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow-x: clip;
-}
-
-/* Chat drawer, not modal. Below 84rem it slides over the margin column only: its width is
-   everything right of the notes column (centred, or pushed left when the window is narrow). */
-.drawer {
-  position: absolute;
-  inset-block: 0;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  width: calc(var(--margin-w) + max(0px, (100% - var(--notes-w) - var(--margin-w)) / 2));
   padding: var(--s3) var(--s4);
-  background: var(--sheet);
-  border-left: 1px solid var(--rule);
-  transform: translateX(100%);
-  transition: transform 160ms ease-out;
 }
 
-.drawer[data-open] {
-  transform: none;
-  box-shadow: -4px 0 16px rgb(0 0 0 / 0.08);
+main[data-view="notes+pdf"] .panes,
+main[data-view="notes+chat"] .panes {
+  grid-column: 1;
 }
 
-/* Wide: notes, margin and drawer side by side; opening the drawer moves the panes left. */
-@media (min-width: 84rem) {
-  .drawer {
-    width: var(--drawer-w);
-  }
-
-  .workspace[data-chat-open] .panes {
-    padding-right: var(--drawer-w);
-  }
+main[data-view$="pdf"] .side-pane,
+main[data-view$="chat"] .side-pane,
+main[data-view$="pdf"] .pdf-pane,
+main[data-view$="chat"] .chat-pane {
+  display: flex;
 }
 
-.drawer-close {
-  align-self: flex-end;
+main[data-view="pdf"] .side-pane,
+main[data-view="chat"] .side-pane {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+
+main[data-view="pdf"] .panes,
+main[data-view="chat"] .panes {
+  display: none;
+}
+
+/* Chat alone keeps a readable line length. */
+main[data-view="chat"] .chat-pane {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+/* The margin column shows only in "notes+margin"; elsewhere the notes have the row to themselves,
+   alone centred at their reading width. */
+main:not([data-view="notes+margin"]) .row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+main[data-view="notes"] .row {
+  grid-template-columns: minmax(0, var(--notes-w));
+  justify-content: center;
+}
+
+main:not([data-view="notes+margin"]) .margin-cell {
+  display: none;
 }
 
 .chat {
@@ -839,26 +965,49 @@ dialog.reference form button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .drawer {
-    transition: none;
-  }
-
   .caret {
     animation: none;
   }
 }
 
-/* Phone: one column; the page scrolls, the toolbar sticks, the margin rule turns horizontal. */
+/* Phone: one pane at a time; the page scrolls, the toolbar sticks, the margin rule turns
+   horizontal, and the sidebar slides over the page. */
 @media (max-width: 48rem) {
   main {
     height: auto;
     min-height: 100dvh;
   }
 
-  .app-header .reference-button {
-    order: 1;
-    flex-basis: 100%;
-    text-align: left;
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(18rem, 85vw);
+    box-shadow: 4px 0 16px rgb(0 0 0 / 0.12);
+  }
+
+  main[data-sidebar-open] .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgb(0 0 0 / 0.3);
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Beside the notes, there is no room: the chosen pane shows instead of them. */
+  main[data-view="notes+pdf"] .panes,
+  main[data-view="notes+chat"] .panes {
+    display: none;
+  }
+
+  .side-pane {
+    grid-column: 1 / -1;
+    min-height: 70dvh;
+    border-left: 0;
   }
 
   .panes {
@@ -916,13 +1065,5 @@ dialog.reference form button {
     top: var(--s2);
     right: var(--s2);
     left: auto;
-  }
-
-  /* A full-screen sheet over everything, header included; Close (or Esc) brings the page back. */
-  .drawer {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    width: 100%;
   }
 }

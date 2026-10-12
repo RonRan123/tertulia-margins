@@ -212,7 +212,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
   - *D6 still holds:* AI text appears only in the margin and chat, never in the notes.
 - **Why:** the notes stay central and the book is a glance away, without becoming a reading app.
 - **Cost we accept:** a PDF view reopens the "reading app" pull that D14 resisted; the drawer's always-available chat becomes a view switch.
-- **R1 details (2026-10-11, Ronith):** an "only" view fills everything beside the sidebar; the reference-text editor and PDF import move under the book in the sidebar; the chosen view and the sidebar's open/closed state are remembered across reloads; on phones the sidebar is an overlay and one pane shows at a time (Claude's assumption, not objected to).
+- **R1 details (2026-10-11, Ronith):** an "only" view fills everything beside the sidebar; the reference-text editor and PDF import move under the book in the sidebar; the chosen view and the sidebar's open/closed state are remembered across reloads; on phones the sidebar is an overlay and one pane shows at a time (Claude's assumption, not objected to). Right pane (Ronith): PDF, margin or chat can sit beside the notes, and notes, PDF or chat can each show alone with only the sidebar; the switcher has those two groups (six views).
 - **Revisit if:** the right pane feels cramped at 2/6 on a laptop screen.
 
 ## D23. PDF in IndexedDB, shown in the browser's built-in viewer (amends D7)

@@ -1,25 +1,30 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { blockAt, commandTarget, splitBlocks } from "@/core/blocks.ts";
 import { defineQuote, insertAfterLine, isDefinable, trimPhrase } from "@/core/commands.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
 import {
   loadState,
+  loadUi,
   saveState,
+  saveUi,
   STORAGE_KEY,
   type AppState,
   type ChatMessage,
   type KeyValueStorage,
   type Reaction,
   type StoreError,
+  type UiState,
+  type View,
 } from "@/core/store.ts";
 import { Chat, type ChatHandle } from "./components/Chat";
 import { MarginCell, useReactions } from "./components/Margin";
 import { Notes, type NotesHandle } from "./components/Notes";
 import { ReactButton } from "./components/ReactButton";
-import { ReferenceText, type ReferenceTextHandle } from "./components/ReferenceText";
+import type { ReferenceTextHandle } from "./components/ReferenceText";
+import { Sidebar } from "./components/Sidebar";
 
 // Reading localStorage can itself throw (blocked storage); core/store catches that inside each call.
 const browserStorage: KeyValueStorage = {
@@ -28,8 +33,29 @@ const browserStorage: KeyValueStorage = {
 };
 const SAVE_DELAY_MS = 300;
 const STATUS_MS = 5000;
-// Wide enough for notes, margin and drawer side by side (globals.css: 38 + 20 + 26rem).
-const isSideBySide = () => window.matchMedia("(min-width: 84rem)").matches;
+// globals.css's phone breakpoint: one pane at a time, the sidebar over the page.
+const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
+
+// The view switcher (D22): margin, PDF or chat beside the notes, or one of them alone.
+const VIEW_GROUPS: { label: string; views: { view: View; label: string; name: string }[] }[] = [
+  {
+    label: "Beside notes",
+    views: [
+      { view: "notes+margin", label: "Margin", name: "Notes with margin" },
+      { view: "notes+pdf", label: "PDF", name: "Notes with PDF" },
+      { view: "notes+chat", label: "Chat", name: "Notes with chat" },
+    ],
+  },
+  {
+    label: "Alone",
+    views: [
+      { view: "notes", label: "Notes", name: "Notes only" },
+      { view: "pdf", label: "PDF", name: "PDF only" },
+      { view: "chat", label: "Chat", name: "Chat only" },
+    ],
+  },
+];
+const showsChat = (view: View) => view === "notes+chat" || view === "chat";
 
 // Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
 function download(filename: string, content: string) {
@@ -41,7 +67,8 @@ function download(filename: string, content: string) {
   setTimeout(() => URL.revokeObjectURL(url)); // after the click's download has started (Safari)
 }
 
-// Notes | margin (D18); chat lives in a drawer; the reference text behind a header button (D14).
+// Sidebar | notes | margin, PDF or chat (D22). Every pane stays mounted and the view only hides
+// some, so switching never drops a streaming reply, a thread or an open block.
 export default function Home() {
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
@@ -53,16 +80,14 @@ export default function Home() {
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
   const [isBusy, setIsBusy] = useState(false); // a chat reply is streaming (reactions stream on their own)
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while the drawer is closed
+  const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true });
+  const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const notesView = useRef<NotesHandle>(null);
   const chat = useRef<ChatHandle>(null);
   const margin = useReactions({ reference, notes, setReactions });
   const referenceText = useRef<ReferenceTextHandle>(null);
-  const chatToggle = useRef<HTMLButtonElement>(null);
-  const drawer = useRef<HTMLElement>(null);
   const hasReference = reference.trim() !== "";
   const reactTitle = !hasReference ? "Add reference text first" : undefined;
   const commandTitle = reactTitle ?? (isBusy ? "Waiting for the current reply" : undefined);
@@ -82,34 +107,23 @@ export default function Home() {
     setNotes(value);
   };
 
-  const toggleChat = (isOpen: boolean) => {
-    // Opening focuses the question box once the drawer is no longer inert. Closing moves focus to
-    // the toggle only if it was in the drawer (about to go inert); otherwise it stays where it is.
-    if (!isOpen && drawer.current?.contains(document.activeElement)) chatToggle.current?.focus();
-    setIsChatOpen(isOpen);
-    setHasUnread(false);
-    if (isOpen) requestAnimationFrame(() => chat.current?.focus());
+  // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
+  const showView = (view: View) => {
+    if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
+    setUi((u) => ({ ...u, view }));
   };
-  // Define and Quiz reply in the drawer: open it only where it sits beside the notes and margin,
-  // focus staying in the notes. Narrower, it would cover the margin or the notes, so the unread
-  // dot is the signal there.
+  const setSidebarOpen = (isSidebarOpen: boolean) => setUi((u) => ({ ...u, isSidebarOpen }));
+  // The dialog lives in the sidebar, so a closed sidebar opens first (it renders nothing while hidden).
+  const openReference = () => {
+    setSidebarOpen(true);
+    requestAnimationFrame(() => referenceText.current?.open());
+  };
+  // Define and Quiz reply in chat: it moves beside the notes, focus staying in them. On a phone
+  // that would hide the notes, so the unread dot is the signal there.
   const runInChat = (command: Parameters<ChatHandle["run"]>[0]) => {
     chat.current?.run(command);
-    if (isSideBySide()) setIsChatOpen(true);
+    if (!isPhone()) showView("notes+chat");
   };
-
-  // Esc closes the drawer from anywhere on the page, unless something nearer used it first:
-  // the React kind menu, a confirm or reply box (they call preventDefault), or the reference dialog.
-  const onEscape = useEffectEvent((e: KeyboardEvent) => {
-    const isForSomethingElse = e.key !== "Escape" || e.defaultPrevented || (e.target as Element).closest?.("dialog");
-    if (isForSomethingElse) return;
-    toggleChat(false);
-  });
-  useEffect(() => {
-    if (!isChatOpen) return;
-    window.addEventListener("keydown", onEscape);
-    return () => window.removeEventListener("keydown", onEscape);
-  }, [isChatOpen]);
 
   // React (D18, D20) acts on the selection in the block being edited, or on the whole block last
   // edited or focused. `kind` absent: the router picks.
@@ -176,6 +190,8 @@ export default function Home() {
     // A one-time sync from storage after mount: the cascading render this rule warns about is the point.
     /* eslint-disable react-hooks/set-state-in-effect */
     show(loadState(browserStorage));
+    const savedUi = loadUi(browserStorage);
+    setUi({ ...savedUi, isSidebarOpen: savedUi.isSidebarOpen && !isPhone() }); // on a phone it would cover the page
     setIsLoaded(true);
     /* eslint-enable react-hooks/set-state-in-effect */
     window.addEventListener("storage", onStorage);
@@ -208,136 +224,161 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [isLoaded, reference, notes, messages, reactions]);
 
+  useEffect(() => {
+    if (isLoaded) saveUi(browserStorage, ui);
+  }, [isLoaded, ui]);
+
   const isNotesEmpty = notes.trim() === "";
-  const isUnreadShown = hasUnread && !isChatOpen;
+  const isUnreadShown = hasUnread && !showsChat(ui.view);
   const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
 
   return (
-    <main>
-      <header className="app-header">
-        <h1>tertulia-margins</h1>
-        <ReferenceText ref={referenceText} value={reference} onChange={setReference} />
-        {saveError && <span className="warning">Not saved: browser storage is full or blocked.</span>}
-        {isChangedElsewhere && (
-          <span className="warning">Changed in another tab: this tab&apos;s edits overwrite it. Reload to see the other version.</span>
-        )}
-        <button
-          ref={chatToggle}
-          type="button"
-          className="chat-toggle"
-          aria-expanded={isChatOpen}
-          aria-controls="chat-drawer"
-          aria-label={isUnreadShown ? "Chat, new reply" : undefined}
-          onClick={() => toggleChat(!isChatOpen)}
-        >
-          Chat
-          {isUnreadShown && <span className="unread" aria-hidden="true" />}
-        </button>
-      </header>
-      {/* Below the header, so the drawer never covers the Chat toggle. */}
-      <div className="workspace" data-chat-open={isChatOpen || undefined}>
-        {/* One scroll: each row is a block and the reactions beside it, so card tops line up
-            with block tops (D18). */}
-        <div className="panes">
-          <div className="row toolbar-row">
-            <div className="notes-cell">
-              {/* Every control here acts on the notes. mousedown is cancelled so focus and the
-                  highlighted selection stay in the block being edited. */}
-              <div className="toolbar">
-                <ReactButton title={reactTitle} onReact={react} />
-                {(["define", "quiz"] as const).map((name) => (
+    <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
+      <Sidebar
+        id="sidebar"
+        reference={reference}
+        onReferenceChange={setReference}
+        referenceRef={referenceText}
+        onClose={() => setSidebarOpen(false)}
+      />
+      {/* Phone only (CSS): the open sidebar covers the page; tapping beside it closes it. */}
+      <div className="sidebar-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+      <div className="main-col">
+        <header className="app-header">
+          <button
+            type="button"
+            className="icon"
+            aria-expanded={ui.isSidebarOpen}
+            aria-controls="sidebar"
+            aria-label="Books sidebar"
+            title={ui.isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+            onClick={() => setSidebarOpen(!ui.isSidebarOpen)}
+          >
+            ☰
+          </button>
+          <div className="view-switcher" role="group" aria-label="View">
+            {VIEW_GROUPS.map((group) => (
+              <div key={group.label} className="view-group" role="group" aria-label={group.label}>
+                <span className="view-group-label" aria-hidden="true">
+                  {group.label}
+                </span>
+                {group.views.map(({ view, label, name }) => (
                   <button
-                    key={name}
+                    key={view}
                     type="button"
-                    disabled={commandTitle !== undefined}
-                    title={commandTitle}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => runCommand(name)}
+                    aria-pressed={ui.view === view}
+                    aria-label={showsChat(view) && isUnreadShown ? `${name}, new reply` : name}
+                    onClick={() => showView(view)}
                   >
-                    {name === "define" ? "Define" : "Quiz"}
+                    {label}
+                    {showsChat(view) && isUnreadShown && <span className="unread" aria-hidden="true" />}
                   </button>
                 ))}
-                <span className="divider" aria-hidden="true" />
-                <button
-                  type="button"
-                  disabled={isNotesEmpty}
-                  title={isNotesEmpty ? "Nothing to export yet" : undefined}
-                  onClick={() => {
-                    const file = exportMarkdown(notes, reference, new Date());
-                    download(file.filename, file.content);
-                  }}
-                >
-                  Export .md
-                </button>
-                <span className="notes-status" aria-live="polite">
-                  {status}
-                </span>
-                <span className="sr-only" aria-live="polite">
-                  {margin.announcement}
-                </span>
               </div>
-              {!hasReference && (
-                <p className="empty-reference">
-                  Add the chapter you&apos;re reading so the AI can check what it says.{" "}
-                  <button type="button" className="link" onClick={() => referenceText.current?.open()}>
-                    Add reference text
-                  </button>
-                </p>
-              )}
-            </div>
-            <div className="margin-cell">
-              {reactions.length === 0 && <p className="empty">Reactions to your notes appear here, beside the note they answer.</p>}
-            </div>
+            ))}
           </div>
-          <Notes
-            ref={notesView}
-            notes={notes}
-            reactions={reactions}
-            onChange={editNotes}
-            onReactShortcut={() => react()}
-            renderMargin={(row, isCurrent) => (
-              <MarginCell
-                items={row.reactions}
-                isCurrent={isCurrent}
-                margin={margin}
-                hasReference={hasReference}
-                onShowExcerpt={showExcerpt}
+          {saveError && <span className="warning">Not saved: browser storage is full or blocked.</span>}
+          {isChangedElsewhere && (
+            <span className="warning">Changed in another tab: this tab&apos;s edits overwrite it. Reload to see the other version.</span>
+          )}
+        </header>
+        {/* The view decides (CSS, from main's data-view) which of the panes and the side pane show. */}
+        <div className="workspace">
+          <div className="panes">
+            <div className="row toolbar-row">
+              <div className="notes-cell">
+                {/* Every control here acts on the notes. mousedown is cancelled so focus and the
+                    highlighted selection stay in the block being edited. */}
+                <div className="toolbar">
+                  <ReactButton title={reactTitle} onReact={react} />
+                  {(["define", "quiz"] as const).map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      disabled={commandTitle !== undefined}
+                      title={commandTitle}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => runCommand(name)}
+                    >
+                      {name === "define" ? "Define" : "Quiz"}
+                    </button>
+                  ))}
+                  <span className="divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    disabled={isNotesEmpty}
+                    title={isNotesEmpty ? "Nothing to export yet" : undefined}
+                    onClick={() => {
+                      const file = exportMarkdown(notes, reference, new Date());
+                      download(file.filename, file.content);
+                    }}
+                  >
+                    Export .md
+                  </button>
+                  <span className="notes-status" aria-live="polite">
+                    {status}
+                  </span>
+                  <span className="sr-only" aria-live="polite">
+                    {margin.announcement}
+                  </span>
+                </div>
+                {!hasReference && (
+                  <p className="empty-reference">
+                    Add the chapter you&apos;re reading so the AI can check what it says.{" "}
+                    <button type="button" className="link" onClick={openReference}>
+                      Add reference text
+                    </button>
+                  </p>
+                )}
+              </div>
+              <div className="margin-cell">
+                {reactions.length === 0 && <p className="empty">Reactions to your notes appear here, beside the note they answer.</p>}
+              </div>
+            </div>
+            <Notes
+              ref={notesView}
+              notes={notes}
+              reactions={reactions}
+              onChange={editNotes}
+              onReactShortcut={() => react()}
+              renderMargin={(row, isCurrent) => (
+                <MarginCell
+                  items={row.reactions}
+                  isCurrent={isCurrent}
+                  margin={margin}
+                  hasReference={hasReference}
+                  onShowExcerpt={showExcerpt}
+                />
+              )}
+              renderDetached={(detached) => (
+                <MarginCell
+                  items={detached.map((reaction) => ({ reaction }))}
+                  isDetached
+                  margin={margin}
+                  hasReference={hasReference}
+                  onShowExcerpt={showExcerpt}
+                />
+              )}
+            />
+          </div>
+          <section className="side-pane" aria-label="Beside the notes">
+            <div className="pdf-pane">
+              <p className="empty">The book&apos;s PDF will show here, opening at the page a note cites.</p>
+            </div>
+            <div className="chat-pane">
+              <Chat
+                ref={chat}
+                reference={reference}
+                notes={notes}
+                messages={messages}
+                setMessages={setMessages}
+                isBusy={isBusy}
+                setIsBusy={setIsBusy}
+                onReplyEnd={() => setHasUnread(true)}
               />
-            )}
-            renderDetached={(detached) => (
-              <MarginCell
-                items={detached.map((reaction) => ({ reaction }))}
-                isDetached
-                margin={margin}
-                hasReference={hasReference}
-                onShowExcerpt={showExcerpt}
-              />
-            )}
-          />
+            </div>
+          </section>
         </div>
-        {/* Not modal: the notes stay usable underneath. Inert while closed, so it is out of the tab order. */}
-        <aside
-          ref={drawer}
-          id="chat-drawer"
-          className="drawer"
-          aria-label="Chat"
-          data-open={isChatOpen || undefined}
-          inert={!isChatOpen}
-        >
-          <button type="button" className="drawer-close" onClick={() => toggleChat(false)}>
-            Close
-          </button>
-          <Chat
-            ref={chat}
-            reference={reference}
-            notes={notes}
-            messages={messages}
-            setMessages={setMessages}
-            isBusy={isBusy}
-            setIsBusy={setIsBusy}
-            onReplyEnd={() => setHasUnread(true)}
-          />
-        </aside>
       </div>
     </main>
   );

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { emptyState, loadState, saveState, type AppState, type KeyValueStorage } from "./store.ts";
+import { emptyState, loadState, loadUi, saveState, saveUi, type AppState, type KeyValueStorage } from "./store.ts";
 
 const KEY = "tertulia-margins:v1";
 const memoryStorage = (initial: Record<string, string> = {}) => {
@@ -94,4 +94,20 @@ test("a reply still streaming is not saved, nor its question", () => {
 test("storage that throws never crashes: load is empty, save reports save_failed", () => {
   expect(loadState(throwing)).toEqual(emptyState());
   expect(saveState(throwing, state)).toBe("save_failed");
+});
+
+test("layout round-trips under its own key and leaves the notes' key alone", () => {
+  const { storage, data } = memoryStorage();
+  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false });
+  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false });
+  expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
+});
+
+test("missing, corrupt or unknown layout falls back to notes + margin with the sidebar open", () => {
+  const fallback = { view: "notes+margin", isSidebarOpen: true };
+  expect(loadUi(memoryStorage().storage)).toEqual(fallback);
+  expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
+  expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
+  expect(loadUi(throwing)).toEqual(fallback);
+  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true })).not.toThrow();
 });

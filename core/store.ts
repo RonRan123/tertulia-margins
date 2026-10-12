@@ -53,6 +53,36 @@ export function saveState(storage: KeyValueStorage, state: AppState): StoreError
   }
 }
 
+// Layout (D22), remembered per browser under its own key so it never touches the reader's data.
+// "notes+…" views put margin, PDF or chat beside the notes; the others fill the space alone.
+export const VIEWS = ["notes+margin", "notes+pdf", "notes+chat", "notes", "pdf", "chat"] as const;
+export type View = (typeof VIEWS)[number];
+export type UiState = { view: View; isSidebarOpen: boolean };
+export const UI_KEY = "tertulia-margins:ui";
+const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true };
+
+export function loadUi(storage: KeyValueStorage): UiState {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(storage.getItem(UI_KEY) ?? "null");
+  } catch {
+    return defaultUi;
+  }
+  if (!isRecord(saved)) return defaultUi;
+  const isKnownView = VIEWS.includes(saved.view as View);
+  return {
+    view: isKnownView ? (saved.view as View) : defaultUi.view,
+    isSidebarOpen: typeof saved.isSidebarOpen === "boolean" ? saved.isSidebarOpen : defaultUi.isSidebarOpen,
+  };
+}
+
+// Losing the layout is harmless, so a failed save is ignored (the notes' save reports storage problems).
+export function saveUi(storage: KeyValueStorage, ui: UiState) {
+  try {
+    storage.setItem(UI_KEY, JSON.stringify(ui));
+  } catch {}
+}
+
 // A reply still streaming is not saved, nor the question that prompted it: after a reload it would
 // be a half-written answer, and history must keep its (question, reply) pairs.
 function finishedMessages(messages: ChatMessage[]): ChatMessage[] {
