@@ -87,6 +87,7 @@ export function Chat({ reference, notes, messages, setMessages, onReplyEnd }: Ch
         ) : (
           <button
             type="button"
+            className="quiet"
             autoFocus={hasAskedToClear}
             disabled={isBusy || messages.length === 0}
             onClick={() => {

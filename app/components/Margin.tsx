@@ -154,9 +154,11 @@ type CardProps = {
   onDelete: () => void;
 };
 
-// The excerpt as the card shows it: one line, at most 60 characters.
+// The excerpt as the card shows it: one line, at most 60 characters, without markdown symbols
+// (the notes render them; the card shouldn't show `**ironic**`).
 function shorten(excerpt: string): string {
-  const line = excerpt.replace(/\s+/g, " ").trim();
+  const plain = excerpt.replace(/^\s*(?:#{1,6}|>|[-*+])\s+/gm, "").replace(/\*\*|__|[*_`~]/g, "");
+  const line = plain.replace(/\s+/g, " ").trim();
   return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line;
 }
 

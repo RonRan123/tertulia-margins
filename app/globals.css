@@ -1,5 +1,6 @@
-/* Tokens (design spec §3). The reader writes in ink, in a book serif; the AI writes beside it in
-   a verdigris pencil, in a sans (D6: typeface, colour and rule change together). */
+/* Tokens (design spec §3). The reader writes in ink; the AI writes beside it in a verdigris
+   pencil, on a tinted card with a rule (D6: AI text is always visually distinct). One system face
+   for both, as in Obsidian (D27). */
 :root {
   color-scheme: light dark;
   --paper: #fafaf7;
@@ -13,8 +14,10 @@
   --quote: #7a6745; /* book binding: passage quotes */
   --warn: #9b3d12;
   --focus: #2f5bd8;
-  --serif: var(--font-literata), "Literata", Georgia, "Times New Roman", serif;
-  --sans: var(--font-hanken), "Hanken Grotesk", system-ui, sans-serif;
+  /* Obsidian's default stacks (D27): one system face for notes, AI and interface. */
+  --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-ui: var(--font-text);
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", "Liberation Mono", Menlo, Monaco, Consolas, monospace;
   --s1: 0.25rem;
   --s2: 0.5rem;
   --s3: 0.75rem;
@@ -23,7 +26,7 @@
   --s8: 2rem;
   --notes-w: 38rem; /* the notes' reading width when they are alone */
   --radius: 4px;
-  --margin-rule: 3px double color-mix(in srgb, var(--ai) 45%, transparent);
+  --margin-rule: 1px solid var(--rule);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,7 +55,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 400 0.875rem/1.45 var(--sans);
+  font: 400 0.875rem/1.45 var(--font-ui);
 }
 
 :focus-visible {
@@ -71,7 +74,7 @@ body {
 
 /* Buttons */
 button {
-  font: 500 0.875rem var(--sans);
+  font: 500 0.875rem var(--font-ui);
   color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--rule);
@@ -115,7 +118,7 @@ textarea {
   margin: var(--s1) 0 0;
   padding-left: var(--s4);
   color: var(--warn);
-  font: 0.8125rem/1.4 var(--sans);
+  font: 0.8125rem/1.4 var(--font-ui);
 }
 
 .empty {
@@ -136,8 +139,8 @@ main {
   min-width: 13rem;
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s3) var(--s4);
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
   overflow-y: auto;
   background: var(--paper);
   border-right: 1px solid var(--rule);
@@ -152,19 +155,13 @@ main:not([data-sidebar-open]) .sidebar,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s2);
+  min-height: 2rem;
 }
 
 .sidebar h1 {
   margin: 0;
-  font: italic 400 1.125rem var(--serif);
-}
-
-.sidebar h2 {
-  margin: 0;
-  font: 600 0.75rem var(--sans);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 600 0.8125rem var(--font-ui);
+  letter-spacing: 0.02em;
   color: var(--ink-soft);
 }
 
@@ -176,49 +173,34 @@ main:not([data-sidebar-open]) .sidebar,
 
 .book {
   display: grid;
-  gap: var(--s1);
-  padding: var(--s2);
+  justify-items: start;
+  gap: 2px;
+  padding: var(--s1) var(--s2);
   border-radius: var(--radius);
 }
 
 .book.is-current {
-  background: var(--sheet);
-  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
 }
 
 .book-title {
-  font: 500 0.9375rem var(--serif);
+  font-weight: 600;
 }
 
-.book .reference-button {
-  text-align: left;
-  border: 0;
+.book .reference-button,
+.book-action {
   padding: 0;
+  border: 0;
   background: none;
-  color: var(--ink-soft);
+  text-align: left;
   font-weight: 400;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
 }
 
-.main-col {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-
-button.icon {
-  padding: var(--s1) var(--s2);
-  line-height: 1;
-}
-
-.app-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s4);
-  padding: var(--s3) var(--s4);
-  background: var(--sheet);
-  border-bottom: 1px solid var(--rule);
+.book .reference-button:hover,
+.book-action:hover:not(:disabled) {
+  color: var(--ink);
 }
 
 .reference-summary {
@@ -226,40 +208,90 @@ button.icon {
   color: var(--ink-soft);
 }
 
-.view-switcher {
+/* One background for everything right of the sidebar, as in Obsidian. */
+.main-col {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background: var(--sheet);
 }
 
-.view-group {
+/* Header and sidebar controls: text, no box (D26). */
+button.quiet {
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+}
+
+button.quiet:hover {
+  color: var(--ink);
+}
+
+button.icon {
+  padding: var(--s1) var(--s2);
+  line-height: 1;
+}
+
+/* One thin bar (D26): ☰, the book, status, then what sits beside the notes, ⤢ and React. */
+.app-header {
   display: flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--s2);
+  min-height: 2.5rem;
+  padding: 0 var(--s3);
+  border-bottom: 1px solid var(--rule);
 }
 
-.view-group-label {
-  margin-right: var(--s1);
+.book-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.notes-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
 }
 
-.view-group button {
+.view-switcher {
+  display: flex;
+  align-items: center;
+}
+
+.view-switcher button {
   position: relative; /* for the unread dot */
 }
 
-.view-group button[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--sheet);
+.view-switcher button[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ai);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.view-switcher button.icon[aria-pressed="true"] {
+  text-decoration: none;
+  color: var(--ai);
+}
+
+/* React needs the notes on screen. */
+main[data-view="pdf"] .react-slot,
+main[data-view="chat"] .react-slot {
+  display: none;
 }
 
 .unread {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 8px;
-  height: 8px;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ai);
 }
@@ -288,7 +320,6 @@ button.icon {
 
 .notes-cell {
   min-width: 0;
-  background: var(--sheet);
 }
 
 .margin-cell {
@@ -313,53 +344,12 @@ button.icon {
   gap: var(--s3);
 }
 
-/* The toolbar row stays put while the notes scroll under it. */
-.toolbar-row {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.toolbar-row .margin-cell {
-  padding: var(--s2) var(--s4) var(--s3);
-  background: var(--paper);
-}
-
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1) var(--s2);
-  padding: var(--s2) var(--s6);
-  background: var(--sheet);
-  border-bottom: 1px solid var(--rule);
-}
-
-.toolbar .divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--rule);
-}
-
-.notes-status {
-  flex: 1;
-  min-width: 8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
-  color: var(--ink-soft);
-}
-
 .empty-reference {
   margin: 0;
   padding: var(--s2) var(--s6);
+  font-size: 0.8125rem;
   color: var(--ink-soft);
-  border-bottom: 1px solid var(--rule);
-}
-
-.toolbar-row .notes-cell {
-  padding-bottom: var(--s2);
+  background: var(--sheet);
 }
 
 /* The notes editor (D25): CodeMirror in the book face. The md-* classes come from
@@ -372,9 +362,12 @@ button.icon {
   outline: none;
 }
 
+/* Obsidian's defaults: 16px, line-height 1.5, a readable line of at most 700px, centred. */
 .notes-editor .cm-content {
-  padding: var(--s3) var(--s6) var(--s8);
-  font: 400 1.125rem/1.65 var(--serif);
+  max-width: calc(700px + 2 * var(--s6));
+  margin-inline: auto;
+  padding: var(--s6) var(--s6) var(--s8);
+  font: 400 1rem/1.5 var(--font-text);
   color: var(--ink);
   caret-color: var(--ink);
 }
@@ -388,6 +381,7 @@ button.icon {
   color: var(--ink-soft);
 }
 
+/* Obsidian's default heading scale. */
 .md-h1,
 .md-h2,
 .md-h3,
@@ -395,24 +389,30 @@ button.icon {
 .md-h5,
 .md-h6 {
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.2;
 }
 
 .md-h1 {
-  font-size: 1.6em;
-  padding-top: 0.3em !important;
+  font-size: 1.618em;
+  font-weight: 700;
+  padding-top: 0.4em !important;
 }
 
 .md-h2 {
-  font-size: 1.3em;
-  padding-top: 0.2em !important;
+  font-size: 1.462em;
+  padding-top: 0.3em !important;
 }
 
-.md-h3,
-.md-h4,
-.md-h5,
-.md-h6 {
-  font-size: 1.1em;
+.md-h3 {
+  font-size: 1.318em;
+}
+
+.md-h4 {
+  font-size: 1.188em;
+}
+
+.md-h5 {
+  font-size: 1.076em;
 }
 
 .md-strong {
@@ -428,7 +428,7 @@ button.icon {
 }
 
 .md-code {
-  font: 0.85em ui-monospace, Menlo, monospace;
+  font: 0.85em var(--font-mono);
   background: color-mix(in srgb, var(--rule) 60%, transparent);
   border-radius: 3px;
 }
@@ -448,7 +448,7 @@ button.icon {
 }
 
 .notes-editor .cm-line.md-codeblock {
-  font: 0.85em/1.6 ui-monospace, Menlo, monospace;
+  font: 0.85em/1.6 var(--font-mono);
   background: color-mix(in srgb, var(--rule) 40%, transparent);
 }
 
@@ -457,7 +457,7 @@ button.icon {
 }
 
 .md-cite {
-  font: 500 0.75em var(--sans);
+  font: 500 0.75em var(--font-ui);
   font-style: normal;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -516,7 +516,7 @@ button.icon {
    larger, invisible hit area around the 7px dot. */
 .dot {
   position: absolute;
-  top: calc((1.125rem * 1.65 - 21px) / 2);
+  top: calc((1rem * 1.5 - 21px) / 2);
   left: calc(-1 * var(--s4) - 12px);
   z-index: 1;
   display: flex;
@@ -545,7 +545,7 @@ button.icon {
 }
 
 .dot-count {
-  font: 600 0.6875rem/1 var(--sans);
+  font: 600 0.6875rem/1 var(--font-ui);
   color: var(--ai);
   background: var(--paper);
   padding: 1px 2px;
@@ -556,7 +556,7 @@ button.icon {
   background: var(--ai-wash);
   border-left: 2px solid var(--ai);
   border-radius: 0 var(--radius) var(--radius) 0;
-  font: 0.9375rem/1.5 var(--sans);
+  font: 0.9375rem/1.5 var(--font-ui);
   color: var(--ai-ink);
   overflow-wrap: anywhere;
 }
@@ -613,7 +613,7 @@ button.icon {
 .card .excerpt {
   display: block;
   margin: var(--s1) 0;
-  font: italic 0.875rem/1.4 var(--serif);
+  font: italic 0.875rem/1.4 var(--font-text);
   color: var(--ink-soft);
   background: none;
   border: 0;
@@ -632,13 +632,13 @@ button.icon {
 }
 
 .card .reply-user {
-  font: 1rem/1.55 var(--serif);
+  font: 1rem/1.55 var(--font-text);
   color: var(--ink);
 }
 
 .card textarea {
   margin-top: var(--s1);
-  font: 1rem/1.5 var(--serif);
+  font: 1rem/1.5 var(--font-text);
   resize: vertical;
 }
 
@@ -814,7 +814,7 @@ main:not([data-view="notes+margin"]) .margin-cell {
 
 .pane-header h2 {
   margin: 0;
-  font: 600 1rem var(--sans);
+  font: 600 1rem var(--font-ui);
 }
 
 .messages {
@@ -836,7 +836,7 @@ main:not([data-view="notes+margin"]) .margin-cell {
 }
 
 .message.user {
-  font: 1rem/1.55 var(--serif);
+  font: 1rem/1.55 var(--font-text);
   color: var(--ink);
 }
 
@@ -846,12 +846,12 @@ main:not([data-view="notes+margin"]) .margin-cell {
   background: var(--ai-wash);
   border-left: 2px solid var(--ai);
   border-radius: 0 var(--radius) var(--radius) 0;
-  font: 0.9375rem/1.5 var(--sans);
+  font: 0.9375rem/1.5 var(--font-ui);
   color: var(--ai-ink);
 }
 
 .chat form textarea {
-  font: 1rem/1.5 var(--serif);
+  font: 1rem/1.5 var(--font-text);
 }
 
 .chat form button {
@@ -891,8 +891,8 @@ dialog.reference form button {
   }
 }
 
-/* Phone: one pane at a time; the page scrolls, the toolbar sticks, the margin rule turns
-   horizontal, and the sidebar slides over the page. */
+/* Phone: one pane at a time; the page scrolls, cards list under the notes, and the sidebar
+   slides over the page. */
 @media (max-width: 48rem) {
   main {
     height: auto;
@@ -939,17 +939,9 @@ dialog.reference form button {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .toolbar-row .margin-cell {
+  .book-name,
+  .notes-status:empty {
     display: none;
-  }
-
-  .toolbar {
-    padding-inline: var(--s4);
-  }
-
-  .notes-status {
-    flex-basis: 100%;
-    text-align: left;
   }
 
   .empty-reference {

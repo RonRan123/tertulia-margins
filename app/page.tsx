@@ -35,25 +35,17 @@ const STATUS_MS = 5000;
 // globals.css's phone breakpoint: one pane at a time, the sidebar over the page.
 const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
 
-// The view switcher (D22): margin, PDF or chat beside the notes, or one of them alone.
-const VIEW_GROUPS: { label: string; views: { view: View; label: string; name: string }[] }[] = [
-  {
-    label: "Beside notes",
-    views: [
-      { view: "notes+margin", label: "Margin", name: "Notes with margin" },
-      { view: "notes+pdf", label: "PDF", name: "Notes with PDF" },
-      { view: "notes+chat", label: "Chat", name: "Notes with chat" },
-    ],
-  },
-  {
-    label: "Alone",
-    views: [
-      { view: "notes", label: "Notes", name: "Notes only" },
-      { view: "pdf", label: "PDF", name: "PDF only" },
-      { view: "chat", label: "Chat", name: "Chat only" },
-    ],
-  },
+// The view (D22, D26) is two choices: what sits beside the notes (margin, PDF or chat), and
+// whether it shows alone. Margin "alone" means the notes alone.
+type Side = "margin" | "pdf" | "chat";
+const SIDES: { side: Side; label: string }[] = [
+  { side: "margin", label: "Margin" },
+  { side: "pdf", label: "PDF" },
+  { side: "chat", label: "Chat" },
 ];
+const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : "margin");
+const isAlone = (view: View) => !view.startsWith("notes+");
+const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
 
 // Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
@@ -202,6 +194,11 @@ export default function Home() {
         reference={reference}
         onReferenceChange={setReference}
         referenceRef={referenceText}
+        canExport={!isNotesEmpty}
+        onExport={() => {
+          const file = exportMarkdown(notes, reference, new Date());
+          download(file.filename, file.content);
+        }}
         onClose={() => setSidebarOpen(false)}
       />
       {/* Phone only (CSS): the open sidebar covers the page; tapping beside it closes it. */}
@@ -210,7 +207,7 @@ export default function Home() {
         <header className="app-header">
           <button
             type="button"
-            className="icon"
+            className="quiet icon"
             aria-expanded={ui.isSidebarOpen}
             aria-controls="sidebar"
             aria-label="Books sidebar"
@@ -219,73 +216,60 @@ export default function Home() {
           >
             ☰
           </button>
-          <div className="view-switcher" role="group" aria-label="View">
-            {VIEW_GROUPS.map((group) => (
-              <div key={group.label} className="view-group" role="group" aria-label={group.label}>
-                <span className="view-group-label" aria-hidden="true">
-                  {group.label}
-                </span>
-                {group.views.map(({ view, label, name }) => (
-                  <button
-                    key={view}
-                    type="button"
-                    aria-pressed={ui.view === view}
-                    aria-label={showsChat(view) && isUnreadShown ? `${name}, new reply` : name}
-                    onClick={() => showView(view)}
-                  >
-                    {label}
-                    {showsChat(view) && isUnreadShown && <span className="unread" aria-hidden="true" />}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-          {saveError && <span className="warning">Not saved: browser storage is full or blocked.</span>}
+          <span className="book-name">Current book</span>
+          <span className="notes-status" aria-live="polite">
+            {saveError ? "Not saved: browser storage is full or blocked." : status}
+          </span>
+          <span className="sr-only" aria-live="polite">
+            {margin.announcement}
+          </span>
           {isChangedElsewhere && (
             <span className="warning">Changed in another tab: this tab&apos;s edits overwrite it. Reload to see the other version.</span>
           )}
+          <div className="view-switcher" role="group" aria-label="Beside the notes">
+            {SIDES.map(({ side, label }) => {
+              const hasDot = side === "chat" && isUnreadShown;
+              return (
+                <button
+                  key={side}
+                  type="button"
+                  className="quiet"
+                  aria-pressed={sideOf(ui.view) === side}
+                  aria-label={hasDot ? `${label}, new reply` : label}
+                  onClick={() => showView(viewOf(side, isAlone(ui.view)))}
+                >
+                  {label}
+                  {hasDot && <span className="unread" aria-hidden="true" />}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="quiet icon"
+              aria-pressed={isAlone(ui.view)}
+              title={isAlone(ui.view) ? "Show beside the notes" : sideOf(ui.view) === "margin" ? "Notes alone" : "Show alone"}
+              aria-label="Show alone"
+              onClick={() => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)))}
+            >
+              ⤢
+            </button>
+          </div>
+          {/* mousedown is cancelled inside, so the selection in the notes stays put. */}
+          <div className="react-slot">
+            <ReactButton title={reactTitle} onReact={react} />
+          </div>
         </header>
         {/* The view decides (CSS, from main's data-view) which of the panes and the side pane show. */}
         <div className="workspace">
           <div className="panes">
-            <div className="row toolbar-row">
-              <div className="notes-cell">
-                {/* Every control here acts on the notes. mousedown is cancelled so focus and the
-                    highlighted selection stay in the block being edited. */}
-                <div className="toolbar">
-                  <ReactButton title={reactTitle} onReact={react} />
-                  <span className="divider" aria-hidden="true" />
-                  <button
-                    type="button"
-                    disabled={isNotesEmpty}
-                    title={isNotesEmpty ? "Nothing to export yet" : undefined}
-                    onClick={() => {
-                      const file = exportMarkdown(notes, reference, new Date());
-                      download(file.filename, file.content);
-                    }}
-                  >
-                    Export .md
-                  </button>
-                  <span className="notes-status" aria-live="polite">
-                    {status}
-                  </span>
-                  <span className="sr-only" aria-live="polite">
-                    {margin.announcement}
-                  </span>
-                </div>
-                {!hasReference && (
-                  <p className="empty-reference">
-                    Add the chapter you&apos;re reading so the AI can check what it says.{" "}
-                    <button type="button" className="link" onClick={openReference}>
-                      Add reference text
-                    </button>
-                  </p>
-                )}
-              </div>
-              <div className="margin-cell">
-                {reactions.length === 0 && <p className="empty">Reactions to your notes appear here, beside the note they answer.</p>}
-              </div>
-            </div>
+            {!hasReference && (
+              <p className="empty-reference">
+                Add the chapter you&apos;re reading so the AI can check what it says.{" "}
+                <button type="button" className="link" onClick={openReference}>
+                  Add reference text
+                </button>
+              </p>
+            )}
             <Notes
               ref={notesView}
               notes={notes}

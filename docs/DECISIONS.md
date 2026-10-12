@@ -254,6 +254,16 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** keeps every control discoverable while giving the notes the page.
 - **Cost we accept:** "Notes alone" moves behind a toggle instead of a labelled button.
 - **Revisit if:** the toggle proves hard to find.
+- **As built (R1d, 2026-10-11, Ronith: "still not simplified enough"):** one bar instead of a bar plus a toolbar: ☰ · book · status · Margin PDF Chat · ⤢ · React. The ⋯ menu is dropped: Reference text and Export moved under the book in the sidebar, where the book's actions belong. Everything right of the sidebar shares one background; the margin rule is a hairline; card excerpts drop markdown symbols.
+
+## D27. Obsidian's default fonts (amends D20's fonts)
+- **Status:** Accepted (2026-10-11, Ronith: "make the fonts match the defaults of Obsidian")
+- **Context:** D20 set Literata for the notes and Hanken Grotesk for the AI and interface, loaded with `next/font`.
+- **Alternatives:** keep a distinct face for AI text only.
+- **Rules:** Obsidian's default stacks: the system UI face (`ui-sans-serif, -apple-system, …`) for notes, AI and interface; the system monospace for code; editor text 16px, line-height 1.5, at most 700px wide and centred; Obsidian's heading scale (1.618, 1.462, 1.318, 1.188, 1.076em). Nothing is downloaded; `next/font` is no longer used.
+- **Why:** the notes should feel like the reader's Obsidian vault.
+- **Cost we accept:** AI and user text no longer differ by typeface; D6's distinction now rests on colour, the tinted card and its rule.
+- **Revisit if:** AI text and notes get confused in real use (then a second face for AI text).
 
 ---
 

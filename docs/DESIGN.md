@@ -42,7 +42,8 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | PDFs in IndexedDB | localStorage only (D7, amended) | D23 |
 | Define/Quiz out of the UI for now (core and prompts kept) | toolbar commands (D17) | D24 |
 | One notes file in a CodeMirror editor with Obsidian-style live preview | Jupyter-style blocks rendered with `marked` (D18, D20) | D25 |
-| Quiet chrome: thin top bar, compact switcher, React + ⋯ | six labelled view buttons, full toolbar | D26 |
+| Quiet chrome: one bar (☰ · book · Margin PDF Chat · ⤢ · React); book actions in the sidebar | six labelled view buttons, full toolbar | D26 |
+| Obsidian's default fonts: system face, 16px/1.5, 700px column | Literata + Hanken Grotesk (D20) | D27 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -130,7 +131,7 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 
 **Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
 
-**Layout is views over one book (D22).** The page shows one book at a time: the sidebar picks the book; the switcher has two groups, *Beside notes* (margin, PDF or chat in the right pane) and *Alone* (notes, PDF or chat with only the sidebar). The view is `data-view` on `<main>` and CSS does the rest: every pane stays mounted and hidden ones are `display: none`. Define and Quiz switch to Notes + chat so their reply is visible (on a phone, an unread dot on Chat instead). Every view reads the same book state, so switching views never loses a stream or an edit. An "only" view fills everything beside the sidebar; the view and the sidebar's state are remembered; the reference-text editor and PDF import live under the book in the sidebar; on phones the sidebar is an overlay and one pane shows at a time (a *Beside notes* PDF or chat shows instead of the notes).
+**Layout is views over one book (D22).** The page shows one book at a time: the sidebar picks the book; the top bar picks what sits beside the notes (Margin, PDF or Chat) and ⤢ shows it alone (Margin alone = the notes alone) (D26). The view is `data-view` on `<main>` and CSS does the rest: every pane stays mounted and hidden ones are `display: none`. Define and Quiz switch to Notes + chat so their reply is visible (on a phone, an unread dot on Chat instead). Every view reads the same book state, so switching views never loses a stream or an edit. An "only" view fills everything beside the sidebar; the view and the sidebar's state are remembered; the reference-text editor, PDF import and export live under the book in the sidebar; on phones the sidebar is an overlay and one pane shows at a time (a *Beside notes* PDF or chat shows instead of the notes).
 
 **The PDF view is the browser's own viewer (D23).** The PDF is stored in IndexedDB, opened as a `blob:` URL in an iframe at `#page=N`. A `[p. N]` cite (or a `[¶n]` whose paragraph has a page label) opens the PDF view at that page. MVP: the page number as given. Later: match the cited text around that page (regex, then AI) so an off-by-a-few page still lands on the right passage.
 

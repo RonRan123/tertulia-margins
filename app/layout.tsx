@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, Literata } from "next/font/google";
 import "./globals.css";
 
-// Self-hosted at build time by Next (no npm package). Literata sets the reader's notes; Hanken
-// Grotesk the AI and the UI (D6: the AI writes in a different hand). globals.css reads the variables.
-const literata = Literata({ subsets: ["latin"], style: ["normal", "italic"], variable: "--font-literata" });
-const hanken = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-hanken" });
+// Fonts are Obsidian's defaults (D27): the system UI face for text and interface, the system
+// monospace for code. Nothing is downloaded; globals.css holds the stacks.
 
 export const metadata: Metadata = {
   title: "tertulia-margins",
@@ -14,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${literata.variable} ${hanken.variable}`}>
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
