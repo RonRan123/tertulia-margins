@@ -291,6 +291,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** labels keep the switcher readable while the icons give it ChatPDF's look.
 - **Cost we accept:** a wider bar; on phones the labels hide.
 - **Revisit if:** the bar crowds at laptop widths.
+- **As built (R3, 2026-10-11, Ronith):** the bar spans the full width above the sidebar, as on chatpdf.com, so toggling the sidebar never moves it; the app name sits at its left; the sidebar's own « close button is gone (☰ does it; on phones the backdrop too). Upload sits after ☰.
 
 ## D31. Books: one notes file per book; new, rename, delete; folders before the PDF (resolves Q9)
 - **Status:** Accepted (2026-10-11, Ronith)

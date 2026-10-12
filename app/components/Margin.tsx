@@ -7,6 +7,7 @@ import { threadHistory, type ReactionKind } from "@/core/reactions.ts";
 import type { Reaction } from "@/core/store.ts";
 import { streamMessage, type MessagePatch } from "@/lib/converse-client.ts";
 import { CitationWarnings, escapeTo } from "./Chat";
+import { CitedText } from "./CitedText";
 import { KIND_LABELS } from "./ReactButton";
 
 // The margin (D18, D20, D25): one card per reaction, each a thread the reader can reply to, set
@@ -245,7 +246,7 @@ function Card({ reaction, isActive, isChoosing, replyTitle, onShowExcerpt, onRep
             ) : (
               <div key={i} className={i === 0 ? "reply-ai" : "reply-ai follow-up"}>
                 <p>
-                  {labelCitations(m.content, m.pages ?? {})}
+                  <CitedText text={labelCitations(m.content, m.pages ?? {})} />
                   {m.isStreaming && (
                     <span className="caret" aria-hidden="true">
                       ▍

@@ -42,9 +42,10 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] Sidebar: "+ New book" (title input, Enter/Esc), click to open, rename (✎ or double-click), delete with a confirm; the last book can't be deleted; switching and deleting wait while a reply streams. **Verify:** headless Chrome: seeded v1 data appeared as "My first book" with its notes, chat and card, v1 key kept; created "Persuasion", typed notes, reloaded (it stayed open with its notes); switched back (notes, 1 card, 2 chat messages intact); renamed to "Pride and Prejudice" (top bar followed); deleted Persuasion (its key removed; delete disabled on the last book).
 
 ### R3: PDF view + upload (D29)
-- [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for one PDF per book. **Verify:** unit tests with a fake.
-- [ ] Upload: an Upload icon in the top bar, a drag-and-drop zone in the empty PDF pane, "Add PDF" under the book; the PDF's text fills the reference text via the existing import (asks before replacing). PDF-by-URL later (Q8).
-- [ ] Viewer: pdfjs viewer with selectable text; floating toolbar: zoom out, reset (fit width), zoom in, page box "N of M", download, search with highlighted matches. A `[p. N]` cite opens that page. **Verify:** each control on a real PDF; the PDF survives reload; screenshots light and dark.
+- [x] IndexedDB wrapper (`lib/pdf-store.ts`, ~50 lines, no dependency; D23) for one PDF per book; deleting a book deletes its PDF. *Verified in the browser (reload keeps the PDF) instead of with a fake: IndexedDB isn't in Node and a fake would be a new dependency.*
+- [x] Upload: Upload in the top bar, a drag-and-drop zone in the empty PDF pane, "Add or replace PDF" under the book; the PDF's text fills the reference text via the existing import, or a banner asks before replacing existing text. PDF-by-URL later (Q8).
+- [x] Viewer: pdfjs viewer with selectable text; floating toolbar: zoom out, fit width, zoom in, page box "N of M", download, search with highlighted matches and "n / total". A cite in chat or an open card ("[¶3 · PDF p. 2]") opens the PDF at that page. **Verify:** headless Chrome on two public-domain test PDFs (4 pages each; one from `cupsfilter`, one typeset by Chrome): upload rendered all pages with a text layer and filled the reference text; zoom in/out/fit changed the page width (456 → 507 → 344 → 456 px); page box 3 scrolled page 3 to the top; search "Bennet" found 20 matches, highlights on the words; reload kept the PDF; a `PDF p. 2` cite clicked from the chat view opened page 2; a second upload showed the replace banner; light and dark screenshots; 119 tests, lint, build green.
+- [x] *Also (Ronith, mid-step):* the top bar spans the full width above the sidebar (ChatPDF-style), so toggling the sidebar never moves it; the app name moved into the bar and the sidebar's « was removed.
 
 ### R4+ (not scheduled): grounded linking
 - [ ] Link a cite to the actual text, not just its page: regex for the quoted words around the cited page(s), then AI as a fallback (Ronith's "future iteration"). **Decide first:** Q10.
@@ -79,6 +80,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Highlight the cited text on the PDF page (needs pdfjs rendering instead of the built-in viewer; D23 revisit)
 - Bring back Define/Quiz with behaviour Ronith likes (D24): where the reply lands, and whether Define pastes a quote
 - R1c QA: ~~margin cards show their excerpt as raw markdown~~ (fixed in R1d); links in the notes aren't clickable (no Cmd-click yet); on phones cards list under the notes, not under each paragraph (D25)
+- R3: a whole book's PDF text becomes the reference text, and every AI call sends all of it (the status line shows ~tokens). For long books that is expensive per turn: decide between trimming to a chapter, prompt caching (Sprint 7) and retrieval (Q5)
+- R3 QA: pdfjs logs one "offsetParent is not set -- cannot scroll" console message when a PDF loads while its view is hidden; harmless (one fix attempt made; the jump and fit work)
+- R3 QA: PDF text-layer quality depends on the PDF (a `cupsfilter` PDF splits "fi" ligatures, so "Netherfield" isn't found there)
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
 - Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
 - Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI

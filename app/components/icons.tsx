@@ -89,3 +89,43 @@ export const MoonIcon = () => (
     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
   </Icon>
 );
+
+// PDF toolbar (D29) and upload.
+export const MinusIcon = () => (
+  <Icon>
+    <path d="M5 12h14" />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M5 12h14" />
+    <path d="M12 5v14" />
+  </Icon>
+);
+
+// Fit width: arrows pulling in, like the reference toolbar's reset.
+export const ResetZoomIcon = MinimizeIcon;
+
+export const DownloadIcon = () => (
+  <Icon>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M12 15V3" />
+  </Icon>
+);
+
+export const SearchIcon = () => (
+  <Icon>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </Icon>
+);
+
+export const UploadIcon = () => (
+  <Icon>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M17 8l-5-5-5 5" />
+    <path d="M12 3v12" />
+  </Icon>
+);

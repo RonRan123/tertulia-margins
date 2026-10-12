@@ -39,7 +39,10 @@ import {
   MoonIcon,
   PanelLeftIcon,
   SunIcon,
+  UploadIcon,
 } from "./components/icons";
+import { OpenPageContext } from "./components/CitedText";
+import { PdfPane, type PdfPaneHandle } from "./components/PdfPane";
 import { ReactButton } from "./components/ReactButton";
 import type { ReferenceTextHandle } from "./components/ReferenceText";
 import { Sidebar } from "./components/Sidebar";
@@ -94,6 +97,7 @@ export default function Home() {
   const [isChangedElsewhere, setIsChangedElsewhere] = useState(false);
   const [library, setLibrary] = useState<Library>({ books: [], currentId: "" }); // D31: loaded after hydration
   const currentKey = useRef(""); // the open book's storage key, for the storage listener
+  const pdfPane = useRef<PdfPaneHandle>(null);
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
   const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
@@ -256,12 +260,27 @@ export default function Home() {
       const next = deleteBook(library, id);
       if (typeof next === "string") return BOOK_ERRORS[next];
       openLibrary(next);
+      pdfPane.current?.forget(id);
       try {
         browserStorage.removeItem(bookKey(id));
       } catch {
         // Unremovable: the book is gone from the library either way.
       }
     },
+  };
+
+  // ---- The PDF (D29) ----
+  // Shows the PDF beside the notes, or alone if the reader is viewing something alone.
+  const showPdf = () => showView(isAlone(ui.view) ? "pdf" : "notes+pdf");
+  const addPdf = () => {
+    showPdf();
+    pdfPane.current?.pick();
+  };
+  // A cite's page: the page as given (D23); R4 matches the cited text instead. If the PDF view is
+  // hidden, the viewer holds the page until it is shown and fitted (PdfViewer).
+  const openPage = (page: number) => {
+    showPdf();
+    pdfPane.current?.goTo(page);
   };
 
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
@@ -274,27 +293,10 @@ export default function Home() {
   const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
 
   return (
-    <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
-      <Sidebar
-        id="sidebar"
-        books={library.books}
-        currentId={library.currentId}
-        isBusy={isStreaming}
-        actions={books}
-        reference={reference}
-        onReferenceChange={setReference}
-        referenceRef={referenceText}
-        canExport={!isNotesEmpty}
-        onExport={() => {
-          const file = exportMarkdown(notes, reference, new Date());
-          download(file.filename, file.content);
-        }}
-        onClose={() => setSidebarOpen(false)}
-      />
-      {/* Phone only (CSS): the open sidebar covers the page; tapping beside it closes it. */}
-      <div className="sidebar-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
-      <div className="main-col">
+    <OpenPageContext value={openPage}>
+      <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
         <header className="app-header">
+          <span className="brand">tertulia</span>
           <button
             type="button"
             className="quiet icon"
@@ -305,6 +307,10 @@ export default function Home() {
             onClick={() => setSidebarOpen(!ui.isSidebarOpen)}
           >
             <PanelLeftIcon />
+          </button>
+          <button type="button" className="quiet pill" title="Upload the book's PDF" onClick={addPdf}>
+            <UploadIcon />
+            <span className="pill-label">Upload</span>
           </button>
           <span className="book-name">
             <BookIcon />
@@ -362,59 +368,89 @@ export default function Home() {
             <ReactButton title={reactTitle} onReact={react} />
           </div>
         </header>
-        {/* The view decides (CSS, from main's data-view) which of the panes and the side pane show. */}
-        <div className="workspace">
-          <div className="panes">
-            {!hasReference && (
-              <p className="empty-reference">
-                Add the chapter you&apos;re reading so the AI can check what it says.{" "}
-                <button type="button" className="link" onClick={openReference}>
-                  Add reference text
-                </button>
-              </p>
-            )}
-            <Notes
-              ref={notesView}
-              notes={notes}
-              reactions={reactions}
-              onChange={editNotes}
-              onReactShortcut={() => react()}
-              renderMargin={(row, isCurrent) => (
-                <MarginCell
-                  items={row.reactions}
-                  isCurrent={isCurrent}
-                  margin={margin}
-                  hasReference={hasReference}
-                  onShowExcerpt={showExcerpt}
+        {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
+        <div className="app-body">
+          <Sidebar
+            id="sidebar"
+            books={library.books}
+            currentId={library.currentId}
+            isBusy={isStreaming}
+            actions={books}
+            reference={reference}
+            onReferenceChange={setReference}
+            referenceRef={referenceText}
+            canExport={!isNotesEmpty}
+            onAddPdf={addPdf}
+            onExport={() => {
+              const file = exportMarkdown(notes, reference, new Date());
+              download(file.filename, file.content);
+            }}
+          />
+          {/* Phone only (CSS): the open sidebar covers the page; tapping beside it closes it. */}
+          <div className="sidebar-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+          <div className="main-col">
+            {/* The view decides (CSS, from main's data-view) which of the panes and the side pane show. */}
+            <div className="workspace">
+              <div className="panes">
+                {!hasReference && (
+                  <p className="empty-reference">
+                    Add the chapter you&apos;re reading so the AI can check what it says.{" "}
+                    <button type="button" className="link" onClick={openReference}>
+                      Add reference text
+                    </button>
+                  </p>
+                )}
+                <Notes
+                  ref={notesView}
+                  notes={notes}
+                  reactions={reactions}
+                  onChange={editNotes}
+                  onReactShortcut={() => react()}
+                  renderMargin={(row, isCurrent) => (
+                    <MarginCell
+                      items={row.reactions}
+                      isCurrent={isCurrent}
+                      margin={margin}
+                      hasReference={hasReference}
+                      onShowExcerpt={showExcerpt}
+                    />
+                  )}
+                  renderDetached={(detached) => (
+                    <MarginCell
+                      items={detached.map((reaction) => ({ reaction }))}
+                      isDetached
+                      margin={margin}
+                      hasReference={hasReference}
+                      onShowExcerpt={showExcerpt}
+                    />
+                  )}
                 />
-              )}
-              renderDetached={(detached) => (
-                <MarginCell
-                  items={detached.map((reaction) => ({ reaction }))}
-                  isDetached
-                  margin={margin}
-                  hasReference={hasReference}
-                  onShowExcerpt={showExcerpt}
-                />
-              )}
-            />
+              </div>
+              <section className="side-pane" aria-label="Beside the notes">
+                <div className="pdf-pane">
+                  <PdfPane
+                    ref={pdfPane}
+                    bookId={library.currentId}
+                    hasReference={hasReference}
+                    onReference={setReference}
+                    onAdded={showPdf}
+                    onStatus={showStatus}
+                  />
+                </div>
+                <div className="chat-pane">
+                  <Chat
+                    reference={reference}
+                    notes={notes}
+                    messages={messages}
+                    setMessages={setMessages}
+                    onReplyEnd={() => setHasUnread(true)}
+                  />
+                </div>
+              </section>
+            </div>
           </div>
-          <section className="side-pane" aria-label="Beside the notes">
-            <div className="pdf-pane">
-              <p className="empty">The book&apos;s PDF will show here, opening at the page a note cites.</p>
-            </div>
-            <div className="chat-pane">
-              <Chat
-                reference={reference}
-                notes={notes}
-                messages={messages}
-                setMessages={setMessages}
-                onReplyEnd={() => setHasUnread(true)}
-              />
-            </div>
-          </section>
         </div>
-      </div>
-    </main>
+      </main>
+    </OpenPageContext>
   );
 }

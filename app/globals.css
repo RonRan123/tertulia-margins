@@ -132,7 +132,15 @@ textarea {
    on its own. */
 main {
   display: flex;
+  flex-direction: column;
   height: 100dvh;
+}
+
+/* Under the full-width bar: sidebar | the rest. */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
@@ -152,18 +160,11 @@ main:not([data-sidebar-open]) .sidebar,
   display: none;
 }
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 2rem;
-}
-
-.sidebar h1 {
-  margin: 0;
-  font: 600 0.8125rem var(--font-ui);
-  letter-spacing: 0.02em;
-  color: var(--ink-soft);
+.brand {
+  padding: 0 var(--s2) 0 var(--s1);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
 }
 
 .books {
@@ -322,8 +323,10 @@ button.icon {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 2.5rem;
+  flex: none;
+  min-height: 2.75rem;
   padding: 0 var(--s3);
+  background: var(--sheet);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -869,6 +872,163 @@ main[data-view="chat"] .panes {
   display: none;
 }
 
+/* The PDF view (D29): pdfjs needs an absolutely positioned scroll box; the toolbar floats on it. */
+.pdf-pane {
+  position: relative;
+  padding: 0;
+}
+
+.pdf-viewer,
+.pdf-scroll {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-scroll {
+  overflow: auto;
+  background: var(--paper);
+}
+
+/* pdfjs sizes pages with the default content-box model; our global border-box would shrink the
+   page image inside its border but not the text layer, so search highlights would drift. */
+.pdf-scroll * {
+  box-sizing: content-box;
+}
+
+.pdf-scroll:focus-visible {
+  outline: none;
+}
+
+.pdf-error {
+  position: absolute;
+  top: var(--s4);
+  left: var(--s4);
+}
+
+.pdf-toolbar {
+  position: absolute;
+  bottom: var(--s4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--sheet) 94%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+  backdrop-filter: blur(6px);
+}
+
+.pdf-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--rule);
+}
+
+.pdf-page {
+  width: 3rem;
+  padding: 3px 4px;
+  text-align: center;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.pdf-count,
+.pdf-matches {
+  padding: 0 6px;
+  color: var(--ink-soft);
+}
+
+.pdf-search {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pdf-search input {
+  width: 9rem;
+  padding: 3px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--ai);
+  border-radius: 6px;
+  outline: none;
+}
+
+/* Before a PDF: a drop zone, ChatPDF-style. */
+.pdf-drop {
+  margin: auto;
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  width: min(26rem, calc(100% - 2 * var(--s6)));
+  padding: var(--s8) var(--s6);
+  text-align: center;
+  color: var(--ink-soft);
+  border: 2px dashed var(--rule);
+  border-radius: 12px;
+}
+
+.pdf-drop .ico {
+  width: 28px;
+  height: 28px;
+  color: var(--ai);
+}
+
+.pdf-drop.is-dragging {
+  border-color: var(--ai);
+  background: var(--ai-wash);
+}
+
+.pdf-drop-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdf-drop-hint {
+  margin: 0 0 var(--s2);
+  font-size: 0.8125rem;
+}
+
+.pdf-offer {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  background: var(--ai-wash);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* A cite in AI text opens the PDF at its page. */
+.cite-link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cite-link:hover {
+  color: var(--ai);
+}
+
 /* Chat alone keeps a readable line length. */
 main[data-view="chat"] .chat-pane {
   width: 100%;
@@ -993,9 +1153,10 @@ dialog.reference form button {
     min-height: 100dvh;
   }
 
+  /* Below the bar, so its toggle stays reachable. */
   .sidebar {
     position: fixed;
-    inset: 0 auto 0 0;
+    inset: 2.75rem auto 0 0;
     z-index: 30;
     width: min(18rem, 85vw);
     box-shadow: 4px 0 16px rgb(0 0 0 / 0.12);
@@ -1004,7 +1165,7 @@ dialog.reference form button {
   main[data-sidebar-open] .sidebar-backdrop {
     display: block;
     position: fixed;
-    inset: 0;
+    inset: 2.75rem 0 0;
     z-index: 29;
     background: rgb(0 0 0 / 0.3);
   }
@@ -1033,6 +1194,7 @@ dialog.reference form button {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .brand,
   .book-name,
   .notes-status:empty,
   .pill-label {

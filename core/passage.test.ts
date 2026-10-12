@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { citedPages, labelCitations, parsePassage } from "./passage.ts";
+import { citedPage, citedPages, labelCitations, parsePassage } from "./passage.ts";
 
 test("no markers: paragraphs split on blank lines, no pages", () => {
   expect(parsePassage("One.\n\n  \nTwo,\nstill two.\n\n")).toEqual([{ text: "One." }, { text: "Two,\nstill two." }]);
@@ -74,4 +74,13 @@ test("D15 marker spellings: no dot, explicit range, roman numerals, PDF prefix",
 test("D15 markers are stripped from text the model sees", () => {
   const [paragraph] = parsePassage("Start [p xii] end, and [pp. 5-6] more.");
   expect(paragraph.text).toBe("Start end, and more.");
+});
+
+test("citedPage: the first arabic page in a labelled cite", () => {
+  expect(citedPage("[¶2 · p. 1]")).toBe(1);
+  expect(citedPage("[¶2 · PDF p. 3]")).toBe(3);
+  expect(citedPage("[¶3-4 · p. 10, p. 11]")).toBe(10);
+  expect(citedPage("[¶3 · pp. 10–11]")).toBe(10);
+  expect(citedPage("[¶2]")).toBeUndefined();
+  expect(citedPage("[¶2 · p. xii]")).toBeUndefined();
 });

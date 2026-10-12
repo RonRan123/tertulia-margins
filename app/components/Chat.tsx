@@ -11,6 +11,7 @@ import {
 import type { CitationCheck } from "@/core/citations.ts";
 import type { Turn } from "@/core/converse.ts";
 import { labelCitations } from "@/core/passage.ts";
+import { CitedText } from "./CitedText";
 import type { ChatMessage as Message } from "@/core/store.ts";
 import { streamMessage } from "@/lib/converse-client.ts";
 
@@ -105,7 +106,7 @@ export function Chat({ reference, notes, messages, setMessages, onReplyEnd }: Ch
         {messages.map((m, i) => (
           <li key={i} className={m.role === "user" ? "message user" : "message ai"}>
             <p>
-              {m.role === "assistant" ? labelCitations(m.content, m.pages ?? {}) : m.content}
+              {m.role === "assistant" ? <CitedText text={labelCitations(m.content, m.pages ?? {})} /> : m.content}
               {m.isStreaming && <span className="caret" aria-hidden="true">▍</span>}
             </p>
             {m.error && <p className="warning">Reply failed: {m.error}</p>}

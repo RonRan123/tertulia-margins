@@ -4,16 +4,27 @@ import { paragraphsFromPages, textItemsOf, type PdfPage } from "@/core/pdf-parag
 
 export type PdfImportError = "pdf_unreadable" | "pdf_no_text";
 
-let worker: Worker | undefined;
+// Opens a PDF on its own worker, which `close` ends with the document. The import and the viewer
+// (D29) both open documents; a shared worker would be torn down when either closed its own.
+// pdfjs is loaded on first use, so it stays out of the first page load.
+export async function openPdf(data: Blob) {
+  const pdfjs = await import("pdfjs-dist");
+  // The bundler emits the worker script as its own chunk.
+  const port = new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), { type: "module" });
+  // pdfjs's generated types say `port?: null`; its PDFWorker constructor takes a Worker.
+  const worker = new pdfjs.PDFWorker({ port: port as unknown as null });
+  const task = pdfjs.getDocument({ data: new Uint8Array(await data.arrayBuffer()), worker });
+  const close = async () => {
+    await task.destroy().catch(() => {});
+    worker.destroy();
+    port.terminate();
+  };
+  return { pdfjs, task, close };
+}
 
 // Throws Error("pdf_unreadable") or Error("pdf_no_text") (an image-only PDF has no text layer).
-export async function importPdf(file: File): Promise<string> {
-  const pdfjs = await import("pdfjs-dist");
-  // The bundler emits the worker as its own chunk; one worker is reused across imports.
-  worker ??= new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), { type: "module" });
-  pdfjs.GlobalWorkerOptions.workerPort = worker;
-
-  const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+export async function importPdf(file: Blob): Promise<string> {
+  const { task: loading, close } = await openPdf(file);
   const pages: PdfPage[] = [];
   try {
     const doc = await loading.promise.catch(() => {
@@ -24,7 +35,7 @@ export async function importPdf(file: File): Promise<string> {
       pages.push({ pageNumber: n, items: textItemsOf(content.items) });
     }
   } finally {
-    await loading.destroy();
+    await close();
   }
 
   const { text } = paragraphsFromPages(pages);

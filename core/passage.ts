@@ -99,3 +99,11 @@ export function labelCitations(reply: string, pages: PageLabels): string {
     return `${citation.slice(0, -1)} · ${labels.join(", ")}]`;
   });
 }
+
+// The page a labelled cite points at, for opening the PDF there (D23: the page as given; R4 will
+// match the text instead). "[¶2 · p. 1]" → 1, "[¶2 · PDF p. 3]" → 3, a range → its first page.
+// Undefined with no page label, or a roman-numeral page (front matter isn't numbered in the PDF).
+export function citedPage(cite: string): number | undefined {
+  const match = /·\s*(?:PDF\s+)?pp?\.\s*(\d+)/i.exec(cite);
+  return match ? Number(match[1]) : undefined;
+}
