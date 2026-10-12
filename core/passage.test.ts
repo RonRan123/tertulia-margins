@@ -1,7 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { citedPages, labelCitations, parsePassage } from "./passage.ts";
+import {
+  citedPage,
+  citedPages,
+  estimateTokens,
+  fitPdfPages,
+  isReferenceTooLong,
+  labelCitations,
+  parsePassage,
+  pdfPageCount,
+  REFERENCE_TOKEN_LIMIT,
+  slicePdfPages,
+} from "./passage.ts";
 
 test("no markers: paragraphs split on blank lines, no pages", () => {
   expect(parsePassage("One.\n\n  \nTwo,\nstill two.\n\n")).toEqual([{ text: "One." }, { text: "Two,\nstill two." }]);
@@ -74,4 +85,39 @@ test("D15 marker spellings: no dot, explicit range, roman numerals, PDF prefix",
 test("D15 markers are stripped from text the model sees", () => {
   const [paragraph] = parsePassage("Start [p xii] end, and [pp. 5-6] more.");
   expect(paragraph.text).toBe("Start end, and more.");
+});
+
+test("citedPage: the first arabic page in a labelled cite", () => {
+  expect(citedPage("[¶2 · p. 1]")).toBe(1);
+  expect(citedPage("[¶2 · PDF p. 3]")).toBe(3);
+  expect(citedPage("[¶3-4 · p. 10, p. 11]")).toBe(10);
+  expect(citedPage("[¶3 · pp. 10–11]")).toBe(10);
+  expect(citedPage("[¶2]")).toBeUndefined();
+  expect(citedPage("[¶2 · p. xii]")).toBeUndefined();
+});
+
+// ---- D32: the reference-text cap ----
+const pdfText = "[PDF p. 1]\nTitle\n\nOne one.\n\n[PDF p. 2]\nTwo two.\n\nStill [PDF p. 3] three.\n\n[PDF p. 5]\nFive.";
+
+test("the cap: ~4 characters a token, 25K tokens", () => {
+  expect(estimateTokens("abcd")).toBe(1);
+  expect(estimateTokens("abcde")).toBe(2);
+  expect(isReferenceTooLong("x".repeat(REFERENCE_TOKEN_LIMIT * 4))).toBe(false);
+  expect(isReferenceTooLong("x".repeat(REFERENCE_TOKEN_LIMIT * 4 + 1))).toBe(true);
+});
+
+test("PDF pages: count, slice from one marker to the next page's, inline markers included", () => {
+  expect(pdfPageCount(pdfText)).toBe(5);
+  expect(pdfPageCount("no markers")).toBe(0);
+  expect(slicePdfPages(pdfText, 1, 1)).toBe("[PDF p. 1]\nTitle\n\nOne one.");
+  expect(slicePdfPages(pdfText, 2, 2)).toBe("[PDF p. 2]\nTwo two.\n\nStill");
+  expect(slicePdfPages(pdfText, 2, 3)).toBe("[PDF p. 2]\nTwo two.\n\nStill [PDF p. 3] three.");
+  expect(slicePdfPages(pdfText, 4, 5)).toBe("[PDF p. 5]\nFive."); // page 4 has no text
+  expect(slicePdfPages(pdfText, 3, 1)).toBe("");
+});
+
+test("fitPdfPages: as many pages from `from` as fit the limit", () => {
+  expect(fitPdfPages(pdfText, 1, 10_000)).toBe(5);
+  expect(fitPdfPages(pdfText, 1, estimateTokens(slicePdfPages(pdfText, 1, 2)))).toBe(2);
+  expect(fitPdfPages(pdfText, 2, 1)).toBe(2); // not even page 2 fits: still page 2
 });

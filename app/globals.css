@@ -1,54 +1,1115 @@
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
+/* Tokens. The reader writes in ink; the AI writes beside it in blue, on a tinted card with a
+   rule (D6: AI text is always visually distinct). One system face for both, as in Obsidian (D27).
+   Light by default: white, light gray, light blue (D28); dark when <html data-theme="dark">. */
+:root {
+  color-scheme: light;
+  --paper: #f6f7f9; /* sidebar */
+  --sheet: #ffffff; /* notes, margin, panes */
+  --ink: #1f2328;
+  --ink-soft: #6b7280;
+  --rule: #e5e7eb;
+  --ai: #2b6cd4;
+  --ai-ink: #1d3557;
+  --ai-wash: #eff5ff;
+  --pill: #e3edff; /* the selected top-bar toggle */
+  --quote: #8a7650; /* book binding: passage quotes */
+  --warn: #b4441a;
+  --focus: #2b6cd4;
+  /* Obsidian's default stacks (D27): one system face for notes, AI and interface. */
+  --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-ui: var(--font-text);
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", "Liberation Mono", Menlo, Monaco, Consolas, monospace;
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s6: 1.5rem;
+  --s8: 2rem;
+  --notes-w: 38rem; /* the notes' reading width when they are alone */
+  --radius: 4px;
+  --margin-rule: 1px solid var(--rule);
 }
 
-/* A column filling the window: the panes take what the header (one line or wrapped) leaves. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #16181d;
+  --sheet: #1c1f25;
+  --ink: #e6e6e3;
+  --ink-soft: #9ca3af;
+  --rule: #2d313a;
+  --ai: #7fb0ff;
+  --ai-ink: #d6e4ff;
+  --ai-wash: #1b2536;
+  --pill: #22324d;
+  --quote: #c4ae84;
+  --warn: #f2a47a;
+  --focus: #7fb0ff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 0.875rem/1.45 var(--font-ui);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Buttons */
+button {
+  font: 500 0.875rem var(--font-ui);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--ai);
+  border-color: var(--ai);
+  color: var(--sheet);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ai);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s4);
+  color: var(--warn);
+  font: 0.8125rem/1.4 var(--font-ui);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* Page (D22): sidebar 1/6 | the rest (header, then the workspace). The workspace splits 3:2, so
+   with the sidebar open the notes take 3/6 of the window and the side pane 2/6. Each pane scrolls
+   on its own. */
 main {
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
   height: 100dvh;
-  max-width: 90rem;
-  margin: 0 auto;
-  padding: 1rem;
 }
 
-h1,
-h2 {
-  margin: 0;
-}
-
-h1 {
-  font-size: 1.25rem;
-}
-
-h2 {
-  font-size: 1rem;
-}
-
-.app-header {
+/* Under the full-width bar: sidebar | the rest. */
+.app-body {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.75rem;
-}
-
-/* Two panes, notes | chat (D14); stacked on narrow screens. minmax(0, 1fr): a long unbroken
-   word must wrap, not widen its pane. */
-.panes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
   flex: 1;
   min-height: 0;
 }
 
-.notes,
+.sidebar {
+  flex: 0 0 calc(100% / 6);
+  min-width: 13rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  overflow-y: auto;
+  background: var(--paper);
+  border-right: 1px solid var(--rule);
+}
+
+main:not([data-sidebar-open]) .sidebar,
+.sidebar-backdrop {
+  display: none;
+}
+
+.brand {
+  padding: 0 var(--s2) 0 var(--s1);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.books {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.new-book {
+  align-self: flex-start;
+  padding: 4px var(--s2);
+  border: 0;
+  background: none;
+  color: var(--ai);
+  font-weight: 500;
+}
+
+.new-book:hover:not(:disabled) {
+  background: var(--pill);
+}
+
+.sidebar-error {
+  margin: 0;
+  padding: 0 var(--s2);
+}
+
+.book {
+  display: grid;
+  gap: 2px;
+  padding: 2px var(--s1);
+  border-radius: 6px;
+}
+
+.book.is-current {
+  background: var(--pill);
+}
+
+.book-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* A book's title opens it; ✎ and × appear on hover, focus, or for the open book. */
+.book-title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px var(--s1);
+  border: 0;
+  background: none;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.book.is-current .book-title {
+  font-weight: 600;
+  color: var(--ai);
+  cursor: default;
+}
+
+.book-tools {
+  display: flex;
+  visibility: hidden;
+}
+
+.book-tools button {
+  padding: 3px 5px;
+  font-size: 0.8125rem;
+}
+
+.book:hover .book-tools,
+.book.is-current .book-tools,
+.book-tools:focus-within {
+  visibility: visible;
+}
+
+.book .confirm {
+  padding: 0 var(--s1) var(--s1);
+  font-size: 0.8125rem;
+}
+
+.book-actions {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: 0 var(--s1) var(--s1);
+}
+
+.title-input {
+  width: 100%;
+  padding: 4px var(--s2);
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--ai);
+  border-radius: 6px;
+  outline: none;
+}
+
+.book .reference-button,
+.book-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.book .reference-button:hover,
+.book-action:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.reference-summary {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+/* One background for everything right of the sidebar, as in Obsidian. */
+.main-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background: var(--sheet);
+}
+
+/* Header and sidebar controls: text, no box (D26). */
+button.quiet {
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+}
+
+button.quiet:hover {
+  color: var(--ink);
+}
+
+button.icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+/* One thin bar (D26): ☰, the book, status, then what sits beside the notes, ⤢ and React. */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  min-height: 2.75rem;
+  padding: 0 var(--s3);
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+}
+
+.book-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--s1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.notes-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+.view-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.view-switcher button {
+  position: relative; /* for the unread dot */
+}
+
+/* ChatPDF-style toggles (D30): icon + label; the selected one sits on a light-blue pill. */
+button.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+button.pill[aria-pressed="true"] {
+  background: var(--pill);
+  color: var(--ai);
+}
+
+.ico {
+  flex: none;
+}
+
+/* React needs the notes on screen. */
+main[data-view="pdf"] .react-slot,
+main[data-view="chat"] .react-slot {
+  display: none;
+}
+
+.unread {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ai);
+}
+
+/* Notes | margin (D18, D25): one scroll. The editor grows with its text; the margin column
+   beside it holds each paragraph's group of cards, lifted out of the flow and placed level with
+   the paragraph by Notes (useMarginLayout), like comments in Google Docs. minmax(0, …): a long
+   unbroken word must wrap, not widen its column. */
+.panes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+/* Takes the rest of the height, so the notes sheet and the margin rule reach the bottom. */
+.notes-row {
+  flex: 1 0 auto;
+}
+
+.notes-cell {
+  min-width: 0;
+}
+
+.margin-cell {
+  position: relative; /* the groups are placed from this column's top */
+  border-left: var(--margin-rule);
+}
+
+.margin-group {
+  position: absolute;
+  top: 0;
+  left: var(--s4);
+  right: var(--s4);
+  z-index: 2;
+}
+
+.margin-stack {
+  position: relative; /* for its dot */
+}
+
+.cards {
+  display: grid;
+  gap: var(--s3);
+}
+
+.empty-reference {
+  margin: 0;
+  padding: var(--s2) var(--s6);
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  background: var(--sheet);
+}
+
+/* The notes editor (D25): CodeMirror in the book face. The md-* classes come from
+   lib/live-preview.ts, which hides markdown symbols except on the lines being edited. */
+.notes-editor .cm-editor {
+  background: transparent;
+}
+
+.notes-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* Obsidian's defaults: 16px, line-height 1.5, a readable line of at most 700px, centred. */
+.notes-editor .cm-content {
+  max-width: calc(700px + 2 * var(--s6));
+  margin-inline: auto;
+  padding: var(--s6) var(--s6) var(--s8);
+  font: 400 1rem/1.5 var(--font-text);
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.notes-editor .cm-line {
+  padding: 0;
+}
+
+.notes-editor .cm-placeholder {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* Obsidian's default heading scale. */
+.md-h1,
+.md-h2,
+.md-h3,
+.md-h4,
+.md-h5,
+.md-h6 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.md-h1 {
+  font-size: 1.618em;
+  font-weight: 700;
+  padding-top: 0.4em !important;
+}
+
+.md-h2 {
+  font-size: 1.462em;
+  padding-top: 0.3em !important;
+}
+
+.md-h3 {
+  font-size: 1.318em;
+}
+
+.md-h4 {
+  font-size: 1.188em;
+}
+
+.md-h5 {
+  font-size: 1.076em;
+}
+
+.md-strong {
+  font-weight: 700;
+}
+
+.md-em {
+  font-style: italic;
+}
+
+.md-strike {
+  text-decoration: line-through;
+}
+
+.md-code {
+  font: 0.85em var(--font-mono);
+  background: color-mix(in srgb, var(--rule) 60%, transparent);
+  border-radius: 3px;
+}
+
+.md-link {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-soft);
+  text-underline-offset: 3px;
+}
+
+/* Quotes, like the passage quotes D6 lets into the notes: italic, softer, a book-binding rule. */
+.notes-editor .cm-line.md-quote {
+  padding-left: var(--s4);
+  border-left: 2px solid var(--quote);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.notes-editor .cm-line.md-codeblock {
+  font: 0.85em/1.6 var(--font-mono);
+  background: color-mix(in srgb, var(--rule) 40%, transparent);
+}
+
+.md-bullet {
+  color: var(--ink-soft);
+}
+
+/* Page links (R4, D33): a reference is underlined in its match's colour; clicking it (off the line
+   being edited) or the marker after it opens the PDF there. ● exact quote, ◐ shared words,
+   ○ estimated page. */
+.md-pageref {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ai);
+  text-underline-offset: 3px;
+}
+
+.md-pageref.is-page {
+  text-decoration-color: var(--ink-soft);
+}
+
+.md-pagelink {
+  display: inline;
+  margin-left: 2px;
+  padding: 0 2px;
+  font: 0.7em var(--font-ui);
+  vertical-align: 0.35em;
+  color: var(--ai);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.md-pagelink.is-page {
+  color: var(--ink-soft);
+}
+
+.md-pagelink:hover {
+  color: var(--ink);
+}
+
+.md-cite {
+  font: 500 0.75em var(--font-ui);
+  font-style: normal;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* React split button and kind menu */
+.split {
+  position: relative;
+  display: inline-flex;
+}
+
+.split > :first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.split > :nth-child(2) {
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left-color: var(--sheet);
+  padding-inline: var(--s2);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--s1));
+  left: 0;
+  z-index: 20;
+  min-width: 15rem;
+  padding: var(--s1);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+.menu [role="menuitem"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: var(--s2) var(--s3);
+  background: none;
+}
+
+.menu [role="menuitem"]:hover,
+.menu [role="menuitem"]:focus {
+  background: var(--ai-wash);
+}
+
+.menu [role="menuitem"] small {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+/* The margin's one decoration: a dot on the rule at a paragraph with reactions. The button is a
+   larger, invisible hit area around the 7px dot. */
+.dot {
+  position: absolute;
+  top: calc((1rem * 1.5 - 21px) / 2);
+  left: calc(-1 * var(--s4) - 12px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  height: 21px;
+  padding: 0 0 0 7px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.dot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.dot:hover::before,
+.dot[aria-pressed="true"]::before {
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px color-mix(in srgb, var(--ai) 35%, transparent);
+}
+
+.dot-count {
+  font: 600 0.6875rem/1 var(--font-ui);
+  color: var(--ai);
+  background: var(--paper);
+  padding: 1px 2px;
+}
+
+.card {
+  padding: var(--s2) var(--s3);
+  background: var(--ai-wash);
+  border-left: 2px solid var(--ai);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font: 0.9375rem/1.5 var(--font-ui);
+  color: var(--ai-ink);
+  overflow-wrap: anywhere;
+}
+
+.card.is-active {
+  border-left-width: 4px;
+}
+
+.card.is-detached {
+  opacity: 0.7;
+}
+
+.card.is-detached .excerpt {
+  text-decoration: line-through;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.card .kind {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--ai);
+}
+
+.card .kind.is-choosing {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.card .delete {
+  border: 0;
+  background: none;
+  padding: 0 var(--s1);
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.card .confirm {
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
+.card .confirm button {
+  padding: 0 var(--s2);
+  font-size: 0.8125rem;
+}
+
+.card .excerpt {
+  display: block;
+  margin: var(--s1) 0;
+  font: italic 0.875rem/1.4 var(--font-text);
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.card p {
+  margin: var(--s1) 0;
+  white-space: pre-wrap;
+}
+
+.card .follow-up,
+.card .reply-user {
+  margin-left: var(--s3);
+}
+
+.card .reply-user {
+  font: 1rem/1.55 var(--font-text);
+  color: var(--ink);
+}
+
+.card textarea {
+  margin-top: var(--s1);
+  font: 1rem/1.5 var(--font-text);
+  resize: vertical;
+}
+
+.card .link {
+  margin-top: var(--s1);
+}
+
+.card .less {
+  margin-left: var(--s3);
+}
+
+/* Collapsed (not the current block's): the opening clamped to 4 lines, one click to open. */
+.card.is-collapsed {
+  background: color-mix(in srgb, var(--ai-wash) 60%, transparent);
+}
+
+.card .expand {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.card .clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.card .more {
+  display: block;
+  margin-top: var(--s1);
+  font-size: 0.8125rem;
+  color: var(--ai);
+}
+
+.card .expand:hover .more {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.margin-cell > .empty {
+  padding-top: var(--s2);
+  font-size: 0.8125rem;
+}
+
+.detached-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.detached-divider::before,
+.detached-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed var(--ink-soft);
+}
+
+.caret {
+  color: var(--ai);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The area under the header. Which panes show is the view (main's data-view, D22): "notes+…"
+   views put the notes in the 3/5 column and margin, PDF or chat in the 2/5 one (the margin is the
+   rows' second column, so the panes span both); the others show one thing across both columns.
+   Hidden panes stay mounted (display: none), so streams, threads and edits carry on. */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr); /* one row the height of the window: each pane scrolls inside it */
+  flex: 1;
+  min-height: 0;
+}
+
+.panes {
+  grid-column: 1 / -1;
+}
+
+.side-pane {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sheet);
+  border-left: 1px solid var(--rule);
+}
+
+.pdf-pane,
+.chat-pane {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: var(--s3) var(--s4);
+}
+
+main[data-view="notes+pdf"] .panes,
+main[data-view="notes+chat"] .panes {
+  grid-column: 1;
+}
+
+main[data-view$="pdf"] .side-pane,
+main[data-view$="chat"] .side-pane,
+main[data-view$="pdf"] .pdf-pane,
+main[data-view$="chat"] .chat-pane {
+  display: flex;
+}
+
+main[data-view="pdf"] .side-pane,
+main[data-view="chat"] .side-pane {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+
+main[data-view="pdf"] .panes,
+main[data-view="chat"] .panes {
+  display: none;
+}
+
+/* The PDF view (D29): pdfjs needs an absolutely positioned scroll box; the toolbar floats on it. */
+.pdf-pane {
+  position: relative;
+  padding: 0;
+}
+
+.pdf-viewer,
+.pdf-scroll {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-scroll {
+  overflow: auto;
+  background: var(--paper);
+}
+
+/* pdfjs sizes pages with the default content-box model; our global border-box would shrink the
+   page image inside its border but not the text layer, so search highlights would drift. */
+.pdf-scroll * {
+  box-sizing: content-box;
+}
+
+.pdf-scroll:focus-visible {
+  outline: none;
+}
+
+.pdf-error {
+  position: absolute;
+  top: var(--s4);
+  left: var(--s4);
+}
+
+.pdf-toolbar {
+  position: absolute;
+  bottom: var(--s4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--sheet) 94%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+  backdrop-filter: blur(6px);
+}
+
+.pdf-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--rule);
+}
+
+.pdf-page {
+  width: 3rem;
+  padding: 3px 4px;
+  text-align: center;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.pdf-count,
+.pdf-matches {
+  padding: 0 6px;
+  color: var(--ink-soft);
+}
+
+.pdf-search {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pdf-search input {
+  width: 9rem;
+  padding: 3px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--ai);
+  border-radius: 6px;
+  outline: none;
+}
+
+/* Before a PDF: a drop zone, ChatPDF-style. */
+.pdf-drop {
+  margin: auto;
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  width: min(26rem, calc(100% - 2 * var(--s6)));
+  padding: var(--s8) var(--s6);
+  text-align: center;
+  color: var(--ink-soft);
+  border: 2px dashed var(--rule);
+  border-radius: 12px;
+}
+
+.pdf-drop .ico {
+  width: 28px;
+  height: 28px;
+  color: var(--ai);
+}
+
+.pdf-drop.is-dragging {
+  border-color: var(--ai);
+  background: var(--ai-wash);
+}
+
+.pdf-drop-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdf-drop-hint {
+  margin: 0 0 var(--s2);
+  font-size: 0.8125rem;
+}
+
+.pdf-offer {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  background: var(--ai-wash);
+  border-bottom: 1px solid var(--rule);
+}
+
+.pdf-range input {
+  width: 3.5rem;
+  padding: 2px 6px;
+  font: inherit;
+  text-align: center;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.range-note {
+  color: var(--ink-soft);
+}
+
+.range-note.warning {
+  margin: 0;
+  padding: 0;
+  color: var(--warn);
+}
+
+/* A cite in AI text opens the PDF at its page. */
+.cite-link {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cite-link:hover {
+  color: var(--ai);
+}
+
+/* Chat alone keeps a readable line length. */
+main[data-view="chat"] .chat-pane {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+/* The margin column shows only in "notes+margin"; elsewhere the notes have the row to themselves,
+   alone centred at their reading width. */
+main:not([data-view="notes+margin"]) .row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+main[data-view="notes"] .row {
+  grid-template-columns: minmax(0, var(--notes-w));
+  justify-content: center;
+}
+
+main:not([data-view="notes+margin"]) .margin-cell {
+  display: none;
+}
+
 .chat {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
 }
 
@@ -56,106 +1117,170 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s2);
   min-height: 2rem;
-  font-size: 0.85rem;
 }
 
-.notes textarea {
-  flex: 1;
-  resize: none;
-  padding: 0.5rem;
-  font-family: ui-monospace, monospace;
+.pane-header h2 {
+  margin: 0;
+  font: 600 1rem var(--font-ui);
 }
 
-.chat .messages {
+.messages {
   flex: 1;
   overflow-y: auto;
   margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@media (max-width: 48rem) {
-  main {
-    height: auto;
-  }
-
-  .panes {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .notes textarea {
-    min-height: 16rem;
-  }
-}
-
-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
+.message {
+  margin: var(--s3) 0;
   overflow-wrap: anywhere;
+}
+
+.message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  font: 1rem/1.55 var(--font-text);
+  color: var(--ink);
+}
+
+/* AI replies wear the margin card's look (D6). */
+.message.ai {
+  padding: var(--s2) var(--s3);
+  background: var(--ai-wash);
+  border-left: 2px solid var(--ai);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font: 0.9375rem/1.5 var(--font-ui);
+  color: var(--ai-ink);
+}
+
+.chat form textarea {
+  font: 1rem/1.5 var(--font-text);
+}
+
+.chat form button {
+  margin-top: var(--s1);
 }
 
 /* D14: the reference text is edited in a dialog, never shown as a reading pane. */
 dialog.reference {
   width: min(48rem, calc(100vw - 2rem));
-  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
 }
 
 dialog.reference::backdrop {
   background: rgb(0 0 0 / 0.3);
 }
 
-.reference-summary {
-  font-weight: 400;
-  color: #666;
-}
-
 .reference-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.25rem;
+  gap: var(--s2);
+  margin-bottom: var(--s1);
   font-weight: 600;
 }
 
-.messages {
-  list-style: none;
-  padding: 0;
+dialog.reference form button {
+  margin-top: var(--s2);
 }
 
-.message {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
-  overflow-wrap: anywhere;
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
 }
 
-.message p {
-  margin: 0.25rem 0;
-  white-space: pre-wrap;
-}
+/* Phone: one pane at a time; the page scrolls, cards list under the notes, and the sidebar
+   slides over the page. */
+@media (max-width: 48rem) {
+  main {
+    height: auto;
+    min-height: 100dvh;
+  }
 
-.who {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #666;
-}
+  /* Below the bar, so its toggle stays reachable. */
+  .sidebar {
+    position: fixed;
+    inset: 2.75rem auto 0 0;
+    z-index: 30;
+    width: min(18rem, 85vw);
+    box-shadow: 4px 0 16px rgb(0 0 0 / 0.12);
+  }
 
-/* D6: AI text is always visually distinct from the user's words. */
-.message.ai {
-  background: #eef3fb;
-  border-left: 3px solid #4a72b8;
-  font-family: Georgia, serif;
-}
+  main[data-sidebar-open] .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 2.75rem 0 0;
+    z-index: 29;
+    background: rgb(0 0 0 / 0.3);
+  }
 
-.warning {
-  margin: 0.5rem 0 0;
-  padding-left: 1rem;
-  font-size: 0.85rem;
-  font-family: system-ui, sans-serif;
-  color: #9a3412;
-}
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-form button {
-  margin-top: 0.25rem;
+  /* Beside the notes, there is no room: the chosen pane shows instead of them. */
+  main[data-view="notes+pdf"] .panes,
+  main[data-view="notes+chat"] .panes {
+    display: none;
+  }
+
+  .side-pane {
+    grid-column: 1 / -1;
+    min-height: 70dvh;
+    border-left: 0;
+  }
+
+  .panes {
+    overflow-y: visible;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brand,
+  .book-name,
+  .notes-status:empty,
+  .pill-label {
+    display: none;
+  }
+
+  .empty-reference {
+    padding-inline: var(--s4);
+  }
+
+  .notes-editor .cm-content {
+    padding-inline: var(--s4);
+  }
+
+  /* Cards list under the notes, in note order, keeping their --ai rule. */
+  .margin-cell {
+    padding: 0 var(--s4) var(--s3);
+    border-left: 0;
+    background: var(--sheet);
+  }
+
+  .margin-cell:empty {
+    display: none;
+  }
+
+  .margin-group {
+    position: static;
+    margin-bottom: var(--s3);
+  }
+
+  .dot {
+    display: none;
+  }
 }

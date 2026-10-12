@@ -64,6 +64,14 @@ function pageLabel(start: Marker | undefined, end: Marker | undefined): string |
   return `${prefix(start)}pp. ${start.page}–${last}`;
 }
 
+// The pages the reference text covers: "p. 101 to p. 108", "p. 101" if one page, undefined if unlabelled.
+export function pageRange(paragraphs: Paragraph[]): string | undefined {
+  const pages = paragraphs.map((p) => p.page).filter((p) => p !== undefined);
+  if (pages.length === 0) return undefined;
+  const [first, last] = [pages[0], pages[pages.length - 1]];
+  return first === last ? first : `${first} to ${last}`;
+}
+
 // Page labels by paragraph number ({ 12: "p. 101" }): only what a reply's citations need.
 export type PageLabels = Record<number, string>;
 
@@ -90,4 +98,44 @@ export function labelCitations(reply: string, pages: PageLabels): string {
     if (labels.length === 0) return citation;
     return `${citation.slice(0, -1)} · ${labels.join(", ")}]`;
   });
+}
+
+// The page a labelled cite points at, for opening the PDF there (D23: the page as given; R4 will
+// match the text instead). "[¶2 · p. 1]" → 1, "[¶2 · PDF p. 3]" → 3, a range → its first page.
+// Undefined with no page label, or a roman-numeral page (front matter isn't numbered in the PDF).
+export function citedPage(cite: string): number | undefined {
+  const match = /·\s*(?:PDF\s+)?pp?\.\s*(\d+)/i.exec(cite);
+  return match ? Number(match[1]) : undefined;
+}
+
+// ---- The reference-text cap (D32) ----
+// Every AI call sends the whole reference text, so its size is capped: ~25K tokens is 2–3
+// chapters and ~5¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
+export const REFERENCE_TOKEN_LIMIT = 25_000;
+export const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+export const isReferenceTooLong = (reference: string) => estimateTokens(reference) > REFERENCE_TOKEN_LIMIT;
+
+// PDF text from lib/pdf-import carries a `[PDF p. N]` marker where each page's text starts.
+const PDF_MARKER = /\[PDF p\. (\d+)\]/g;
+
+// The highest PDF page with text (0 when the text has no PDF markers).
+export function pdfPageCount(text: string): number {
+  return Math.max(0, ...[...text.matchAll(PDF_MARKER)].map((m) => Number(m[1])));
+}
+
+// The text of PDF pages from..to (inclusive): from page `from`'s marker up to page to+1's.
+// A paragraph running across the cut is cut with it.
+export function slicePdfPages(text: string, from: number, to: number): string {
+  const markers = [...text.matchAll(PDF_MARKER)].map((m) => ({ page: Number(m[1]), index: m.index }));
+  const start = markers.find((m) => m.page >= from)?.index ?? text.length;
+  const end = markers.find((m) => m.page > to)?.index ?? text.length;
+  return end > start ? text.slice(start, end).trim() : "";
+}
+
+// The last page `to` such that pages from..to fit the cap; `from` itself if even it doesn't.
+export function fitPdfPages(text: string, from: number, limit = REFERENCE_TOKEN_LIMIT): number {
+  const last = pdfPageCount(text);
+  let to = from;
+  while (to < last && estimateTokens(slicePdfPages(text, from, to + 1)) <= limit) to++;
+  return to;
 }

@@ -1,11 +1,11 @@
 # tertulia-margins
 
 Note-first AI reading partner: the user writes margin notes, the AI talks back, grounded in the pasted text.
-Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md
+Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md · v1 (frozen): docs/archive/v1/, tag `v1-marginalia`
 
 ## Working agreement (Ronith drives, Claude executes)
 - IMPORTANT: Never make product, architecture, dependency, data-model, or prompt-content decisions silently. Stop and run the `/decide` flow: options, trade-offs, a recommendation, then wait. Routine implementation details (names, file layout inside a module) are yours.
-- Ronith owns `prompts/*.md`. Propose edits as diffs with reasoning; don't rewrite his prompts wholesale.
+- Ronith owns `prompts/*.md`. Propose edits as diffs with reasoning; don't rewrite his prompts wholesale. Exception (D19): Claude may create new prompt files for Sprints 5–6; Ronith reviews and refines all prompts in Sprint 7. Existing prompt text still changes only with his approval.
 - Before each step: state assumptions and the success criterion ("done when ..."). If something is ambiguous, ask; don't guess.
 - After each step: show evidence (test output, command + result, screenshot), then a ≤5-bullet "what changed and why" a newcomer could follow.
 - No new npm dependency without asking. Prefer ~30 lines of our own code to a library.

@@ -42,7 +42,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** v2 is done and there is time, or real use shows the passage alone is too thin. Preferred shape then: option B (labelled, opt-in, skipped by `checkCitations`).
 
 ## D6. The AI never writes into the notes (Q7)
-- **Status:** Accepted (2026-10-08, Ronith)
+- **Status:** Accepted (2026-10-08, Ronith); amended by D18 (AI text may also appear in the margin column)
 - **Context:** Day 0: Claude's app was verbose, led the conversation, and buried the user's notes. Ronith's rule: the user stays in the driver seat, and the notes must not drift toward being AI-run.
 - **Alternatives:** amend §5 but allow user-initiated pinning of chat text into notes (~1 h); keep Augment blocks beneath notes with accept/edit/discard.
 - **Why:** the notes pane stays trustworthy by construction. A passage snippet pasted by code, not the model, can be checked by `checkCitations`; AI suggestions stay in chat and the user retypes them in their own words.
@@ -51,7 +51,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** typing everything yourself proves too slow in real use.
 
 ## D7. Storage: browser localStorage + markdown export (Q1)
-- **Status:** Accepted (2026-10-08, Ronith)
+- **Status:** Accepted (2026-10-08, Ronith); amended by D23 (PDFs go in IndexedDB)
 - **Context:** passage and notes must survive a reload; D1 chose a Vercel-deployable stack.
 - **Alternatives:** `.md` files on disk through route handlers (~3 h, needs a writable disk); SQLite (3-4 h, new dependency, same disk limit).
 - **Why:** about 2 h cheaper than the alternatives and keeps the Vercel path open. Only the `store` module touches storage, so swapping later is one module.
@@ -116,7 +116,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** PDF import's paragraph detection is unreliable, or typing markers proves tedious in real use.
 
 ## D14. Reference text lives in the background, not in a pane
-- **Status:** Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
+- **Status:** Superseded by D22 (2026-10-11: the PDF becomes a view). Originally Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
 - **Context:** Sprint 3 needs to place the passage; this is a companion to a paper book, not a reading app (Day 0).
 - **Alternatives:** collapsible passage above the notes; three columns (passage | notes | chat).
 - **Why:** the reader reads the paper book; the app only needs the text to ground and check citations.
@@ -139,6 +139,189 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Rules:** markdown-rendered notes is a separate step after marginalia (about 30 lines of our own renderer, no new dependency, not a rich-text editor). Marginalia replaces or absorbs Augment and disagreement flags where they overlap.
 - **Cost we accept:** the MVP ships with the interface Ronith dislikes.
 - **Revisit if:** Sprint 4 real-chapter use shows the chat and commands are unusable (then pull marginalia forward). D6 must be amended (distinct AI-only margin area, notes still never edited) before building.
+
+## D17. Sprint 4 shape: toolbar commands, context-aware `/define` quote, export with frontmatter
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** Sprint 4 builds the command table, `/define`, `/quiz` and export; each hid a product choice.
+- **Alternatives:** commands typed in the chat box, or both; up to 3 quoted sentences, or appended at the end of the notes; export with the full reference text, or notes only; command instructions kept in `system.md`.
+- **Rules:**
+  - *Trigger:* select text in the notes, click Define or Quiz in a toolbar above the notes. The command shows in chat as `/define <word>`. Quiz with no selection covers all notes; with a selection, that part.
+  - *`/define` quote (code, not the model; D6):* one passage sentence containing the word, inserted as a blockquote on the line after the selection, e.g. `> “…sentence…” [¶4, p. 12]`. Choose the occurrence by context: the nearest `[¶n]` or page cite in the notes around the selection picks the closest occurrence (word on p. 5 and p. 50, nearby note cites p. 48 → the p. 50 sentence). No nearby cite → first occurrence. Word not in the passage → nothing inserted.
+  - *Export:* the notes as written, plus YAML frontmatter (export date, reference page range). No AI text, no reference text.
+  - *Prompts:* a command is a row `{name, promptFile, maxTokens}`; `prompts/define.md` and `prompts/quiz.md` hold Ronith's existing `<commands>` lines moved verbatim.
+  - *Process (this sprint):* Claude commits each verified step and reports evidence.
+- **Why:** keeps the "on selection" idea from DESIGN §2, puts the quote next to the thought it serves, and keeps the vault file the reader's own words.
+- **Cost we accept:** the context heuristic can pick wrong when notes cite several places; the quote is visible and editable, so the reader can fix it.
+- **Revisit if:** the picked sentence is often wrong in real use.
+
+## D18. Re-plan after Sprint 4: marginalia first, then blocks; export deprioritized (amends D6, D11, D16)
+- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view)
+- **Context:** after Sprint 4, the two-pane notes | chat UI feels unappealing and the chat not very useful. Ronith wants notes rendered like Obsidian and the AI to collaborate in the margin. Export is built (Sprint 4) but no longer a priority.
+- **Alternatives:** rendering by true live preview (CodeMirror 6, ~5 h) or a side-by-side preview; reactions triggered on leaving a block or after a typing pause; our own markdown renderer; blocks first, or both in one sprint.
+- **Rules:**
+  - *Marginalia (Sprint 5):* a React button acts on the selection, or on the paragraph at the cursor. One reaction appears in a margin column beside the notes, anchored to that excerpt. A reaction can be a probing question, a pushback (where the note disagrees with or overreaches the text, cited `[¶n]`), or a connection to another passage. Each reaction is a thread the reader can reply to. The chat becomes a collapsed drawer.
+  - *D6 amended:* AI text may appear in the margin column, visually distinct from the notes; it still never enters the notes.
+  - *Blocks (Sprint 6):* notes become Jupyter-style blocks. Every block renders as markdown, and the one being edited shows raw text. Rendering uses `marked` (new dependency, approved). Not a rich-text editor: each block is still plain markdown text (DESIGN §3 stands).
+  - *Pushed to the Parking lot:* `/expand`, model routing, public demo, book-level memory, `/tensions`. Augment and disagreement flags are absorbed by React. Caching and logging move to Sprint 7 to feed the write-up.
+- **Why:** prove the AI's value as a margin collaborator before polishing the editor; a button keeps cost and noise low while the reaction prompt is tuned.
+- **Cost we accept:** Sprint 5's margin sits beside a plain textarea, so reactions can't line up with their text exactly; the MVP gate in D11 is effectively replaced by the marginalia milestone.
+- **Revisit if:** the button feels like a chore (then a smarter trigger: threads across blocks, or a periodic pass over all notes, Parking lot).
+
+## D19. Claude drafts new prompts now; Ronith refines them in Sprint 7 (amends D2)
+- **Status:** Accepted (2026-10-09, Ronith: "you can create the prompts and in a final sprint stage, I'll review and refine them")
+- **Context:** Sprint 5 needs a new reaction prompt; under D2 every prompt waited on Ronith, which would stall the build.
+- **Alternatives:** Claude proposes each prompt and waits for approval (D2 as written).
+- **Why:** keeps Sprints 5–6 moving; prompt quality is tuned once, with real use and evals in hand.
+- **Rules:** Claude may create new `prompts/*.md` files and keeps them in Ronith's voice, building on `system.md`. Existing prompt text (`system.md`, `define.md`, `quiz.md`) changes only with his approval. Every Claude-drafted prompt gets an owner comment saying so.
+- **Cost we accept:** reactions in Sprints 5–6 run on unreviewed prompts.
+- **Revisit if:** reactions are off-voice badly enough to hide whether the feature works.
+
+## D20. Sprint 5–6 shape: routed reactions, commands stay in chat, blocks split the notes text, excerpt anchors
+- **Status:** Accepted (2026-10-09, Ronith)
+- **Context:** D18 left four choices open: who picks a reaction's kind, where command replies go, how blocks are stored, how reactions stay attached.
+- **Alternatives:** the reader always picks the kind from a menu; Define/Quiz replies as margin threads; blocks as an array with IDs; anchors by position.
+- **Rules:**
+  - *Kind, router style:* clicking React runs a router call that picks the most useful kind (question, pushback, connection), then the matching prompt writes the reaction. Right-clicking React opens a menu to pick the kind yourself (no router call). The notes' own browser context menu is untouched.
+  - *Commands:* `/define` and `/quiz` replies stay in the chat drawer.
+  - *Blocks:* notes stay one markdown string; a block is a chunk separated by blank lines. No storage migration; export and the AI see the same text.
+  - *Anchors:* a reaction stores the exact excerpt it reacted to and finds it in the notes; if the text is rewritten, the reaction stays, marked "note changed".
+  - *Also decided (design-spec review):* fonts Literata (notes) and Hanken Grotesk (AI, UI) via Next's built-in `next/font`, no npm package; reactions stream in parallel with each other and with chat; raw HTML in notes is escaped, not rendered; each React makes a new card, even on an excerpt that already has one.
+- **Why:** routing gets the right kind without asking, while the menu keeps control one click away; one string keeps every existing feature working.
+- **Cost we accept:** two model calls per routed reaction (router first, so a little more latency and cost); a blank line inside a code block splits it.
+- **Revisit if:** the router picks badly or the extra latency shows (then a faster model for the router, Q3), or reactions detach too often.
+
+## D21. v2 overhaul: v1 frozen and archived, docs rewritten, Sprint 7 after the overhaul
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** after Sprints 1–6, Ronith reviewed similar tools and HCI research and wants a significant overhaul (docs/research/v2-insights.md): books as folders, a PDF view, a view switcher. The v1 reasoning must stay traceable.
+- **Alternatives:** edit DESIGN/PLAN in place with superseded markers; a separate OVERHAUL.md beside the v1 docs. For Sprint 7: run it on v1 before the overhaul, or fold it into the new plan.
+- **Rules:**
+  - *Traceability:* git tag `v1-marginalia` marks the last v1 commit; `docs/archive/v1/` keeps DESIGN.md and PLAN.md as they were. DESIGN.md (v2) opens with "Principles carried forward", each row linked to its D-number. DECISIONS.md stays append-only; superseded entries say so in their status.
+  - *Sprint 7* (prompt review, caching, evals, write-up) runs after the overhaul, so its screenshots and numbers show the v2 product.
+  - *Steps:* the overhaul starts with R1 layout shell, R2 books as folders, R3 PDF view (PLAN.md).
+- **Why:** an archived v1 reads as a clean "before" for the write-up, and v2 stays one spec that CLAUDE.md points at.
+- **Cost we accept:** the 21 h budget is spent; the overhaul needs its own time box (Ronith sets it, PLAN.md). No write-up until it lands.
+- **Revisit if:** the overhaul drags past its time box (then cut to R1–R3 and run Sprint 7).
+
+## D22. v2 layout: sidebar, notes, a right pane, and a view switcher (supersedes D14; amends D18)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants the notes centred, with the PDF one click away (D14 kept it hidden), and views picked from the top, like the tools he studied.
+- **Alternatives:** keep D14 (no PDF view); three fixed columns (passage | notes | chat, rejected in D14).
+- **Rules:**
+  - *Grid:* a collapsible sidebar (1/6, open/close button) with books as folders; notes (3/6); a right pane (2/6).
+  - *Views, from a switcher at the top:* (1) Notes + AI margin, (2) Notes only, (3) PDF only, (4) Chat only. The right pane shows the margin, the PDF or the chat; clicking a source cite opens the PDF.
+  - *D6 still holds:* AI text appears only in the margin and chat, never in the notes.
+- **Why:** the notes stay central and the book is a glance away, without becoming a reading app.
+- **Cost we accept:** a PDF view reopens the "reading app" pull that D14 resisted; the drawer's always-available chat becomes a view switch.
+- **R1 details (2026-10-11, Ronith):** an "only" view fills everything beside the sidebar; the reference-text editor and PDF import move under the book in the sidebar; the chosen view and the sidebar's open/closed state are remembered across reloads; on phones the sidebar is an overlay and one pane shows at a time (Claude's assumption, not objected to). Right pane (Ronith): PDF, margin or chat can sit beside the notes, and notes, PDF or chat can each show alone with only the sidebar; the switcher has those two groups (six views).
+- **Revisit if:** the right pane feels cramped at 2/6 on a laptop screen.
+
+## D23. PDF in IndexedDB, shown in the browser's built-in viewer (amends D7)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** D22's PDF view needs the PDF to survive a reload; localStorage holds ~5 MB, too little for books.
+- **Alternatives:** render pages with pdfjs-dist ourselves (about 2 h more; allows highlighting the cited text later); don't store the PDF (re-pick it every session).
+- **Rules:** our own ~40-line IndexedDB wrapper beside `core/store` (no new dependency); notes, chat and reactions stay in localStorage (D7). The viewer is an iframe on a `blob:` URL at `#page=N`; a `[p. N]` cite opens that page (MVP, as Ronith specified). Pages go straight to the PDF page for now; matching a cite to the actual text (regex + AI around the cited pages) is a later step.
+- **Why:** about 10 lines to display, works offline, and PDFs stay in the reader's browser (D9).
+- **Cost we accept:** no highlighting of the cited text on the page; `#page=N` support varies a little between browsers; PDF pages can differ from the paper book's (D13), so links may be off by a few pages until the grounded linking step.
+- **Revisit if:** grounded linking needs highlights (then pdfjs rendering), or a browser ignores `#page=`.
+
+## D24. Define and Quiz leave the UI for now (amends D17)
+- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors")
+- **Context:** after R1, Define and Quiz switched the right pane to chat and Define pasted a quote into the notes; Ronith dislikes both behaviours.
+- **Alternatives:** keep them and only change where replies land (unread dot, or a margin card).
+- **Rules:** the toolbar buttons and the page/chat wiring go. `core/commands.ts` (with its tests), `prompts/define.md` and `prompts/quiz.md` stay untouched, so they can return with a better shape. Chat still asks free-form questions; React is unchanged.
+- **Why:** fewer controls while the v2 layout settles; nothing about the commands' core logic was wrong.
+- **Cost we accept:** no quick definitions or self-quizzing until they come back.
+- **Revisit if:** Ronith wants them back (Parking lot has the item).
+
+## D25. Notes are one file in a CodeMirror editor with Obsidian-style live preview (supersedes D18's blocks and D20's block storage)
+- **Status:** Accepted (2026-10-11, Ronith: "I want one simple file structure with rendering in line the way that obsidian works rather than having the block setup")
+- **Context:** Sprint 6's Jupyter-style blocks render every paragraph except the one being edited; Ronith wants one continuous file that renders as you type, like Obsidian.
+- **Alternatives:** one plain textarea with no rendering (~1 h); today's blocks with their chrome removed (~1 h). Live preview was priced at ~5 h in D18 and passed over then.
+- **Rules:**
+  - *Editor:* CodeMirror 6, the library Obsidian's live preview is built on. New dependencies (approved): `@codemirror/state`, `view`, `language`, `commands` (undo/redo), `@lezer/markdown` (GitHub-flavoured markdown parser; leaner than `@codemirror/lang-markdown`, which pulls in HTML/CSS/JS support). `marked` is removed.
+  - *Live preview* (`lib/live-preview.ts`): headings, bold, italics, inline code, strikethrough, links, quotes, bullet lists and `[¶n]` cites render in place; their symbols show only on the lines the selection touches. Decorations never change the text; raw HTML stays text.
+  - *Storage unchanged:* the notes stay one markdown string, so store, export and the AI see exactly what is typed.
+  - *Margin:* each paragraph with reactions gets a group of cards level with its first line, pushed down past earlier groups (`stackCards`). React acts on the selection or the paragraph at the caret (D18 as first specified).
+- **Why:** it is how Obsidian does it, with no change to the data or the AI's input.
+- **Cost we accept:** five new packages; links aren't clickable while editing (Obsidian needs Cmd-click too); on phones cards list under the notes instead of under each paragraph.
+- **Revisit if:** the editor fights the margin layout, or live preview misrenders common notes.
+
+## D26. Quiet chrome: a minimal frame around the notes
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants the UI "more minimalistic" after R1.
+- **Alternatives:** zero chrome (controls appear on hover or a floating corner control); just restyle today's controls.
+- **Rules:** one thin top bar: ☰, the book's title, and a compact switcher (Margin · PDF · Chat, plus a ⤢ toggle that shows the current pane alone) instead of six labelled buttons. The notes toolbar shrinks to React and a ⋯ menu (Export, Reference text). No boxes or borders; hairline dividers only.
+- **Why:** keeps every control discoverable while giving the notes the page.
+- **Cost we accept:** "Notes alone" moves behind a toggle instead of a labelled button.
+- **Revisit if:** the toggle proves hard to find.
+- **As built (R1d, 2026-10-11, Ronith: "still not simplified enough"):** one bar instead of a bar plus a toolbar: ☰ · book · status · Margin PDF Chat · ⤢ · React. The ⋯ menu is dropped: Reference text and Export moved under the book in the sidebar, where the book's actions belong. Everything right of the sidebar shares one background; the margin rule is a hairline; card excerpts drop markdown symbols.
+
+## D27. Obsidian's default fonts (amends D20's fonts)
+- **Status:** Accepted (2026-10-11, Ronith: "make the fonts match the defaults of Obsidian")
+- **Context:** D20 set Literata for the notes and Hanken Grotesk for the AI and interface, loaded with `next/font`.
+- **Alternatives:** keep a distinct face for AI text only.
+- **Rules:** Obsidian's default stacks: the system UI face (`ui-sans-serif, -apple-system, …`) for notes, AI and interface; the system monospace for code; editor text 16px, line-height 1.5, at most 700px wide and centred; Obsidian's heading scale (1.618, 1.462, 1.318, 1.188, 1.076em). Nothing is downloaded; `next/font` is no longer used.
+- **Why:** the notes should feel like the reader's Obsidian vault.
+- **Cost we accept:** AI and user text no longer differ by typeface; D6's distinction now rests on colour, the tinted card and its rule.
+- **Revisit if:** AI text and notes get confused in real use (then a second face for AI text).
+
+## D28. A light theme by default, dark behind a toggle
+- **Status:** Accepted (2026-10-11, Ronith: "a minimalist non-chrome / non-dark option. think white, gray, light blue")
+- **Context:** the palette followed the system's light/dark setting, and Ronith uses dark mode; he wants a light, minimal look.
+- **Alternatives:** light only; follow the system with a toggle.
+- **Rules:** the app opens light (white main area, light-gray sidebar, gray text, light-blue accent; AI cards on a pale-blue wash with a blue rule, so D6's distinction holds). A sun/moon icon in the top bar switches to the dark palette; the choice is remembered with the layout (`core/store` UI state).
+- **Why:** light is what Ronith asked for; dark stays one click away.
+- **Cost we accept:** the system setting no longer picks the theme.
+- **Revisit if:** dark is wanted on by default at night (then "follow system").
+
+## D29. The PDF view uses pdfjs's own viewer with our toolbar (supersedes D23's built-in viewer)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants a ChatPDF-like viewer with a floating toolbar: zoom out, reset, zoom in, "1 of N" page box, download, search. The browser's built-in viewer (D23) can't be restyled.
+- **Alternatives:** the browser's built-in viewer in an iframe (~0.5 h).
+- **Rules:** `pdfjs-dist/web/pdf_viewer` (already installed: no new dependency) renders pages with a selectable text layer; its find controller highlights search matches. Our toolbar drives zoom, page and search. D23's IndexedDB storage stays; a `[p. N]` cite opens that page.
+- **Why:** matches the reference design and makes search and later highlighting of cited text possible (D23's revisit condition).
+- **Cost we accept:** about 3 h; the pdfjs viewer stylesheet joins the page.
+- **Revisit if:** rendering is slow on long books.
+
+## D30. Top bar with icons and labels, ChatPDF-style (amends D26)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith likes ChatPDF's icon top bar.
+- **Alternatives:** icons only.
+- **Rules:** left: sidebar icon (and, from R3, Upload); middle: the book's title; right: Margin, PDF and Chat as icon + label toggles (the selected one on a light-blue pill), ⤢ alone, theme, React. Icons are inline SVGs in the style of Lucide (ISC licence, credited in the source); no icon package.
+- **Why:** labels keep the switcher readable while the icons give it ChatPDF's look.
+- **Cost we accept:** a wider bar; on phones the labels hide.
+- **Revisit if:** the bar crowds at laptop widths.
+- **As built (R3, 2026-10-11, Ronith):** the bar spans the full width above the sidebar, as on chatpdf.com, so toggling the sidebar never moves it; the app name sits at its left; the sidebar's own « close button is gone (☰ does it; on phones the backdrop too). Upload sits after ☰.
+
+## D31. Books: one notes file per book; new, rename, delete; folders before the PDF (resolves Q9)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** R2 needs a data model; Ronith also chose to build folders before the PDF viewer.
+- **Alternatives:** several notes files per book (e.g. per chapter, ~+1.5 h); create and switch only; PDF first.
+- **Rules:** a book holds its title, reference text, one notes file, its chat and its margin threads (and, from R3, its PDF in IndexedDB). The sidebar lists books: "+ New book" asks for a title, a click opens one, titles rename inline, delete asks first. v1's saved state becomes the first book, "My first book". Order: R1e (theme, top bar), R2 (books), R3 (PDF viewer and upload; PDF-by-URL later).
+- **Why:** matches "the main notes" in Ronith's insights and keeps the store change small.
+- **Cost we accept:** one notes file per book until a later step.
+- **Revisit if:** one file per book gets unwieldy for long books.
+
+## D32. A 25K-token cap on the reference text; pick PDF pages to fit it
+- **Status:** Accepted (2026-10-12, Ronith: "add a blocker for the time being so that the whole book doesn't get parsed with each use of AI")
+- **Context:** R3 fills the reference text from a whole PDF, and every chat turn and reaction sends all of it: a 300-page book is ~150K tokens, ~30¢ a turn on Sonnet 5.5's $2/MTok input (D12's price, to re-check before Sprint 7).
+- **Alternatives:** caps of 10K (~2¢/turn) or 50K (~10¢/turn) tokens; block only and trim the text by hand.
+- **Rules:** `core/passage` estimates tokens as characters ÷ 4 and caps the reference text at 25K tokens (~100K characters, 2–3 chapters, ~5¢ a turn). Over the cap, React, chat and thread replies are disabled with a message saying the size and how to fix it, and the route refuses the request (`reference_too_long`) before any paid call. When a PDF's text is over the cap, the upload asks which PDF pages to use (prefilled with as many pages from the start as fit); "Choose PDF pages" under the book reopens that choice. The PDF itself still shows in full.
+- **Why:** a hard ceiling on cost per turn while grounding stays whole-text, until a better way to send only the relevant parts exists.
+- **Cost we accept:** the AI sees only the chosen pages; re-picking pages as the reader moves on.
+- **Revisit if:** Ronith's exploration of structured XML and sending only parts of the book (Parking lot) lands, or prompt caching (Sprint 7) makes larger references cheap.
+
+## D33. Page links: a free, computed layer from the notes' page references to the PDF (resolves Q10)
+- **Status:** Accepted (2026-10-12, Ronith)
+- **Context:** Ronith wants each page reference in his notes linked to the right spot in the PDF, like ChatPDF's citations, as a layer above the markdown so the file stays clean. Paper pages and PDF pages differ (D13).
+- **Alternatives:** embeddings (Voyage `voyage-4-lite`, $0.02/M tokens after 200M free; new key and route) or Claude ranking nearby paragraphs (~1¢ a reference); Ronith declined anything that costs money for now. Corrections (pin or re-link) declined too.
+- **Rules:**
+  - *References:* `[p. 42]`, `[pp. 42-43]`, `[PDF p. 7]`, `p. 42`, `pp. 42-43`, `pg 42`, `page 42`, `pages 42-43`, `(42)` right after a closing quote, and `— 42` right after a quote. Not `[¶n]` cites or roman numerals. Each takes the quote before it in its paragraph (or a blockquote above it), else its sentence.
+  - *Matching, free only, surest first:* exact quote anywhere in the PDF, the hit nearest the estimate (●); else the paragraph within 3 pages of the estimate covering the most of the reference's word weight, rarer words counting more (◐, at least 35% and two shared words; Claude's proposal, Ronith agreed); else the estimated page (○). Exact hits teach the book's offset (median of PDF page − book page).
+  - *A layer:* links are recomputed from the notes and the whole PDF's text as the notes change; nothing is stored in or written to the notes. In the editor each reference is underlined and followed by a marker. Clicking the reference text (Ronith) or the marker opens the PDF at that page and selects the quote (or the paragraph's first words); on the line being edited a plain click on the text places the caret instead, as in Obsidian's live preview, and ⌘/Ctrl-click still opens it.
+- **Why:** gives most references an exact or near-exact link at no cost, and keeps the markdown file the reader's own.
+- **Cost we accept:** paraphrases only link by shared words (no meaning); a wrong link can't be corrected by hand; links are only as good as the PDF's text layer.
+- **Revisit if:** too many ◐/○ links land wrong (then embeddings or Claude ranking, Parking lot), or Ronith wants to fix links by hand.
 
 ---
 
