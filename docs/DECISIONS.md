@@ -224,6 +224,15 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** no highlighting of the cited text on the page; `#page=N` support varies a little between browsers; PDF pages can differ from the paper book's (D13), so links may be off by a few pages until the grounded linking step.
 - **Revisit if:** grounded linking needs highlights (then pdfjs rendering), or a browser ignores `#page=`.
 
+## D24. Define and Quiz leave the UI for now (amends D17)
+- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors")
+- **Context:** after R1, Define and Quiz switched the right pane to chat and Define pasted a quote into the notes; Ronith dislikes both behaviours.
+- **Alternatives:** keep them and only change where replies land (unread dot, or a margin card).
+- **Rules:** the toolbar buttons and the page/chat wiring go. `core/commands.ts` (with its tests), `prompts/define.md` and `prompts/quiz.md` stay untouched, so they can return with a better shape. Chat still asks free-form questions; React is unchanged.
+- **Why:** fewer controls while the v2 layout settles; nothing about the commands' core logic was wrong.
+- **Cost we accept:** no quick definitions or self-quizzing until they come back.
+- **Revisit if:** Ronith wants them back (Parking lot has the item).
+
 ---
 
 ## Template

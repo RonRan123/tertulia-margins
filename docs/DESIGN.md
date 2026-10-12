@@ -40,6 +40,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | The PDF is viewable on demand and opens at a cited page | reference text never shown (D14, superseded) | D22, D23 |
 | PDF upload or URL link as the main input | typed/pasted text first, PDF import secondary (D13) | D23; URL handling decided at R3 |
 | PDFs in IndexedDB | localStorage only (D7, amended) | D23 |
+| Define/Quiz out of the UI for now (core and prompts kept) | toolbar commands (D17) | D24 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem

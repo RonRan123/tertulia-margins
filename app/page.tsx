@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { blockAt, commandTarget, splitBlocks } from "@/core/blocks.ts";
-import { defineQuote, insertAfterLine, isDefinable, trimPhrase } from "@/core/commands.ts";
+import { commandTarget } from "@/core/blocks.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
 import {
@@ -19,7 +18,7 @@ import {
   type UiState,
   type View,
 } from "@/core/store.ts";
-import { Chat, type ChatHandle } from "./components/Chat";
+import { Chat } from "./components/Chat";
 import { MarginCell, useReactions } from "./components/Margin";
 import { Notes, type NotesHandle } from "./components/Notes";
 import { ReactButton } from "./components/ReactButton";
@@ -79,18 +78,15 @@ export default function Home() {
   const [isChangedElsewhere, setIsChangedElsewhere] = useState(false);
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
-  const [isBusy, setIsBusy] = useState(false); // a chat reply is streaming (reactions stream on their own)
   const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true });
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const notesView = useRef<NotesHandle>(null);
-  const chat = useRef<ChatHandle>(null);
   const margin = useReactions({ reference, notes, setReactions });
   const referenceText = useRef<ReferenceTextHandle>(null);
   const hasReference = reference.trim() !== "";
   const reactTitle = !hasReference ? "Add reference text first" : undefined;
-  const commandTitle = reactTitle ?? (isBusy ? "Waiting for the current reply" : undefined);
 
   // A status message clears itself after a few seconds, or on the next notes edit.
   const showStatus = (message: string) => {
@@ -118,13 +114,6 @@ export default function Home() {
     setSidebarOpen(true);
     requestAnimationFrame(() => referenceText.current?.open());
   };
-  // Define and Quiz reply in chat: it moves beside the notes, focus staying in them. On a phone
-  // that would hide the notes, so the unread dot is the signal there.
-  const runInChat = (command: Parameters<ChatHandle["run"]>[0]) => {
-    chat.current?.run(command);
-    if (!isPhone()) showView("notes+chat");
-  };
-
   // React (D18, D20) acts on the selection in the block being edited, or on the whole block last
   // edited or focused. `kind` absent: the router picks.
   function react(kind?: ReactionKind) {
@@ -141,32 +130,6 @@ export default function Home() {
       if (isAroundCaret) notesView.current?.select(from, from + excerpt.length);
     }
     margin.react(excerpt, kind);
-  }
-
-  // Commands act on the same target as React, read at click time (D17). Define first pastes the
-  // passage sentence under the selection (app code, not the AI: D6), then asks chat to define.
-  function runCommand(name: "define" | "quiz") {
-    clearStatus(); // a previous command's message would describe the wrong run
-    if (notes.trim() === "") return showStatus("Write a note first.");
-    const target = notesView.current?.target();
-    // Quiz with nothing targeted covers all the notes (D17).
-    if (name === "quiz") return runInChat({ name, selection: (target && commandTarget(notes, target.start, target.end)) ?? "" });
-
-    // A caret alone stands for its whole block.
-    const isCaret = target !== undefined && target.start === target.end;
-    const range = isCaret ? blockAt(splitBlocks(notes), target.start) : target;
-    const selection = range ? trimPhrase(notes.slice(range.start, range.end)) : ""; // "**Netherfield**" → "Netherfield"
-    if (!range || selection === "") return showStatus("Select a word or phrase in a note, then Define.");
-    if (!isDefinable(selection)) return showStatus("Define works on a word or short phrase: one line, up to 4 words.");
-    const quote = defineQuote(reference, notes, range.start, range.end);
-    if (quote) {
-      const inserted = insertAfterLine(notes, range.end, quote);
-      notesView.current?.edit(inserted.notes, inserted.caret); // the block stays open, caret after the quote
-      showStatus(`Quote from ${quote.slice(quote.lastIndexOf("[") + 1, -1)} added below your note.`);
-    } else {
-      showStatus(`“${selection}” isn't in the reference text, so no quote was added.`);
-    }
-    runInChat({ name, selection });
   }
 
   // The page is prerendered empty, so saved state is loaded after hydration, not during render.
@@ -291,18 +254,6 @@ export default function Home() {
                     highlighted selection stay in the block being edited. */}
                 <div className="toolbar">
                   <ReactButton title={reactTitle} onReact={react} />
-                  {(["define", "quiz"] as const).map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      disabled={commandTitle !== undefined}
-                      title={commandTitle}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => runCommand(name)}
-                    >
-                      {name === "define" ? "Define" : "Quiz"}
-                    </button>
-                  ))}
                   <span className="divider" aria-hidden="true" />
                   <button
                     type="button"
@@ -367,13 +318,10 @@ export default function Home() {
             </div>
             <div className="chat-pane">
               <Chat
-                ref={chat}
                 reference={reference}
                 notes={notes}
                 messages={messages}
                 setMessages={setMessages}
-                isBusy={isBusy}
-                setIsBusy={setIsBusy}
                 onReplyEnd={() => setHasUnread(true)}
               />
             </div>

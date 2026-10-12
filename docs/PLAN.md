@@ -30,6 +30,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - *Decided (D22):* "only" views fill the space beside the sidebar; view and sidebar state remembered across reloads; phones: sidebar overlay, one pane at a time.
 - **Verify:** each view switches without losing notes, a streaming reply or a margin thread; sidebar toggles; `npm test` and `npm run build` pass; screenshots of all views. *Done (headless Chrome, public-domain text): all six views and phone captured; a chat reply asked in Notes with chat kept streaming while Notes only was shown, finished, showed the unread dot, and was intact on return; view and closed sidebar survived reload; 124 tests, lint, build green.*
 
+- [x] *R1b (D24):* Define and Quiz removed from the toolbar and chat; core command code and prompts kept. **Verify:** 124 tests, lint, build green.
+
 ### R2: books as folders
 - [ ] Data model: a list of books, each with its own reference text, notes, chat and reactions; the sidebar lists books, adds, renames and switches. v1's stored state becomes the first book (no data lost). **Decide first:** Q9.
 - [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for PDFs, keyed by book. **Verify:** unit tests with a fake; two books keep separate notes across reload; v1 data appears as book 1.
@@ -69,6 +71,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - ~~UX redesign: marginalia-first~~ → scheduled by D18 (Sprints 5–6)
 - Per-book page offset so PDF pages map to the paper book's pages (Q10 option)
 - Highlight the cited text on the PDF page (needs pdfjs rendering instead of the built-in viewer; D23 revisit)
+- Bring back Define/Quiz with behaviour Ronith likes (D24): where the reply lands, and whether Define pastes a quote
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
 - Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
 - Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI
