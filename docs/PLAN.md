@@ -38,8 +38,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] *R1e (D28, D30):* light theme by default (white, light gray, light blue), dark behind a sun/moon toggle, remembered; top bar of icon + label toggles (light-blue pill when selected); icons inline after Lucide. **Verify:** headless Chrome: light and dark screenshots of margin, PDF and chat views; dark chosen, page reloaded, `data-theme` still dark; phone hides the labels; 112 tests (UI-state tests cover the theme), lint, build green.
 
 ### R2: books as folders (D31)
-- [ ] Data model: a list of books, each with title, reference text, notes, chat and reactions; v1's stored state becomes "My first book" (no data lost). **Verify:** unit tests: migration from v1 state, malformed books dropped, round trip.
-- [ ] Sidebar: "+ New book" (asks for a title), click to open, rename inline, delete with a confirm. **Verify:** two books keep separate notes, chat and threads across reload; delete removes only that book.
+- [x] Data model: a library (`tertulia-margins:library`: books and the open one) plus one key per book in v1's shape; v1's stored state is copied into "My first book" and the v1 key kept as a backup. **Verify:** 6 new store tests: migration, no-v1 start, corrupt library without overwriting a saved first book, malformed/duplicate books dropped, add/rename/delete rules, per-book keys; 118 tests, lint, build green.
+- [x] Sidebar: "+ New book" (title input, Enter/Esc), click to open, rename (✎ or double-click), delete with a confirm; the last book can't be deleted; switching and deleting wait while a reply streams. **Verify:** headless Chrome: seeded v1 data appeared as "My first book" with its notes, chat and card, v1 key kept; created "Persuasion", typed notes, reloaded (it stayed open with its notes); switched back (notes, 1 card, 2 chat messages intact); renamed to "Pride and Prejudice" (top bar followed); deleted Persuasion (its key removed; delete disabled on the last book).
 
 ### R3: PDF view + upload (D29)
 - [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for one PDF per book. **Verify:** unit tests with a fake.

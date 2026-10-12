@@ -1,5 +1,6 @@
-// The only module that touches storage (D7): reference text, notes, chat and margin reactions survive a reload.
-// Storage is injected ({ getItem, setItem }) so the page passes localStorage and tests pass a fake.
+// The only module that touches storage (D7): books (D31), each with its reference text, notes, chat
+// and margin reactions, survive a reload. Storage is injected ({ getItem, setItem, removeItem }) so
+// the page passes localStorage and tests pass a fake.
 import type { CitationCheck } from "./citations.ts";
 import type { Turn } from "./converse.ts";
 import type { PageLabels } from "./passage.ts";
@@ -19,17 +20,96 @@ export type ChatMessage = Turn & {
 // request sends `messages` as `history` (with `reaction: { excerpt, kind }`).
 export type Reaction = { id: string; excerpt: string; kind: ReactionKind; messages: ChatMessage[] };
 export type AppState = { reference: string; notes: string; messages: ChatMessage[]; reactions: Reaction[] };
-export type KeyValueStorage = { getItem(key: string): string | null; setItem(key: string, value: string): void };
+export type KeyValueStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
 export type StoreError = "save_failed"; // storage full, blocked (private mode) or unavailable
 
-export const STORAGE_KEY = "tertulia-margins:v1"; // the page listens for other tabs writing it
+export const STORAGE_KEY = "tertulia-margins:v1"; // v1's single book; kept as a backup after migration
 export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], reactions: [] });
 
-// Missing, corrupt or unreadable storage falls back to empty state: loading never throws.
-export function loadState(storage: KeyValueStorage): AppState {
+// ---- Books (D31) ----
+// The library lists the books and which one is open; each book's state lives under its own key,
+// in the v1 shape, so one large reference text never has to be rewritten to save another book.
+export type BookMeta = { id: string; title: string };
+export type Library = { books: BookMeta[]; currentId: string };
+export const LIBRARY_KEY = "tertulia-margins:library";
+export const bookKey = (id: string) => `tertulia-margins:book:${id}`;
+const FIRST_BOOK: BookMeta = { id: "first", title: "My first book" };
+
+// Missing library: the first run of v2. v1's saved state (if any) is copied into "My first book";
+// the v1 key is left as it was, as a backup. A corrupt library is rebuilt the same way, keeping
+// any book keys already there. Never throws.
+export function loadLibrary(storage: KeyValueStorage): Library {
   let saved: unknown;
   try {
-    saved = JSON.parse(storage.getItem(STORAGE_KEY) ?? "null");
+    saved = JSON.parse(storage.getItem(LIBRARY_KEY) ?? "null");
+  } catch {
+    saved = null;
+  }
+  const books = isRecord(saved) && Array.isArray(saved.books) ? saved.books.filter(isBookMeta).map(({ id, title }) => ({ id, title })) : [];
+  const uniqueBooks = books.filter((b, i) => books.findIndex((o) => o.id === b.id) === i);
+  if (uniqueBooks.length > 0) {
+    const savedId = isRecord(saved) ? saved.currentId : undefined;
+    const currentId = uniqueBooks.some((b) => b.id === savedId) ? (savedId as string) : uniqueBooks[0].id;
+    return { books: uniqueBooks, currentId };
+  }
+  const library: Library = { books: [FIRST_BOOK], currentId: FIRST_BOOK.id };
+  try {
+    const v1 = storage.getItem(STORAGE_KEY);
+    const isFirstBookSaved = storage.getItem(bookKey(FIRST_BOOK.id)) !== null;
+    if (v1 !== null && !isFirstBookSaved) storage.setItem(bookKey(FIRST_BOOK.id), v1);
+    storage.setItem(LIBRARY_KEY, JSON.stringify(library));
+  } catch {
+    // Unwritable storage: the page still opens with the first book; its save reports the problem.
+  }
+  return library;
+}
+
+export function saveLibrary(storage: KeyValueStorage, library: Library): StoreError | undefined {
+  try {
+    storage.setItem(LIBRARY_KEY, JSON.stringify(library));
+  } catch {
+    return "save_failed";
+  }
+}
+
+// Library edits are pure; the page saves the result. A title is trimmed; an empty one is refused.
+export type BookError = "title_empty" | "last_book";
+export function addBook(library: Library, id: string, title: string): Library | BookError {
+  const name = title.trim();
+  if (name === "") return "title_empty";
+  return { books: [...library.books, { id, title: name }], currentId: id };
+}
+
+export function renameBook(library: Library, id: string, title: string): Library | BookError {
+  const name = title.trim();
+  if (name === "") return "title_empty";
+  return { ...library, books: library.books.map((b) => (b.id === id ? { ...b, title: name } : b)) };
+}
+
+// The last book can't be deleted: there is always a book to write in. Deleting the open book
+// opens the one before it (or the new first one).
+export function deleteBook(library: Library, id: string): Library | BookError {
+  if (library.books.length <= 1) return "last_book";
+  const index = library.books.findIndex((b) => b.id === id);
+  const books = library.books.filter((b) => b.id !== id);
+  const isCurrent = library.currentId === id;
+  return { books, currentId: isCurrent ? books[Math.max(0, index - 1)].id : library.currentId };
+}
+
+const isBookMeta = (b: unknown): b is BookMeta =>
+  isRecord(b) && typeof b.id === "string" && b.id !== "" && typeof b.title === "string" && b.title.trim() !== "";
+
+// ---- One book's state ----
+
+// Missing, corrupt or unreadable storage falls back to empty state: loading never throws.
+export function loadState(storage: KeyValueStorage, key: string): AppState {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(storage.getItem(key) ?? "null");
   } catch {
     return emptyState();
   }
@@ -43,11 +123,11 @@ export function loadState(storage: KeyValueStorage): AppState {
   };
 }
 
-export function saveState(storage: KeyValueStorage, state: AppState): StoreError | undefined {
+export function saveState(storage: KeyValueStorage, key: string, state: AppState): StoreError | undefined {
   const { reference, notes, messages, reactions } = state;
   try {
     const saved = { reference, notes, messages: finishedMessages(messages), reactions: finishedReactions(reactions) };
-    storage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    storage.setItem(key, JSON.stringify(saved));
   } catch {
     return "save_failed";
   }

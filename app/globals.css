@@ -167,25 +167,105 @@ main:not([data-sidebar-open]) .sidebar,
 }
 
 .books {
+  display: grid;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.new-book {
+  align-self: flex-start;
+  padding: 4px var(--s2);
+  border: 0;
+  background: none;
+  color: var(--ai);
+  font-weight: 500;
+}
+
+.new-book:hover:not(:disabled) {
+  background: var(--pill);
+}
+
+.sidebar-error {
+  margin: 0;
+  padding: 0 var(--s2);
+}
+
 .book {
   display: grid;
-  justify-items: start;
   gap: 2px;
-  padding: var(--s1) var(--s2);
-  border-radius: var(--radius);
+  padding: 2px var(--s1);
+  border-radius: 6px;
 }
 
 .book.is-current {
-  background: color-mix(in srgb, var(--rule) 45%, transparent);
+  background: var(--pill);
 }
 
+.book-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* A book's title opens it; ✎ and × appear on hover, focus, or for the open book. */
 .book-title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px var(--s1);
+  border: 0;
+  background: none;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.book.is-current .book-title {
   font-weight: 600;
+  color: var(--ai);
+  cursor: default;
+}
+
+.book-tools {
+  display: flex;
+  visibility: hidden;
+}
+
+.book-tools button {
+  padding: 3px 5px;
+  font-size: 0.8125rem;
+}
+
+.book:hover .book-tools,
+.book.is-current .book-tools,
+.book-tools:focus-within {
+  visibility: visible;
+}
+
+.book .confirm {
+  padding: 0 var(--s1) var(--s1);
+  font-size: 0.8125rem;
+}
+
+.book-actions {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: 0 var(--s1) var(--s1);
+}
+
+.title-input {
+  width: 100%;
+  padding: 4px var(--s2);
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--ai);
+  border-radius: 6px;
+  outline: none;
 }
 
 .book .reference-button,

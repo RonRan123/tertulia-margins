@@ -5,6 +5,7 @@ const KEY = "tertulia-margins:v1";
 const storageWith = (value: unknown): KeyValueStorage => ({
   getItem: (k) => (k === KEY ? JSON.stringify(value) : null),
   setItem: () => {},
+  removeItem: () => {},
 });
 
 // Sprint 3 e2e: an unchecked citation entry crashed Chat's CitationWarnings (`c.cited.length`),
@@ -19,6 +20,7 @@ test("citation entries without quote, cited and status are dropped on load", () 
         { role: "assistant", content: "x [¶1]", citations: [{ nope: 1 }, { quote: "One", cited: [1], status: "ok" }] },
       ],
     }),
+    KEY,
   );
   expect(messages[1].citations).toEqual([{ quote: "One", cited: [1], status: "ok" }]);
 });
@@ -42,6 +44,7 @@ test("bad citation fields and page labels are dropped, so rendering never sees t
         { role: "assistant", content: "z", paragraphs: [{ page: "p. 1" }] }, // older shape: ignored
       ],
     }),
+    KEY,
   );
   expect(messages.slice(1)).toEqual([
     { role: "assistant", content: "x", citations: [], pages: { 1: "p. 1" } },
@@ -57,6 +60,7 @@ test("dropping a malformed message drops its partner too, so roles keep alternat
   const ai = (content: string) => ({ role: "assistant", content });
   const { messages } = loadState(
     storageWith({ reference: "One.", notes: "", messages: [{ role: "user" }, ai("A1"), user("Q2"), ai("A2"), user("Q3"), { role: "assistant" }, user("Q4"), ai("A4"), user("Q5")] }),
+    KEY,
   );
   expect(messages).toEqual([user("Q2"), ai("A2"), user("Q4"), ai("A4")]);
 });
@@ -82,6 +86,7 @@ test("malformed reactions are dropped, and threads keep their shape (opening rea
         reaction({ id: "kept", extra: 1, messages: [ai("A"), user("Q1"), { role: "assistant" }, user("Q2"), ai("A2"), user("Q3")] }),
       ],
     }),
+    KEY,
   );
   expect(reactions).toEqual([{ id: "kept", excerpt: "E", kind: "question", messages: [ai("A"), user("Q2"), ai("A2")] }]);
 });

@@ -35,7 +35,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 
 | v2 | Replaces | Decision |
 |---|---|---|
-| Books as folders in a collapsible sidebar; each holds one PDF / reference text and its notes | one global passage + notes | D22 (data model at R2) |
+| Books as folders in a collapsible sidebar; each holds one PDF / reference text and its notes | one global passage + notes | D22, D31 (built R2) |
 | A view switcher: Notes + margin, Notes only, PDF only, Chat only | notes + margin, chat in a drawer | D22 |
 | The PDF is viewable on demand and opens at a cited page | reference text never shown (D14, superseded) | D22, D23 |
 | PDF upload or URL link as the main input | typed/pasted text first, PDF import secondary (D13) | D23; URL handling decided at R3 |
@@ -134,6 +134,8 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 **Prompts are data, not code.** Each command's instructions live in `prompts/<command>.md`. Ronith writes and tunes these directly; they are the most important "code" in the project and the part that should carry his voice and judgment.
 
 **Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
+
+**Books are a library plus one key per book (D31).** `core/store` keeps a small library (the books' titles and which one is open) under `tertulia-margins:library`, and each book's reference text, notes, chat and margin threads under its own key in v1's shape, so saving one book never rewrites another's text. The first v2 load copies v1's state into "My first book" and leaves the v1 key as a backup. Switching books saves the open one first; while a reply streams, switching and deleting wait, so the reply can't land in the wrong book.
 
 **Layout is views over one book (D22).** The page shows one book at a time: the sidebar picks the book; the top bar picks what sits beside the notes (Margin, PDF or Chat) and ⤢ shows it alone (Margin alone = the notes alone) (D26). The view is `data-view` on `<main>` and CSS does the rest: every pane stays mounted and hidden ones are `display: none`. Define and Quiz switch to Notes + chat so their reply is visible (on a phone, an unread dot on Chat instead). Every view reads the same book state, so switching views never loses a stream or an edit. An "only" view fills everything beside the sidebar; the view and the sidebar's state are remembered; the reference-text editor, PDF import and export live under the book in the sidebar; on phones the sidebar is an overlay and one pane shows at a time (a *Beside notes* PDF or chat shows instead of the notes).
 

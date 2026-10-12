@@ -5,12 +5,20 @@ import { commandTarget } from "@/core/blocks.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
 import {
+  addBook,
+  bookKey,
+  deleteBook,
+  LIBRARY_KEY,
+  loadLibrary,
   loadState,
   loadUi,
+  renameBook,
+  saveLibrary,
   saveState,
   saveUi,
-  STORAGE_KEY,
   type AppState,
+  type BookError,
+  type Library,
   type ChatMessage,
   type KeyValueStorage,
   type Reaction,
@@ -40,6 +48,11 @@ import { Sidebar } from "./components/Sidebar";
 const browserStorage: KeyValueStorage = {
   getItem: (key) => window.localStorage.getItem(key),
   setItem: (key, value) => window.localStorage.setItem(key, value),
+  removeItem: (key) => window.localStorage.removeItem(key),
+};
+const BOOK_ERRORS: Record<BookError, string> = {
+  title_empty: "A book needs a title.",
+  last_book: "The last book can't be deleted.",
 };
 const SAVE_DELAY_MS = 300;
 const STATUS_MS = 5000;
@@ -79,6 +92,8 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [saveError, setSaveError] = useState<StoreError>();
   const [isChangedElsewhere, setIsChangedElsewhere] = useState(false);
+  const [library, setLibrary] = useState<Library>({ books: [], currentId: "" }); // D31: loaded after hydration
+  const currentKey = useRef(""); // the open book's storage key, for the storage listener
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
   const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
@@ -146,16 +161,24 @@ export default function Home() {
       setMessages(state.messages);
       setReactions(state.reactions);
     };
+    // Another tab's library change updates the list; this tab keeps its open book while it exists.
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return;
+      if (e.key === LIBRARY_KEY) {
+        const latest = loadLibrary(browserStorage);
+        return setLibrary((mine) => (latest.books.some((b) => b.id === mine.currentId) ? { ...latest, currentId: mine.currentId } : latest));
+      }
+      if (e.key !== currentKey.current) return;
       if (pendingSave.current) return setIsChangedElsewhere(true);
-      show(loadState(browserStorage));
+      show(loadState(browserStorage, currentKey.current));
     };
     // A closed or reloaded tab saves only what it changed and hasn't saved yet: never its stale copy.
     const onPageHide = () => pendingSave.current?.();
     // A one-time sync from storage after mount: the cascading render this rule warns about is the point.
     /* eslint-disable react-hooks/set-state-in-effect */
-    show(loadState(browserStorage));
+    const opened = loadLibrary(browserStorage);
+    currentKey.current = bookKey(opened.currentId);
+    setLibrary(opened);
+    show(loadState(browserStorage, currentKey.current));
     const savedUi = loadUi(browserStorage);
     setUi({ ...savedUi, isSidebarOpen: savedUi.isSidebarOpen && !isPhone() }); // on a phone it would cover the page
     setIsLoaded(true);
@@ -180,10 +203,11 @@ export default function Home() {
       return;
     }
     const state = { reference, notes, messages, reactions };
+    const key = currentKey.current; // the book these edits belong to, even if another opens before saving
     const save = () => {
       pendingSave.current = undefined;
       stored.current = state;
-      setSaveError(saveState(browserStorage, state));
+      setSaveError(saveState(browserStorage, key, state));
     };
     pendingSave.current = save;
     const timer = setTimeout(save, SAVE_DELAY_MS);
@@ -193,6 +217,52 @@ export default function Home() {
   useEffect(() => {
     if (isLoaded) saveUi(browserStorage, ui);
   }, [isLoaded, ui]);
+
+  // ---- Books (D31) ----
+  // Switching is blocked while a reply streams: it would land in the newly opened book.
+  const isStreaming = messages.at(-1)?.isStreaming === true || reactions.some((r) => r.messages.at(-1)?.isStreaming === true);
+  const currentBook = library.books.find((b) => b.id === library.currentId);
+
+  // Saves the open book's last edits, then shows `next`'s book.
+  function openLibrary(next: Library) {
+    pendingSave.current?.();
+    setLibrary(next);
+    setSaveError(saveLibrary(browserStorage, next));
+    if (bookKey(next.currentId) === currentKey.current) return;
+    currentKey.current = bookKey(next.currentId);
+    stored.current = loadState(browserStorage, currentKey.current);
+    setReference(stored.current.reference);
+    setNotes(stored.current.notes);
+    setMessages(stored.current.messages);
+    setReactions(stored.current.reactions);
+    setIsChangedElsewhere(false);
+    clearStatus();
+  }
+  // Each returns an error message, or undefined when done.
+  const books = {
+    open: (id: string) => openLibrary({ ...library, currentId: id }),
+    create: (title: string) => {
+      const next = addBook(library, crypto.randomUUID(), title);
+      if (typeof next === "string") return BOOK_ERRORS[next];
+      openLibrary(next);
+    },
+    rename: (id: string, title: string) => {
+      const next = renameBook(library, id, title);
+      if (typeof next === "string") return BOOK_ERRORS[next];
+      setLibrary(next);
+      setSaveError(saveLibrary(browserStorage, next));
+    },
+    remove: (id: string) => {
+      const next = deleteBook(library, id);
+      if (typeof next === "string") return BOOK_ERRORS[next];
+      openLibrary(next);
+      try {
+        browserStorage.removeItem(bookKey(id));
+      } catch {
+        // Unremovable: the book is gone from the library either way.
+      }
+    },
+  };
 
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
   useEffect(() => {
@@ -207,6 +277,10 @@ export default function Home() {
     <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
       <Sidebar
         id="sidebar"
+        books={library.books}
+        currentId={library.currentId}
+        isBusy={isStreaming}
+        actions={books}
         reference={reference}
         onReferenceChange={setReference}
         referenceRef={referenceText}
@@ -234,7 +308,7 @@ export default function Home() {
           </button>
           <span className="book-name">
             <BookIcon />
-            Current book
+            {currentBook?.title}
           </span>
           <span className="notes-status" aria-live="polite">
             {saveError ? "Not saved: browser storage is full or blocked." : status}
