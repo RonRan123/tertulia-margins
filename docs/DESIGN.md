@@ -5,13 +5,42 @@
 | | |
 |---|---|
 | Owner | Ronith (decides); Claude (executes) |
-| Status | Draft v0.1, 2026-10-08 |
-| Budget | 7 days x 3 h = 21 h |
-| Companion docs | [PLAN.md](PLAN.md) (progress), [DECISIONS.md](DECISIONS.md) (why) |
+| Status | v2 draft, 2026-10-11 (v1: tag `v1-marginalia`, [archive/v1/DESIGN.md](archive/v1/DESIGN.md)) |
+| Budget | v1: 7 days x 3 h = 21 h (spent); v2: time box set by Ronith (PLAN.md) |
+| Companion docs | [PLAN.md](PLAN.md) (progress), [DECISIONS.md](DECISIONS.md) (why), [research/v2-insights.md](research/v2-insights.md) (v2 input) |
 
 This document explains *what* we are building and *why this shape*, framed as trade-offs against the constraints. It is a living doc: when implementation teaches us something, this file changes in the same commit.
 
 ---
+
+## 0. v2 at a glance: what carries forward, what changes
+
+v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([research/v2-insights.md](research/v2-insights.md), D21). The v1 spec is frozen in [archive/v1/DESIGN.md](archive/v1/DESIGN.md); this section is the bridge.
+
+**Principles carried forward (unchanged unless a later D says so)**
+
+| Principle | Source |
+|---|---|
+| Note-first: the reader's notes are the primary artifact and steer every reply | §1, Day 0 |
+| The AI never edits or writes into the notes; AI text is visually distinct and lives in the margin or chat | D6, D18 |
+| Every claim about the book cites `[¶n]`; unsupported → "not in the text"; `checkCitations` verifies quotes deterministically | D4, §6.2 |
+| Passage-only knowledge for now | D5 |
+| Book text and PDFs stay in the reader's browser; never committed, never shipped | D7, D9, §4 |
+| Readers locate passages by the paper book's page; `[p. N]` markers are typed by the reader | D13, D15 |
+| Margin reactions (question, pushback, connection) as threads; router picks the kind | D18, D20 |
+| Notes are one markdown string shown as blocks; export is the reader's words only | D17, D20 |
+| Product logic in `core/`, thin routes, commands and kinds as data tables | §6.1, CLAUDE.md |
+
+**What v2 changes**
+
+| v2 | Replaces | Decision |
+|---|---|---|
+| Books as folders in a collapsible sidebar; each holds one PDF / reference text and its notes | one global passage + notes | D22 (data model at R2) |
+| A view switcher: Notes + margin, Notes only, PDF only, Chat only | notes + margin, chat in a drawer | D22 |
+| The PDF is viewable on demand and opens at a cited page | reference text never shown (D14, superseded) | D22, D23 |
+| PDF upload or URL link as the main input | typed/pasted text first, PDF import secondary (D13) | D23; URL handling decided at R3 |
+| PDFs in IndexedDB | localStorage only (D7, amended) | D23 |
+| Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
 
@@ -24,17 +53,19 @@ We want the inverse: **note-first**. The reader's notes are the primary artifact
 ## 2. Goals
 
 1. **Grounded conversation about a passage.** Every claim about the book cites the supplied text. Unsupported claims say "not in the text."
-2. **Notes steer the AI.** The user's notes are always in context and shape replies. AI text lives only in the chat pane, so it is never confused with the user's notes (D6).
+2. **Notes steer the AI.** The user's notes are always in context and shape replies. AI text lives only in the margin and chat, so it is never confused with the user's notes (D6, D18).
 3. **Commands on a selection.** `/define`, `/quiz`, `/expand` act on a selected line, Jupyter-style.
 4. **Augment, don't replace.** The AI can suggest an expansion of a terse note with context from the text, and flags where a note disagrees with the passage. Suggestions appear in chat; the user writes any note text themselves (D6).
 5. **Obsidian-compatible.** Notes export to markdown.
 6. **Portfolio-grade evidence.** A day-7 write-up with screenshots and *measured* cost-per-session and time-to-first-token (TTFT).
+7. **One place per book (v2).** Each book is a folder holding its PDF and notes; the PDF is one click away, opening at the page a note cites (D22, D23).
 
 ## 3. Non-goals
 
 These are deliberately excluded so they cannot creep back in silently.
 
 - **Rich-text editor.** A plain markdown textarea. Editors are a known rabbit hole.
+- **A reading app.** The PDF view is for checking a source, not for reading the book in the app (D22 reopens the view D14 closed; this line keeps its spirit). No annotation on the PDF itself.
 - **Tensions across a body of work** (multiple books/authors). This is a research problem. v4 does one book only.
 - **Accounts, auth, multi-user, sync.** Single user, single browser.
 - **OCR / photo input** in the first week.
@@ -52,25 +83,27 @@ These are deliberately excluded so they cannot creep back in silently.
 
 The interaction model is the product's whole differentiation, so it is specified first.
 
-1. The user types or pastes reference text from the book, with `[p. N]` page markers, or imports it from a PDF (D13). It stays in the background as reference, not a reading pane (D14).
+0. The user creates a book folder in the sidebar and adds the book: a PDF upload or URL link, or typed/pasted text with `[p. N]` markers (D13, D23). The PDF's text becomes the reference text the AI is grounded in.
+1. The reference text stays in the background for the AI; the PDF itself is a view the user can open, or that opens at the cited page when they click a source (D22).
 2. The user writes notes in the notes column as they read, exactly as they would in Obsidian.
 3. The user selects a line in their notes and runs a command, or asks a free-form question in the chat drawer.
-4. The AI replies in the chat drawer (commands, questions) or the margin (reactions), citing paragraphs of the passage. Replies never edit the user's notes.
-5. The user may press **React** on a note (the selection or the paragraph at the cursor): the AI answers in the margin column beside the notes with a probing question, a pushback cited `[¶n]`, or a connection to another passage. Each reaction is a thread the user can reply to. Nothing is added to the notes. The chat stays available in a collapsed drawer (D18; replaces Augment).
+4. The AI replies in the chat (commands, questions) or the margin (reactions), citing paragraphs of the passage. Replies never edit the user's notes. Which of margin, PDF or chat fills the right pane is the view the user picked (D22).
+5. The user may press **React** on a note (the selection or the paragraph at the cursor): the AI answers in the margin column beside the notes with a probing question, a pushback cited `[¶n]`, or a connection to another passage. Each reaction is a thread the user can reply to. Nothing is added to the notes. The chat stays one view-switch away (D22; v1 had it in a drawer, D18; replaces Augment).
 6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote. Commands run from a toolbar above the notes on the selected text; `/define` picks the occurrence nearest the cites around the selection, else the first (D17).
 7. Export produces one markdown file: frontmatter (date, reference page range), then the user's notes with their inline passage quotes. No AI-written text, no reference text (D17).
 
-The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6). AI text lives in the margin or the chat drawer, visually distinct (D18).
+The invariant: **the notes pane holds only the user's words and verbatim passage quotes. AI-written text never enters it** (D6). AI text lives in the margin or the chat, visually distinct (D18).
 
 ## 6. Design overview
 
 ```
-Browser (one page)
-  ┌───────────────╥───────────────┐
-  │  Notes        ║  Margin cards │   passage, notes, chat, reactions kept in
-  │  (textarea)   ║  (+ chat      │   browser storage
-  │               ║   drawer)     │
-  └───────┬───────╨───────▲───────┘
+Browser (one page)        [ Notes+Margin | Notes | PDF | Chat ]   ← view switcher (D22)
+  ┌──────────┬───────────────────╥──────────────────┐
+  │ Sidebar  │  Notes (blocks)   ║  right pane:     │   notes, chat, reactions: localStorage
+  │ (1/6,    │  (3/6)            ║  margin | PDF |  │   PDFs: IndexedDB (D23)
+  │ books as │                   ║  chat (2/6)      │
+  │ folders) │                   ║                  │
+  └──────────┴────────┬──────────╨───────▲──────────┘
           │ POST /api/converse   │ streamed text + citation flags
           ▼                      │
   route handler (thin: parse, call core, stream out)
@@ -93,6 +126,10 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 **Prompts are data, not code.** Each command's instructions live in `prompts/<command>.md`. Ronith writes and tunes these directly; they are the most important "code" in the project and the part that should carry his voice and judgment.
 
 **Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
+
+**Layout is views over one book (D22).** The page shows one book at a time: the sidebar picks the book, the switcher picks what fills the right pane (margin, PDF or chat), or hides it (Notes only), or gives the whole width to the PDF or the chat. Every view reads the same book state, so switching views never loses a stream or an edit. An "only" view fills everything beside the sidebar; the view and the sidebar's state are remembered; the reference-text editor and PDF import live under the book in the sidebar; on phones the sidebar is an overlay and one pane shows at a time.
+
+**The PDF view is the browser's own viewer (D23).** The PDF is stored in IndexedDB, opened as a `blob:` URL in an iframe at `#page=N`. A `[p. N]` cite (or a `[¶n]` whose paragraph has a page label) opens the PDF view at that page. MVP: the page number as given. Later: match the cited text around that page (regex, then AI) so an off-by-a-few page still lands on the right passage.
 
 **Blocks are views of one string (D20).** `core/blocks.ts` splits the notes on runs of blank lines into blocks with offsets; an edit replaces only its block's slice, so the original separators (and export) stay byte-for-byte. Each block renders with `marked` (GFM, single newlines as line breaks); raw HTML is escaped as text, links other than http(s), mailto and relative ones lose their link, and `[¶n]` cites get a `cite` span. The margin works like comments in a document: on wide screens each block's cards start level with the block and slide down past earlier cards (`stackCards` in `core/blocks.ts`), so cards never push the notes apart; on phones they sit under their block.
 
@@ -154,7 +191,8 @@ Detailed, checkbox-level plan lives in [PLAN.md](PLAN.md), organised as one spri
 | 3–4 | v1 | **MVP.** Notes pane + chat pane, `/define` `/quiz` on selection, persisted, markdown export (D11) |
 | 5 | v2 | Marginalia: React button, reactions (question, pushback, connection) as threads in a margin column, chat in a drawer (D18) |
 | 6 | v3 | Notes as Jupyter-style blocks rendered with `marked`; visual redesign (D18) |
-| 7 | v4 | Prompt caching and logging, eval set, write-up |
+| 7 | v4 | Prompt caching and logging, eval set, write-up (moved after the v2 overhaul, D21) |
+| v2 | R1–R3 | Layout shell with view switcher; books as folders; PDF view with upload/URL (D21–D23). Then Sprint 7 on the v2 UI |
 
 Book-level memory, `/tensions`, `/expand`, model routing and the public demo moved to the PLAN.md Parking lot (D18).
 
@@ -182,6 +220,10 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q5. v3 approach.** Long-context + caching vs chunked retrieval.
 - **Q6. Write-up audience.** *Resolved (D10): LLM engineers, with a one-paragraph product story and screenshots up top.*
 - **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*
+- **Q8. PDF by URL (R3).** Fetching from the browser fails on most sites (CORS); a server route that fetches it works but is an open proxy on the public demo (D9). Options: browser fetch with a clear error, a size-capped route, or upload only.
+- **Q9. Book data model (R2).** One notes document per book, or several (e.g. per chapter)? How v1's single passage/notes migrate into the first book.
+- **Q10. Page mismatch (R3+).** PDF pages often differ from the paper book (D13). A per-book page offset, the grounded text match from §6.1, or both?
+- **Q11. v2 time box.** How many hours the overhaul gets before Sprint 7 (D21).
 
 ---
 
@@ -203,5 +245,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Note:** text the user wrote. Never edited by the AI.
 - **Passage quote:** a verbatim snippet of the passage with its `[¶n]`, pasted into the notes by the app and visibly marked. Not AI-written.
 - **¶n:** paragraph ID used for citations. Each ¶ also carries a page label (printed page if detected, else PDF page).
+- **Book (folder):** a sidebar entry holding one book's PDF / reference text, notes, chat and reactions (D22).
+- **View:** what the page shows besides the sidebar: Notes + margin, Notes only, PDF only, Chat only (D22).
 - **Augment:** the AI suggests an expansion of a note in chat; the user writes any note text themselves.
 - **TTFT:** time to first token of a streamed reply.

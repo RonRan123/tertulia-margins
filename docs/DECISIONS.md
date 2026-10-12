@@ -51,7 +51,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** typing everything yourself proves too slow in real use.
 
 ## D7. Storage: browser localStorage + markdown export (Q1)
-- **Status:** Accepted (2026-10-08, Ronith)
+- **Status:** Accepted (2026-10-08, Ronith); amended by D23 (PDFs go in IndexedDB)
 - **Context:** passage and notes must survive a reload; D1 chose a Vercel-deployable stack.
 - **Alternatives:** `.md` files on disk through route handlers (~3 h, needs a writable disk); SQLite (3-4 h, new dependency, same disk limit).
 - **Why:** about 2 h cheaper than the alternatives and keeps the Vercel path open. Only the `store` module touches storage, so swapping later is one module.
@@ -116,7 +116,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** PDF import's paragraph detection is unreliable, or typing markers proves tedious in real use.
 
 ## D14. Reference text lives in the background, not in a pane
-- **Status:** Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
+- **Status:** Superseded by D22 (2026-10-11: the PDF becomes a view). Originally Accepted (2026-10-09, Ronith: "there is no actual book to display… it should live in the background as a reference text")
 - **Context:** Sprint 3 needs to place the passage; this is a companion to a paper book, not a reading app (Day 0).
 - **Alternatives:** collapsible passage above the notes; three columns (passage | notes | chat).
 - **Why:** the reader reads the paper book; the app only needs the text to ground and check citations.
@@ -155,7 +155,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** the picked sentence is often wrong in real use.
 
 ## D18. Re-plan after Sprint 4: marginalia first, then blocks; export deprioritized (amends D6, D11, D16)
-- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing")
+- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view)
 - **Context:** after Sprint 4, the two-pane notes | chat UI feels unappealing and the chat not very useful. Ronith wants notes rendered like Obsidian and the AI to collaborate in the margin. Export is built (Sprint 4) but no longer a priority.
 - **Alternatives:** rendering by true live preview (CodeMirror 6, ~5 h) or a side-by-side preview; reactions triggered on leaving a block or after a typing pause; our own markdown renderer; blocks first, or both in one sprint.
 - **Rules:**
@@ -189,6 +189,40 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** routing gets the right kind without asking, while the menu keeps control one click away; one string keeps every existing feature working.
 - **Cost we accept:** two model calls per routed reaction (router first, so a little more latency and cost); a blank line inside a code block splits it.
 - **Revisit if:** the router picks badly or the extra latency shows (then a faster model for the router, Q3), or reactions detach too often.
+
+## D21. v2 overhaul: v1 frozen and archived, docs rewritten, Sprint 7 after the overhaul
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** after Sprints 1–6, Ronith reviewed similar tools and HCI research and wants a significant overhaul (docs/research/v2-insights.md): books as folders, a PDF view, a view switcher. The v1 reasoning must stay traceable.
+- **Alternatives:** edit DESIGN/PLAN in place with superseded markers; a separate OVERHAUL.md beside the v1 docs. For Sprint 7: run it on v1 before the overhaul, or fold it into the new plan.
+- **Rules:**
+  - *Traceability:* git tag `v1-marginalia` marks the last v1 commit; `docs/archive/v1/` keeps DESIGN.md and PLAN.md as they were. DESIGN.md (v2) opens with "Principles carried forward", each row linked to its D-number. DECISIONS.md stays append-only; superseded entries say so in their status.
+  - *Sprint 7* (prompt review, caching, evals, write-up) runs after the overhaul, so its screenshots and numbers show the v2 product.
+  - *Steps:* the overhaul starts with R1 layout shell, R2 books as folders, R3 PDF view (PLAN.md).
+- **Why:** an archived v1 reads as a clean "before" for the write-up, and v2 stays one spec that CLAUDE.md points at.
+- **Cost we accept:** the 21 h budget is spent; the overhaul needs its own time box (Ronith sets it, PLAN.md). No write-up until it lands.
+- **Revisit if:** the overhaul drags past its time box (then cut to R1–R3 and run Sprint 7).
+
+## D22. v2 layout: sidebar, notes, a right pane, and a view switcher (supersedes D14; amends D18)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** Ronith wants the notes centred, with the PDF one click away (D14 kept it hidden), and views picked from the top, like the tools he studied.
+- **Alternatives:** keep D14 (no PDF view); three fixed columns (passage | notes | chat, rejected in D14).
+- **Rules:**
+  - *Grid:* a collapsible sidebar (1/6, open/close button) with books as folders; notes (3/6); a right pane (2/6).
+  - *Views, from a switcher at the top:* (1) Notes + AI margin, (2) Notes only, (3) PDF only, (4) Chat only. The right pane shows the margin, the PDF or the chat; clicking a source cite opens the PDF.
+  - *D6 still holds:* AI text appears only in the margin and chat, never in the notes.
+- **Why:** the notes stay central and the book is a glance away, without becoming a reading app.
+- **Cost we accept:** a PDF view reopens the "reading app" pull that D14 resisted; the drawer's always-available chat becomes a view switch.
+- **R1 details (2026-10-11, Ronith):** an "only" view fills everything beside the sidebar; the reference-text editor and PDF import move under the book in the sidebar; the chosen view and the sidebar's open/closed state are remembered across reloads; on phones the sidebar is an overlay and one pane shows at a time (Claude's assumption, not objected to).
+- **Revisit if:** the right pane feels cramped at 2/6 on a laptop screen.
+
+## D23. PDF in IndexedDB, shown in the browser's built-in viewer (amends D7)
+- **Status:** Accepted (2026-10-11, Ronith)
+- **Context:** D22's PDF view needs the PDF to survive a reload; localStorage holds ~5 MB, too little for books.
+- **Alternatives:** render pages with pdfjs-dist ourselves (about 2 h more; allows highlighting the cited text later); don't store the PDF (re-pick it every session).
+- **Rules:** our own ~40-line IndexedDB wrapper beside `core/store` (no new dependency); notes, chat and reactions stay in localStorage (D7). The viewer is an iframe on a `blob:` URL at `#page=N`; a `[p. N]` cite opens that page (MVP, as Ronith specified). Pages go straight to the PDF page for now; matching a cite to the actual text (regex + AI around the cited pages) is a later step.
+- **Why:** about 10 lines to display, works offline, and PDFs stay in the reader's browser (D9).
+- **Cost we accept:** no highlighting of the cited text on the page; `#page=N` support varies a little between browsers; PDF pages can differ from the paper book's (D13), so links may be off by a few pages until the grounded linking step.
+- **Revisit if:** grounded linking needs highlights (then pdfjs rendering), or a browser ignores `#page=`.
 
 ---
 

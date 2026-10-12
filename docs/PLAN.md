@@ -5,83 +5,47 @@ Each step has a **Verify** line: the check that proves it works.
 
 Time log: record actual hours in the table at the bottom. It feeds the write-up.
 
+v1's plan (Sprints 1–6, MVP contract, scope rules) is frozen in [archive/v1/PLAN.md](archive/v1/PLAN.md) (D21). The scope rules below carry over.
+
+**Rules that stop scope creep (from v1)**
+- A step ends when its **Verify** check passes. Unfinished tasks do not roll silently into the next step; decide to cut or to swap.
+- New idea mid-step: Parking lot, not code.
+- Over the time box by more than 30 minutes: stop and say what is being cut.
+
 ---
 
-## Day 0: Homework (before any code; not counted in the 21 h)
-- [x] 30-min manual test: paste one annotated chapter + your notes into Claude, have the conversation you wish the tool had. Save in `docs/research/day0.md`.
-- [x] ≤1 h: try NotebookLM and Readwise Reader on the same chapter. List what each does badly.
-- [x] Answer DESIGN.md open questions Q1, Q2, Q4, Q6. (D5, D7, D9, D10)
-- **Verify:** `docs/research/day0.md` has a draft system prompt and a "what competitors get wrong" list.
+## v1 (Sprints 1–6): done, archived
+Full checklist with Verify lines and QA notes: [archive/v1/PLAN.md](archive/v1/PLAN.md); code at tag `v1-marginalia`.
+Shipped: grounded chat with `[¶n]` + `checkCitations` (S1–2), notes + persistence (S3), `/define` `/quiz` + export (S4), margin reactions as threads (S5), notes as blocks + visual pass (S6).
+Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7 moved below, after the overhaul (D21).
 
-## MVP scope contract (D11)
+## v2 overhaul (D21–D23)
+**Goal:** one place per book: folders in a sidebar, notes in the centre, and a right pane that shows the margin, the PDF or the chat, picked from a view switcher. Input: Ronith's insights in [research/v2-insights.md](research/v2-insights.md).
+**Time box:** _Ronith to set (Q11)._ Over by 30 min on a step: stop and say what is cut.
 
-**The MVP is done when:** you can type or paste reference text from your book (with `[p. N]` page markers) or import it from a PDF, write notes beside it, chat with the AI about it with every claim cited as `[¶n]` (page shown), run `/define` and `/quiz` on a selection, reload without losing anything, and export the notes to Obsidian. Used end to end on a real chapter of your own book.
+### R1: layout shell + view switcher (one book still)
+- [ ] Grid: collapsible sidebar (1/6, open/close button), notes (3/6), right pane (2/6). The sidebar shows the current book as a placeholder entry until R2.
+- [ ] View switcher at the top: Notes + margin · Notes only · PDF only · Chat only. The chat drawer goes; chat becomes a view. PDF view shows an empty state until R3.
+- [ ] Reference-text editor and PDF import move from the header to the book entry in the sidebar.
+- *Decided (D22):* "only" views fill the space beside the sidebar; view and sidebar state remembered across reloads; phones: sidebar overlay, one pane at a time.
+- **Verify:** each view switches without losing notes, a streaming reply or a margin thread; sidebar toggles; `npm test` and `npm run build` pass; screenshots of all four views.
 
-| IN the MVP | OUT (after the MVP or parked) |
-|---|---|
-| Reference text typed/pasted with `[p. N]` markers; PDF import as a secondary input (D13) | Prompt caching, cost/TTFT logging (Sprint 5) |
-| Grounded chat, cite-or-abstain, `checkCitations` | `/expand`, Augment, disagreement flags (Sprint 5) |
-| Two panes; notes always in context; AI text only in chat (D6) | Model routing; the MVP uses one model (Sprint 5) |
-| `/define` (app pastes the verbatim sentence) and `/quiz` | Public demo (Sprint 5) |
-| localStorage + markdown export (D7) | Book-level memory, `/tensions`, evals (Sprints 6-7) |
-| | Everything in the Parking lot |
+### R2: books as folders
+- [ ] Data model: a list of books, each with its own reference text, notes, chat and reactions; the sidebar lists books, adds, renames and switches. v1's stored state becomes the first book (no data lost). **Decide first:** Q9.
+- [ ] IndexedDB wrapper (~40 lines, no dependency; D23) for PDFs, keyed by book. **Verify:** unit tests with a fake; two books keep separate notes across reload; v1 data appears as book 1.
 
-**Rules that stop scope creep**
-- A sprint ends when its **Demo** check passes. Unfinished tasks do not roll silently into the next sprint; decide to cut or to swap.
-- Adding anything to the MVP column needs a `/decide`, and something of equal size comes out (swap, don't add).
-- Over the time box by more than 30 minutes: stop and say what is being cut.
-- New idea mid-sprint: Parking lot, not code.
-- **MVP gate (end of Sprint 4):** if the MVP is not done, drop everything after it except the write-up.
+### R3: PDF view + upload or URL
+- [ ] Add a book's PDF by upload or URL; it is stored (R2) and its text fills the reference text via the existing import (D13). **Decide first:** Q8 (URL fetching).
+- [ ] PDF view: browser viewer in an iframe on a `blob:` URL; clicking a `[p. N]` cite (or a `[¶n]` with a page label) opens the PDF view at that page (D23). **Verify:** a cite opens the right PDF page in Chrome and Safari; the PDF survives reload.
 
-Hours below are my estimates against the 3 h/day budget; adjust them if reality disagrees.
+### R4+ (not scheduled): grounded linking
+- [ ] Link a cite to the actual text, not just its page: regex for the quoted words around the cited page(s), then AI as a fallback (Ronith's "future iteration"). **Decide first:** Q10.
 
-## Sprint 1 (Day 1, 3 h): skeleton + grounded reply
-**Goal:** a script asks a question about a passage and streams back a cited, checked answer.
-- [x] Scaffold Next.js + TS, lint, Vitest (no Tailwind). **Verify:** `npm run build` and `npm test` pass.
-- [x] `core/converse` streams a reply for a passage + question. **Verify:** script prints streamed tokens and TTFT.
-- [x] Paragraph IDs + cite-or-abstain prompt (`prompts/system.md`, already drafted). **Verify:** 3 hand questions answered with `[¶n]`.
-- [x] `checkCitations`. **Verify:** unit tests: real quote passes, invented quote fails.
-- **Demo:** the script's output for the 3 questions, with the citation check green.
-
-## Sprint 2 (Day 2, 3 h): input + first page
-**Goal:** reference text from your own book produces a grounded streamed reply in the browser, with page labels.
-- [x] Reference text with `[p. N]` markers: paragraphs labelled with the page of the last marker before them (D13). **Verify:** unit tests: markers stripped from the text, labels correct, a paragraph spanning a marker gets a page range.
-- [x] PDF import (secondary, `pdfjs-dist`, runs in the browser): extracts text, infers paragraphs, fills the reference-text box with `[PDF p. N]` markers for you to trim (D13). **Verify:** your PDF imports with paragraph breaks that match the book on a hand-checked page.
-- [x] Minimal page: reference-text box + chat (multi-turn), page shown beside each `[¶n]`, failed citations flagged. **Verify:** screenshot of a grounded streamed reply.
-- **Demo:** the screenshot, from your own book.
-- **Risk:** paragraph detection from the PDF. If it eats more than 1 h, ship one paragraph per PDF page and note it.
-
-## Sprint 3 (Day 3, 3 h): notes
-**Goal:** the product has its second pane and survives a reload.
-- [x] Two-pane layout: notes | chat. Reference text lives in the background: editable on demand, never shown as a reading pane (D14). Notes always in context; AI text only in the chat pane (D6).
-- [x] Persist reference text, notes and chat in localStorage behind a `store` module (D7). **Verify:** reload keeps state.
-- **Demo:** write notes, ask a question that visibly uses them, reload, nothing lost.
-
-## Sprint 4 (Day 4, 3 h): commands + export (MVP gate)
-**Goal:** the MVP definition above is true.
-- [x] Command table + `/define` (app pastes the verbatim sentence with `[¶n]`/page, D6) and `/quiz` on selection. **Verify:** each command end to end in the browser.
-- [ ] Export to markdown. **Verify:** file opens cleanly in Obsidian. *Built and tested (`993eb40`); Obsidian check deprioritized by D18.*
-- [ ] Use it on a real chapter and write down what felt wrong (feeds Sprint 5 priorities).
-- **MVP gate:** superseded by D18 (Ronith: "this project is not ready"); the marginalia milestone below replaces it.
-
-## Sprint 5 (Day 5, 3 h): marginalia (D18)
-**Goal:** the AI collaborates in the margin instead of a chat pane.
-- [x] Layout: notes | margin column; chat collapses into a drawer (still available). D6 as amended by D18: AI text only in the margin or chat, visually distinct, never in the notes.
-- [x] React: a button acts on the selection or the paragraph at the cursor; one reaction (probing question, pushback cited `[¶n]`, or connection to another passage) appears in the margin, anchored to that excerpt. `prompts/react-*.md` (router + one per kind) drafted by Claude (D19); Ronith refines them in Sprint 7. **Verify:** three reactions on a real chapter, each of a different kind, citations checked. *Sprint 5 QA: real pushback and connection reactions, citations 17/18 ok (the miss is the note-quote false positive below); Sprint 6 QA: a real question (38 words), routed pushback on a misreading and routed connection (not pushback) on an accurate note. Pushback/connection ran 62 words vs 60, so limits were tightened again (35/50 words, bracketed `[¶n]` only); the new limits are unmeasured until Sprint 7's evals.*
-- [x] Threads: reply to a reaction; the AI answers in that thread. Reactions and threads persist across reload (store). **Verify:** reply, reload, thread intact.
-- **Demo:** write notes, React on three passages, reply to one, reload.
-
-## Sprint 6 (Day 6, 3 h): blocks + visual redesign (D18)
-**Goal:** notes read like Obsidian; the page looks intentional.
-- [x] Notes become Jupyter-style blocks: every block rendered with `marked`, the block being edited shows raw markdown. Existing notes split into blocks on load; export still produces the same file. **Verify:** headings, lists, quotes, bold and links render; editing a block and clicking away re-renders it; reload keeps everything.
-- [x] Reactions anchor to blocks (a block's reactions sit beside it); Define/Quiz/React act on the current block or selection. *Comment-style margin: each block's cards start level with it and slide down past earlier cards, so cards never push the notes apart; a dot on the margin rule marks each block with reactions.*
-- [x] Visual redesign of notes, margin and drawer (typography, spacing, AI-vs-user distinction). **Verify:** before/after screenshots.
-
-## Sprint 7 (Day 7, 3 h): measure + write-up
+## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
 - [ ] Eval script (DESIGN.md §7), including reaction quality spot-checks. **Verify:** prints a scorecard.
-- [ ] Write-up for LLM engineers (D10): product-story paragraph and screenshots first, then citation validity, cost per session, TTFT cached vs uncached, and design trade-offs.
+- [ ] Write-up for LLM engineers (D10): product-story paragraph and screenshots first, then citation validity, cost per session, TTFT cached vs uncached, and design trade-offs; v1 → v2 as the design story.
 
 ---
 
@@ -103,6 +67,8 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 - Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
 - ~~UX redesign: marginalia-first~~ → scheduled by D18 (Sprints 5–6)
+- Per-book page offset so PDF pages map to the paper book's pages (Q10 option)
+- Highlight the cited text on the PDF page (needs pdfjs rendering instead of the built-in viewer; D23 revisit)
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
 - Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
 - Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI
@@ -116,3 +82,6 @@ Hours below are my estimates against the 3 h/day budget; adjust them if reality 
 | 2 | 3 | | | |
 | 3 | 3 | | | |
 | 4 | 3 | | | MVP gate |
+| R1 | | | | v2 layout shell |
+| R2 | | | | books as folders |
+| R3 | | | | PDF view |

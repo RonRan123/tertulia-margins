@@ -1,7 +1,7 @@
 # tertulia-margins
 
 Note-first AI reading partner: the user writes margin notes, the AI talks back, grounded in the pasted text.
-Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md
+Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md · v1 (frozen): docs/archive/v1/, tag `v1-marginalia`
 
 ## Working agreement (Ronith drives, Claude executes)
 - IMPORTANT: Never make product, architecture, dependency, data-model, or prompt-content decisions silently. Stop and run the `/decide` flow: options, trade-offs, a recommendation, then wait. Routine implementation details (names, file layout inside a module) are yours.
