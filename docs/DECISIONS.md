@@ -311,6 +311,18 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** the AI sees only the chosen pages; re-picking pages as the reader moves on.
 - **Revisit if:** Ronith's exploration of structured XML and sending only parts of the book (Parking lot) lands, or prompt caching (Sprint 7) makes larger references cheap.
 
+## D33. Page links: a free, computed layer from the notes' page references to the PDF (resolves Q10)
+- **Status:** Accepted (2026-10-12, Ronith)
+- **Context:** Ronith wants each page reference in his notes linked to the right spot in the PDF, like ChatPDF's citations, as a layer above the markdown so the file stays clean. Paper pages and PDF pages differ (D13).
+- **Alternatives:** embeddings (Voyage `voyage-4-lite`, $0.02/M tokens after 200M free; new key and route) or Claude ranking nearby paragraphs (~1¢ a reference); Ronith declined anything that costs money for now. Corrections (pin or re-link) declined too.
+- **Rules:**
+  - *References:* `[p. 42]`, `[pp. 42-43]`, `[PDF p. 7]`, `p. 42`, `pp. 42-43`, `pg 42`, `page 42`, `pages 42-43`, `(42)` right after a closing quote, and `— 42` right after a quote. Not `[¶n]` cites or roman numerals. Each takes the quote before it in its paragraph (or a blockquote above it), else its sentence.
+  - *Matching, free only, surest first:* exact quote anywhere in the PDF, the hit nearest the estimate (●); else the paragraph within 3 pages of the estimate covering the most of the reference's word weight, rarer words counting more (◐, at least 35% and two shared words; Claude's proposal, Ronith agreed); else the estimated page (○). Exact hits teach the book's offset (median of PDF page − book page).
+  - *A layer:* links are recomputed from the notes and the whole PDF's text as the notes change; nothing is stored in or written to the notes. In the editor each reference is underlined and followed by a marker. Clicking the reference text (Ronith) or the marker opens the PDF at that page and selects the quote (or the paragraph's first words); on the line being edited a plain click on the text places the caret instead, as in Obsidian's live preview, and ⌘/Ctrl-click still opens it.
+- **Why:** gives most references an exact or near-exact link at no cost, and keeps the markdown file the reader's own.
+- **Cost we accept:** paraphrases only link by shared words (no meaning); a wrong link can't be corrected by hand; links are only as good as the PDF's text layer.
+- **Revisit if:** too many ◐/○ links land wrong (then embeddings or Claude ranking, Parking lot), or Ronith wants to fix links by hand.
+
 ---
 
 ## Template

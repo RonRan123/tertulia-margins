@@ -553,6 +553,40 @@ main[data-view="chat"] .react-slot {
   color: var(--ink-soft);
 }
 
+/* Page links (R4, D33): a reference is underlined in its match's colour; clicking it (off the line
+   being edited) or the marker after it opens the PDF there. ● exact quote, ◐ shared words,
+   ○ estimated page. */
+.md-pageref {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ai);
+  text-underline-offset: 3px;
+}
+
+.md-pageref.is-page {
+  text-decoration-color: var(--ink-soft);
+}
+
+.md-pagelink {
+  display: inline;
+  margin-left: 2px;
+  padding: 0 2px;
+  font: 0.7em var(--font-ui);
+  vertical-align: 0.35em;
+  color: var(--ai);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.md-pagelink.is-page {
+  color: var(--ink-soft);
+}
+
+.md-pagelink:hover {
+  color: var(--ink);
+}
+
 .md-cite {
   font: 500 0.75em var(--font-ui);
   font-style: normal;

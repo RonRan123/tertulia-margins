@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { commandTarget } from "@/core/blocks.ts";
+import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
@@ -99,6 +100,7 @@ export default function Home() {
   const [library, setLibrary] = useState<Library>({ books: [], currentId: "" }); // D31: loaded after hydration
   const currentKey = useRef(""); // the open book's storage key, for the storage listener
   const pdfPane = useRef<PdfPaneHandle>(null);
+  const [pdfText, setPdfText] = useState<string>(); // the open book's whole PDF text, for page links
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
   const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
@@ -296,6 +298,20 @@ export default function Home() {
     pdfPane.current?.goTo(page);
   };
 
+  // ---- Page links (R4, D33) ----
+  // A layer over the notes, recomputed as they change (deferred, so typing stays smooth); never
+  // written into them. Free methods only: exact quote, word overlap, page.
+  const linkedNotes = useDeferredValue(notes);
+  const pdfParas = useMemo(() => (pdfText ? pdfParagraphs(pdfText) : []), [pdfText]);
+  const pageLinks = useMemo(
+    () => ({ notes: linkedNotes, links: pdfParas.length > 0 ? linkPageRefs(findPageRefs(linkedNotes), pdfParas) : [] }),
+    [linkedNotes, pdfParas],
+  );
+  const openLink = (link: PageLink) => {
+    showPdf();
+    pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
+  };
+
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
   useEffect(() => {
     document.documentElement.dataset.theme = ui.theme;
@@ -428,6 +444,8 @@ export default function Home() {
                   reactions={reactions}
                   onChange={editNotes}
                   onReactShortcut={() => react()}
+                  pageLinks={pageLinks}
+                  onOpenLink={openLink}
                   renderMargin={(row, isCurrent) => (
                     <MarginCell
                       items={row.reactions}
@@ -457,6 +475,7 @@ export default function Home() {
                     onReference={setReference}
                     onAdded={showPdf}
                     onStatus={showStatus}
+                    onText={setPdfText}
                   />
                 </div>
                 <div className="chat-pane">

@@ -13,7 +13,7 @@ import { UploadIcon } from "./icons";
 export type PdfPaneHandle = {
   pick: () => void; // opens the file picker (top bar, sidebar)
   choosePages: () => void; // asks which PDF pages become the reference text (D32)
-  goTo: (page: number) => void; // a cite's page
+  goTo: (page: number, highlight?: string) => void; // a cite's or page link's page (R4: and its words)
   forget: (bookId: string) => void; // the book was deleted
 };
 
@@ -23,6 +23,7 @@ type PdfPaneProps = {
   onReference: (text: string) => void;
   onAdded: () => void; // a PDF was added: the page shows the PDF view
   onStatus: (message: string) => void;
+  onText: (text: string | undefined) => void; // the whole PDF's text, for page links (R4)
   ref?: Ref<PdfPaneHandle>;
 };
 
@@ -31,7 +32,7 @@ const IMPORT_ERRORS: Record<string, string> = {
   pdf_no_text: "This PDF has no text layer (a scan?), so the AI can't read it. You can still view it.",
 };
 
-export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, ref }: PdfPaneProps) {
+export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, onText, ref }: PdfPaneProps) {
   const [pdf, setPdf] = useState<StoredPdf>();
   const [loadedFor, setLoadedFor] = useState<string>(); // the book whose PDF `pdf` is
   const [offer, setOffer] = useState<string>(); // text waiting for "use as reference text?"
@@ -39,7 +40,7 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
   const [isDragging, setIsDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const viewer = useRef<PdfViewerHandle>(null);
-  const pendingPage = useRef<number>(undefined);
+  const pendingPage = useRef<{ page: number; highlight?: string }>(undefined);
 
   // Each book has its own PDF; switching books loads it (or finds none).
   useEffect(() => {
@@ -105,9 +106,9 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
   useImperativeHandle(ref, () => ({
     pick: () => input.current?.click(),
     choosePages: () => void choosePages(),
-    goTo: (page) => {
-      if (viewer.current) return viewer.current.goTo(page);
-      pendingPage.current = page;
+    goTo: (page, highlight) => {
+      if (viewer.current) return viewer.current.goTo(page, highlight);
+      pendingPage.current = { page, highlight };
     },
     forget: (id) => void deletePdf(id),
   }));
@@ -115,9 +116,28 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
   // A cite clicked before the viewer existed opens its page once it does.
   useEffect(() => {
     if (pdf && viewer.current && pendingPage.current) {
-      viewer.current.goTo(pendingPage.current);
+      viewer.current.goTo(pendingPage.current.page, pendingPage.current.highlight);
       pendingPage.current = undefined;
     }
+  }, [pdf]);
+
+  // The whole PDF's text (not just the pages chosen as reference text) is what page links search.
+  // The latest onText is kept in a ref so a new callback doesn't re-read the PDF.
+  const latestOnText = useRef(onText);
+  useEffect(() => {
+    latestOnText.current = onText;
+  });
+  useEffect(() => {
+    let isCurrent = true;
+    latestOnText.current(undefined);
+    if (!pdf) return;
+    void import("@/lib/pdf-import.ts")
+      .then(({ importPdf }) => importPdf(pdf.data))
+      .then((text) => isCurrent && latestOnText.current(text))
+      .catch(() => {}); // no text layer: references link by page only, once the text is known
+    return () => {
+      isCurrent = false;
+    };
   }, [pdf]);
 
   const picker = (

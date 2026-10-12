@@ -6,7 +6,9 @@ import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { blockAt, layoutRows, splitBlocks, stackCards, type Row } from "@/core/blocks.ts";
 import type { Reaction } from "@/core/store.ts";
+import type { PageLink } from "@/core/page-links.ts";
 import { livePreview, markdownLanguage } from "@/lib/live-preview.ts";
+import { linkAt, pageLinksField, setPageLinks } from "@/lib/page-link-view.ts";
 
 // The notes (D25): one markdown file in one CodeMirror editor, rendered in place like Obsidian's
 // live preview. The notes stay one string, so store, export and the AI see exactly what is typed.
@@ -29,21 +31,24 @@ type NotesProps = {
   onReactShortcut: () => void; // Cmd/Ctrl+Enter
   renderMargin: (row: Row<Reaction>, isCurrent: boolean) => ReactNode;
   renderDetached: (detached: Reaction[]) => ReactNode;
+  // R4: page links computed for `notes` (they may lag a keystroke behind); a marker click opens one.
+  pageLinks: { notes: string; links: PageLink[] };
+  onOpenLink: (link: PageLink) => void;
   ref?: Ref<NotesHandle>;
 };
 
 const EMPTY_COPY = "Write what you notice as you read. Put the cursor in a paragraph and press React to hear back.";
 const CARD_GAP = 12; // px, var(--s3): between groups pushed together, and below the last one
 
-export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargin, renderDetached, ref }: NotesProps) {
+export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargin, renderDetached, pageLinks, onOpenLink, ref }: NotesProps) {
   const host = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const [caret, setCaret] = useState<number>(); // where the selection's head is, for the current paragraph
   // The editor is made once; this keeps its listeners pointing at the latest props.
-  const latest = useRef({ onChange, onReactShortcut });
+  const latest = useRef({ onChange, onReactShortcut, onOpenLink });
   useEffect(() => {
-    latest.current = { onChange, onReactShortcut };
+    latest.current = { onChange, onReactShortcut, onOpenLink };
   });
 
   useEffect(() => {
@@ -60,6 +65,16 @@ export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargi
           ]),
           markdownLanguage.extension,
           livePreview,
+          pageLinksField,
+          EditorView.domEventHandlers({
+            mousedown: (event, view) => {
+              const link = linkAt(view, event);
+              if (!link) return false;
+              event.preventDefault(); // the click opens the PDF; the caret stays where it was
+              latest.current.onOpenLink(link);
+              return true;
+            },
+          }),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-label": "Notes" }),
           placeholder(EMPTY_COPY),
@@ -90,6 +105,14 @@ export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargi
       annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
     });
   }, [notes]);
+
+  // Fresh links go in only when they were computed for exactly the text in the editor; stale ones
+  // would mark the wrong characters.
+  useEffect(() => {
+    const editor = view.current;
+    if (!editor || editor.state.doc.toString() !== pageLinks.notes) return;
+    editor.dispatch({ effects: setPageLinks.of(pageLinks.links) });
+  }, [pageLinks]);
 
   useImperativeHandle(ref, () => ({
     target: () => {

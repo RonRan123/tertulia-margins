@@ -48,6 +48,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | PDF view: pdfjs viewer with a floating toolbar (zoom, page, download, search) | browser's built-in viewer (D23) | D29 |
 | Top bar of icon + label toggles, ChatPDF-style | text switcher (D26) | D30 |
 | Reference text capped at 25K tokens; PDF page picker | whole reference text every call | D32 |
+| Page references in the notes linked to the PDF (exact, word overlap, page), as a computed layer | page numbers as plain text | D33 |
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
@@ -135,6 +136,8 @@ The route answers with NDJSON (one JSON event per line: for a reaction a `kind` 
 **Prompts are data, not code.** Each command's instructions live in `prompts/<command>.md`. Ronith writes and tunes these directly; they are the most important "code" in the project and the part that should carry his voice and judgment.
 
 **Commands are a table, not a class hierarchy.** A command is `{name, promptFile, maxTokens}` in `core/commands.ts` (a `model` column joins with routing, §6.4; D11). Adding a command is adding a row. The `/define` passage quote is plain code in the same module (`defineQuote`, `insertAfterLine`), run in the browser (D17).
+
+**Page links are a computed layer over the notes (D33).** `core/page-links.ts` finds page references in the notes (`[p. 42]`, `p. 42`, `page 42`, “…” (42), “…” — 42) and links each to the open book's PDF, free methods only and surest first: the quote found exactly (●), else the nearby paragraph sharing the most rare words (◐), else the estimated page (○); exact hits teach the book's PDF − paper page offset. The page recomputes links from the notes (deferred while typing) and the whole PDF's text; `lib/page-link-view.ts` draws them in the editor as an underline and a marker that opens the PDF at the page with the words selected. Nothing is written into the notes, so the markdown file and its export stay the reader's own.
 
 **Books are a library plus one key per book (D31).** `core/store` keeps a small library (the books' titles and which one is open) under `tertulia-margins:library`, and each book's reference text, notes, chat and margin threads under its own key in v1's shape, so saving one book never rewrites another's text. The first v2 load copies v1's state into "My first book" and leaves the v1 key as a backup. Switching books saves the open one first; while a reply streams, switching and deleting wait, so the reply can't land in the wrong book.
 
@@ -233,7 +236,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*
 - **Q8. PDF by URL (R3).** Fetching from the browser fails on most sites (CORS); a server route that fetches it works but is an open proxy on the public demo (D9). Options: browser fetch with a clear error, a size-capped route, or upload only.
 - **Q9. Book data model (R2).** *Resolved (D31): one notes file per book; v1's state becomes "My first book".*
-- **Q10. Page mismatch (R3+).** PDF pages often differ from the paper book (D13). A per-book page offset, the grounded text match from §6.1, or both?
+- **Q10. Page mismatch (R3+).** *Resolved (D33): both: page links match the cited text and learn a per-book offset from exact hits.*
 - **Q12. Sending parts of a book.** D32 caps the reference text at 25K tokens; Ronith wants to explore structured XML and sending only the relevant parts per call (relates to Q5).
 - **Q11. v2 time box.** How many hours the overhaul gets before Sprint 7 (D21).
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from "react";
 import type { EventBus, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import type { StoredPdf } from "@/lib/pdf-store.ts";
 import { openPdf } from "@/lib/pdf-import.ts";
@@ -9,7 +9,8 @@ import { DownloadIcon, MinusIcon, PlusIcon, ResetZoomIcon, SearchIcon } from "./
 // The book's PDF (D29): pdfjs's own viewer (pages, selectable text, search highlights) under a
 // floating toolbar like ChatPDF's: zoom out, fit width, zoom in, "N of M", download, search.
 // The PDF is read from the reader's browser (lib/pdf-store) and never uploaded anywhere.
-export type PdfViewerHandle = { goTo: (page: number) => void };
+// goTo's `highlight`: words to find and select on that page (a page link's quote, R4).
+export type PdfViewerHandle = { goTo: (page: number, highlight?: string) => void };
 
 type Matches = { current: number; total: number };
 
@@ -18,6 +19,7 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
   const viewer = useRef<PDFViewer>(null);
   const bus = useRef<EventBus>(null);
   const pendingPage = useRef<number>(undefined); // asked for before the pages were ready
+  const pendingHighlight = useRef<string>(undefined);
   const isFitted = useRef(false); // fit to width once, when first shown
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -26,6 +28,18 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Matches>();
   const [error, setError] = useState("");
+
+  const find = (text: string, type: "" | "again", findPrevious = false, highlightAll = true) =>
+    bus.current?.dispatch("find", {
+      source: null,
+      type,
+      query: text,
+      caseSensitive: false,
+      entireWord: false,
+      highlightAll,
+      findPrevious,
+      matchDiacritics: false,
+    });
 
   // A page asked for while the PDF is loading or hidden (another view) waits: pdfjs can't scroll a
   // hidden view, and re-fitting the width when it reappears would undo the jump.
@@ -36,7 +50,14 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     const pageNumber = Math.min(Math.max(1, pendingPage.current), pages.pagesCount);
     pendingPage.current = undefined;
     pages.scrollPageIntoView({ pageNumber });
+    // Find searches from the current page, which pdfjs updates once the scroll lands.
+    const highlight = pendingHighlight.current;
+    pendingHighlight.current = undefined;
+    if (highlight) setTimeout(() => find(highlight, "", false, false), 100);
   };
+  // The loading effect below runs once per PDF but should jump with the latest state.
+  const onPagesReady = useEffectEvent(() => jumpIfPending());
+
   // One viewer per PDF. pdf_viewer.mjs reads pdfjs from globalThis, so it's imported after it.
   useEffect(() => {
     let isCancelled = false;
@@ -58,7 +79,7 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
         if (container.current?.offsetParent == null) return;
         pages.currentScaleValue = "page-width";
         isFitted.current = true;
-        jumpIfPending();
+        onPagesReady();
       });
       eventBus.on("pagechanging", ({ pageNumber }: { pageNumber: number }) => {
         setPage(pageNumber);
@@ -88,8 +109,9 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     };
   }, [pdf]);
 
-  const goTo = (n: number) => {
+  const goTo = (n: number, highlight?: string) => {
     pendingPage.current = n;
+    pendingHighlight.current = highlight;
     jumpIfPending();
   };
 
@@ -112,18 +134,6 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     return () => observer.disconnect();
   });
   useImperativeHandle(ref, () => ({ goTo }));
-
-  const find = (text: string, type: "" | "again", findPrevious = false) =>
-    bus.current?.dispatch("find", {
-      source: null,
-      type,
-      query: text,
-      caseSensitive: false,
-      entireWord: false,
-      highlightAll: true,
-      findPrevious,
-      matchDiacritics: false,
-    });
 
   const closeSearch = () => {
     setIsSearching(false);
