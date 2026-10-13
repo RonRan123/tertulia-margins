@@ -68,6 +68,17 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [ ] Per-call usage rows; $3/day per-account cap enforced in the route.
 - **Verify:** two test accounts can't see each other's books or PDFs; a book edited on one browser shows on another; the cap refuses the call that would pass $3.
 
+## Tester polish (after H1; Ronith, 2026-10-12)
+**Goal:** the app feels right to testers before they're invited. Order: bug first, then editor, layout, messages.
+### T1: a PDF added to a new book shows without a reload
+- [ ] ~~Fix~~ *Not reproduced (2026-10-12), parked by Ronith:* headless Chrome showed the PDF at once for new book → Upload, a new book made while another's PDF was open, and a 60-page PDF over the cap (page picker); each survived a reload. Suspect if it returns: Reference text's "Import PDF" reads only the text and never stores or shows the PDF.
+### T2: Obsidian-style list keys (D36)
+- [x] With `@codemirror/lang-markdown`'s commands (`lib/list-keys.ts`): Enter continues `- `, `* `, `1. ` (numbered on), `- [ ] ` and `> `; Enter on an empty item ends the list; Backspace on a bare marker removes it; Tab / Shift-Tab indent and outdent a list item (elsewhere Tab keeps moving focus, so the editor isn't a keyboard trap). **Verify:** core-free editor checks in headless Chrome for each key; notes stay byte-identical otherwise; Ronith compares side by side with Obsidian and lists what still differs. *Done (headless Chrome, notes read back from storage):* `- one⏎two⏎⇥sub⏎sub2⏎⇧⇥three⏎⏎plain` → `- one\n- two\n\t- sub\n\t- sub2\n- three\nplain`; `1. first⏎second⏎⇥a⏎b⏎⇧⇥third` → `…\n\t1. a\n\t2. b\n3. third` (renumbered as Obsidian does); `- [x] done⏎` → `- [ ] `; `> a quote⏎` → `> `; Backspace on a bare `- ` removes it (nested: keeps the tab); Tab on a plain line moves focus, text unchanged; lint (now ignoring `.scratch/`), build, 132 tests green. Bundle +~190 KB minified (lang-markdown brings lang-html/css/js). *Not yet Obsidian:* nested bullets indent less than Obsidian's and have no indent guides (parking lot).
+### T3: a draggable divider between the notes and the right pane
+- [ ] Drag to resize (keyboard: arrow keys on the focused handle), width remembered with the layout in `core/store` UI state, sensible min/max; hidden on phones and in the "alone" views. **Verify:** drag changes both widths; reload keeps it; store test for the saved width.
+### T4: tester-friendly messages
+- [ ] Error codes shown to readers (`daily_limit`, `network_error`, `invite_required`, `reference_too_long`, …) become plain sentences, in one table; a quiet "N AI replies left today" near the AI controls. **Verify:** each code maps to a sentence (test); screenshot of one error and the counter.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
@@ -78,6 +89,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 
 ## Parking lot (ideas that are NOT in scope; write here instead of building)
 - EPUB upload; photo + OCR
+- Tester ideas Ronith passed on for now (2026-10-12): a Feedback link in the top bar (Google Form or email); a first-run public-domain sample book with a "how it works" screen; opening an existing Obsidian `.md` file into a book. Prompt caching + logging stays Sprint 7's first item
+- More Obsidian matching after T2: numbered lists renumbering, clickable `- [ ]` checkboxes, `==highlight==`, bullets drawn as dots with indent guides, `[[wikilinks]]`
 - Tensions across multiple books
 - Obsidian plugin / two-way sync
 - Open and save a vault `.md` file via the File System Access API (Chromium only; D7 revisit option, ~+0.5-1 h)

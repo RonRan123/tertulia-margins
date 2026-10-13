@@ -2,12 +2,13 @@
 // bold, italics, code, links, quotes, lists, [¶n] cites), and its symbols (#, **, >, [](url))
 // show only on the lines the selection touches, so the line you edit is plain markdown.
 // The text is never changed: decorations only style or hide characters. Raw HTML stays text.
-import { Language, defineLanguageFacet, syntaxTree } from "@codemirror/language";
+import { syntaxTree } from "@codemirror/language";
 import type { EditorState, Range } from "@codemirror/state";
 import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
-import { GFM, parser } from "@lezer/markdown";
 
-export const markdownLanguage = new Language(defineLanguageFacet(), parser.configure(GFM), [], "markdown");
+// lang-markdown's GFM language (D36): its list commands only run where it is the active language.
+// It also parses ~sub~, ^sup^ and :emoji:, which live preview leaves as plain text.
+export { markdownLanguage } from "@codemirror/lang-markdown";
 
 // [¶4], [¶3-4], [¶4, p. 12], [¶12 · p. 101], [¶2, PDF p. 3]
 const CITE = /\[¶\s*\d[^[\]\n]*\]/g;

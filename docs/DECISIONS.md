@@ -344,6 +344,16 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** it stops no one who clears site data, uses a private window or another browser, or calls the route directly; the Anthropic monthly limit stays the real ceiling. Replies vary ~10x in cost with the reference size.
 - **Revisit if:** spend nears the monthly limit (then a server-side cap, which needs D34 stage 2's database).
 
+## D36. Obsidian-style list keys from `@codemirror/lang-markdown`
+- **Status:** Accepted (2026-10-12, Ronith)
+- **Context:** in the notes, Enter after a bullet doesn't continue the list and Tab doesn't indent it, as Obsidian does. Obsidian is closed source, but its editor is CodeMirror 6, like ours (D25).
+- **Alternatives:** our own ~60 lines for continue, end and indent.
+- **Rules:** add `@codemirror/lang-markdown` (the official CodeMirror package, same family as our other `@codemirror/*` dependencies) for its list commands; Tab and Shift-Tab indent and outdent a list item with `@codemirror/commands` (already installed). Live preview keeps parsing with `@lezer/markdown` (D25).
+- **Why:** battle-tested list editing for one small dependency, against edge cases (nested numbering, task items, quotes) we'd otherwise rediscover.
+- **Cost we accept:** one more dependency, which brings `@codemirror/lang-html` (with its CSS and JavaScript parsers) and `@codemirror/autocomplete`: ~190 KB more minified JavaScript (measured at T2; Claude first described it as small). The notes now parse with lang-markdown's GFM language, which also reads `~sub~`, `^sup^` and `:emoji:` (shown as typed).
+- **As built:** `lib/list-keys.ts`; Obsidian's renumbering added on top (an indented ordered item restarts at 1, an outdented one continues the list above), and Backspace on a bare marker removes it outright.
+- **Revisit if:** it fights live preview's own parse or the page's load time suffers (then our own ~80 lines, now that the behaviour is pinned down).
+
 ---
 
 ## Template
