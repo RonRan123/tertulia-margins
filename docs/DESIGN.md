@@ -27,7 +27,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Passage-only knowledge for now | D5 |
 | Book text and PDFs stay in the reader's browser; never committed, never shipped | D7, D9, §4 |
 | Readers locate passages by the paper book's page; `[p. N]` markers are typed by the reader | D13, D15 |
-| Margin reactions (question, pushback, connection) as threads; router picks the kind | D18, D20 |
+| ~~Margin reactions (question, pushback, connection) as threads; router picks the kind~~ (replaced by daemons, D37) | D18, D20 |
 | Notes are one markdown string; export is the reader's words only | D17, D20 |
 | Product logic in `core/`, thin routes, commands and kinds as data tables | §6.1, CLAUDE.md |
 
@@ -52,6 +52,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
 | Hosted for invited testers: Vercel deploy behind an invite code (accounts and Supabase tabled) | BYO-key demo (D9) | D34 |
 | 60 AI replies per browser per day, counted in localStorage | no cap | D35 |
+| Daemons in the margin: named personas (The Author, The Devil's Advocate) react automatically with 1–2 sentence nuggets; a reviewer shows the best or none; React, router and threads removed (Sprint 8, planned) | React button, routed reactions as threads | D37 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -100,7 +101,7 @@ The interaction model is the product's whole differentiation, so it is specified
 2. The user writes notes in the notes column as they read, exactly as they would in Obsidian.
 3. The user selects a line in their notes and runs a command, or asks a free-form question in the chat.
 4. The AI replies in the chat (commands, questions) or the margin (reactions), citing paragraphs of the passage. Replies never edit the user's notes. Which of margin, PDF or chat fills the right pane is the view the user picked (D22).
-5. The user may press **React** on a note (the selection or the paragraph at the cursor): the AI answers in the margin column beside the notes with a probing question, a pushback cited `[¶n]`, or a connection to another passage. Each reaction is a thread the user can reply to. Nothing is added to the notes. The chat stays one view-switch away (D22; v1 had it in a drawer, D18; replaces Augment).
+5. As the user writes, **daemons** react on their own (D37, Sprint 8): once enough of the user's own words are new or changed and they pause, The Author and The Devil's Advocate each draft a short nugget (1–2 sentences or questions, cited `[¶n]`) or pass, and a reviewer puts the single best one in the margin beside its line, or nothing. Nothing is added to the notes. The chat stays one view-switch away (D22). *(Until Sprint 8 lands: the React button and reaction threads, D18/D20.)*
 6. Commands that point at the text (e.g. `/define`) also get a verbatim passage snippet with its `[¶n]`, pasted into the notes by the app (plain code, not the model) and marked as a quote. Commands run from a toolbar above the notes on the selected text; `/define` picks the occurrence nearest the cites around the selection, else the first (D17).
 7. Export produces one markdown file: frontmatter (date, reference page range), then the user's notes with their inline passage quotes. No AI-written text, no reference text (D17).
 
@@ -148,6 +149,8 @@ On the hosted app (D34), `proxy.ts` lets a request through only with the invite 
 **The PDF view is pdfjs's viewer with our toolbar (D29).** Each book's PDF is stored in IndexedDB (`lib/pdf-store.ts`, keyed by book id; D23). `PdfPane` shows a drop zone until there is one, then `PdfViewer`: pdfjs's `PDFViewer` (pages with a selectable text layer) and its find controller (highlighted matches), under a floating toolbar: zoom out, fit width, zoom in, "N of M", download, search. Adding a PDF fills the book's reference text from its text (`lib/pdf-import.ts`, D13), or asks first if there is some. Each open document gets its own pdfjs worker, closed with it. A labelled cite in AI text ("[¶3 · PDF p. 2]", `CitedText`) opens the PDF at that page (`citedPage` in `core/passage.ts`); a page asked for while the view is hidden waits until it is shown and fitted. MVP: the page as given. Later: match the cited text around that page (regex, then AI) so an off-by-a-few page still lands on the right passage.
 
 **Notes are one file with live preview (D25).** The notes are one markdown string in one CodeMirror editor (`app/components/Notes.tsx`). `lib/live-preview.ts` parses it with `@lezer/markdown` (GFM) and decorates it in place: headings, bold, italics, code, links, quotes, bullets and `[¶n]` cites render, and their symbols show only on the lines the selection touches. Decorations never change the text, and raw HTML stays text. Lists edit as in Obsidian (`lib/list-keys.ts`, D36): Enter continues an item or quote, Tab and Shift-Tab nest list items by a tab. `core/blocks.ts` still splits the notes into paragraphs (runs of non-blank lines): React acts on the selection or the paragraph at the caret, and the margin groups cards by the paragraph their excerpt starts in. The margin works like comments in a document: on wide screens each group starts level with its paragraph's first line and slides down past earlier groups (`stackCards`); on phones the cards list under the notes. *(v1: Jupyter-style blocks rendered with `marked`, D18/D20; superseded.)*
+
+**Daemons (D37, Sprint 8, planned) replace reactions.** A daemon is a named companion in the margin with one job: a persona (name, colour, voice/tone, personality, free-text prompt) combined with one action from a fixed, app-owned table (Ask, Counter, Evidence, Connect, …) that owns the citation rule, context and reply shape. Defaults: The Author (Connect, in the book's voice) and The Devil's Advocate (Counter). A run starts after an idle gap once 10+ lines of the reader's own words are new or changed (quotes, page markers and headings don't count; unchanged paragraphs are never re-sent). One panel call drafts a nugget or "pass" per daemon; a small reviewer call without the book shows the best one or none, with a floor of about one card per 15 lines; runners-up are saved to fill the floor without a call. Daemons have their own daily run cap. Chat and the panel call share one cached prefix: system prompt + whole reference text. The text below describes reactions as built until then.
 
 **Reactions go through `converse()` too (D18, D20).** A request with `reaction: {excerpt, kind?}` is a margin reaction. With no `kind`, a short non-streamed router call (`prompts/react-router.md`) picks question, pushback or connection; `converse()` yields the kind (the route sends it as a `kind` event), then streams the reply from `prompts/react-<kind>.md`, citations checked as usual. Kinds are a table in `core/reactions.ts`, like commands, next to the anchoring helpers (`reactTarget`, `findExcerpt`). A reply in a thread sends the kind it already has (no router call), the thread as `history` and the reply as `question`.
 
@@ -264,5 +267,6 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **¶n:** paragraph ID used for citations. Each ¶ also carries a page label (printed page if detected, else PDF page).
 - **Book (folder):** a sidebar entry holding one book's PDF / reference text, notes, chat and reactions (D22).
 - **View:** what the page shows besides the sidebar: Notes + margin, Notes only, PDF only, Chat only (D22).
+- **Daemon:** a named companion in the margin with one job: a persona plus one action. It reacts to the reader's notes with a short, cited nugget and never writes into them (D37).
 - **Augment:** the AI suggests an expansion of a note in chat; the user writes any note text themselves.
 - **TTFT:** time to first token of a streamed reply.

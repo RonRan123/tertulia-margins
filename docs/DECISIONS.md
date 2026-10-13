@@ -155,7 +155,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** the picked sentence is often wrong in real use.
 
 ## D18. Re-plan after Sprint 4: marginalia first, then blocks; export deprioritized (amends D6, D11, D16)
-- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view)
+- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view); marginalia superseded by D37 (daemons)
 - **Context:** after Sprint 4, the two-pane notes | chat UI feels unappealing and the chat not very useful. Ronith wants notes rendered like Obsidian and the AI to collaborate in the margin. Export is built (Sprint 4) but no longer a priority.
 - **Alternatives:** rendering by true live preview (CodeMirror 6, ~5 h) or a side-by-side preview; reactions triggered on leaving a block or after a typing pause; our own markdown renderer; blocks first, or both in one sprint.
 - **Rules:**
@@ -177,7 +177,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** reactions are off-voice badly enough to hide whether the feature works.
 
 ## D20. Sprint 5–6 shape: routed reactions, commands stay in chat, blocks split the notes text, excerpt anchors
-- **Status:** Accepted (2026-10-09, Ronith)
+- **Status:** Accepted (2026-10-09, Ronith); routed reactions and threads superseded by D37
 - **Context:** D18 left four choices open: who picks a reaction's kind, where command replies go, how blocks are stored, how reactions stay attached.
 - **Alternatives:** the reader always picks the kind from a menu; Define/Quiz replies as margin threads; blocks as an array with IDs; anchors by position.
 - **Rules:**
@@ -353,6 +353,26 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** one more dependency, which brings `@codemirror/lang-html` (with its CSS and JavaScript parsers) and `@codemirror/autocomplete`: ~190 KB more minified JavaScript (measured at T2; Claude first described it as small). The notes now parse with lang-markdown's GFM language, which also reads `~sub~`, `^sup^` and `:emoji:` (shown as typed).
 - **As built:** `lib/list-keys.ts`; Obsidian's renumbering added on top (an indented ordered item restarts at 1, an outdented one continues the list above), and Backspace on a bare marker removes it outright.
 - **Revisit if:** it fights live preview's own parse or the page's load time suffers (then our own ~80 lines, now that the behaviour is pinned down).
+
+## D37. Daemons replace margin reactions: automatic short nuggets, picked by a reviewer (supersedes D18's marginalia and D20's routed reactions)
+- **Status:** Accepted (2026-10-13, Ronith)
+- **Context:** Sprint 8 planning. The React button felt like the chore D18 warned of, and reactions ran a paragraph long. Ronith's references: Maggie Appleton's daemons (LM Sketchbook), the Obsidian "AI Editors" plugin, merryvj/llm-daemons.
+- **Alternatives:** a button per daemon; one button running both daemons; a run every ~4 s pause, with each daemon drafting in its own call and a full-price reviewer (~3 calls per 10 lines); counting runs against D35's 60-reply cap; keeping old cards read-only or hidden; custom daemons in this MVP; caching later in Sprint 7.
+- **Rules:**
+  - *Definition:* a daemon is a named companion in the margin with one job. It reacts to the reader's notes in its own voice, using the book as its evidence. It never writes into the notes, and its text is always marked as its own.
+  - *Persona × action:* a daemon is a persona (name, colour, voice/tone, personality, free-text prompt) combined with one action from a fixed, app-owned list (Ask, Counter, Evidence, Connect, Define, Quiz, …). The action owns the citation rule, the context and the reply shape, so a persona can't skip `[¶n]`. Daemons are rows in a data table.
+  - *Two defaults:* **The Author** (Connect: answers the note in the book's voice, first person, labelled "in the book's voice", every claim cited, "the book doesn't say" when silent) and **The Devil's Advocate** (Counter: the strongest opposing reading, plain and short, cited when it uses the text).
+  - *Nuggets:* a reply is 1–2 sentences or 1–2 questions, the most interesting point first, cited `[¶n]` (the cite opens the PDF page), so the reader can scan and decide whether to engage.
+  - *Automatic cadence:* a run starts after an idle gap (~20–30 s) once 10+ lines of the reader's own words are new or substantially changed since the daemons last saw them. Quotes copied from the book, page markers and headings don't count; unchanged paragraphs are never re-sent.
+  - *Draft, then review:* one panel call drafts a candidate from each daemon, or "pass", in one structured reply. A small separate reviewer call (no book, only the candidates, the excerpt and the cited paragraphs) shows the single best one, or none if nothing is significant. Floor: if ~15 lines have gone by with no card, the reviewer must pick when there is a candidate. Runners-up are saved per book and fill the floor later without a call, while their text is unchanged. All numbers go in `core/limits.ts`.
+  - *Cap:* daemons get their own daily run cap (separate from D35's chat replies), starting at 40 runs per browser per day; at the cap they pause quietly and chat keeps working.
+  - *Caching (simple):* one cached base prefix (system prompt + the whole reference text) shared by chat and the daemon panel call; each call's own instructions, notes and question come after it.
+  - *Removed:* the React button and its right-click menu, the router call and the three reaction kinds, and thread replies. Saved margin cards and threads are deleted from each book on load.
+  - *Later (Parking lot):* "Elaborate" and replies that open a thread on a nugget; custom daemons (a "New daemon" form); Socratic and Researcher/Recommend daemons (Recommend needs D5 reopened); other inline AI actions on a selection.
+  - *Prompts:* Claude drafts `prompts/daemon-*.md` and the reviewer prompt from the pushback and connection prompts (extends D19); Ronith refines them before merge.
+- **Why:** the reader writes and the margin quietly fills with the one point worth reading, in a voice that says who's speaking. Generating is separated from showing, so cost scales with how much the reader writes rather than how often they pause.
+- **Cost we accept:** testers' existing reactions are deleted. Automatic runs spend without a click; the daemon cap and the Anthropic monthly limit are the ceilings. The panel call blends both personas in one reply, so their voices may drift together. "Substantially changed" and "significant" are tuned by feel at first. The Author speaks in the first person as a real person, so the eval must test notes about things the book never discusses.
+- **Revisit if:** the voices blur (then one draft call per daemon); the margin feels too empty or too noisy (tune the thresholds); spend grows faster than notes do; the Author invents views (then third person: "the book argues…").
 
 ---
 

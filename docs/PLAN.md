@@ -74,10 +74,25 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [ ] ~~Fix~~ *Not reproduced (2026-10-12), parked by Ronith:* headless Chrome showed the PDF at once for new book → Upload, a new book made while another's PDF was open, and a 60-page PDF over the cap (page picker); each survived a reload. Suspect if it returns: Reference text's "Import PDF" reads only the text and never stores or shows the PDF.
 ### T2: Obsidian-style list keys (D36)
 - [x] With `@codemirror/lang-markdown`'s commands (`lib/list-keys.ts`): Enter continues `- `, `* `, `1. ` (numbered on), `- [ ] ` and `> `; Enter on an empty item ends the list; Backspace on a bare marker removes it; Tab / Shift-Tab indent and outdent a list item (elsewhere Tab keeps moving focus, so the editor isn't a keyboard trap). **Verify:** core-free editor checks in headless Chrome for each key; notes stay byte-identical otherwise; Ronith compares side by side with Obsidian and lists what still differs. *Done (headless Chrome, notes read back from storage):* `- one⏎two⏎⇥sub⏎sub2⏎⇧⇥three⏎⏎plain` → `- one\n- two\n\t- sub\n\t- sub2\n- three\nplain`; `1. first⏎second⏎⇥a⏎b⏎⇧⇥third` → `…\n\t1. a\n\t2. b\n3. third` (renumbered as Obsidian does); `- [x] done⏎` → `- [ ] `; `> a quote⏎` → `> `; Backspace on a bare `- ` removes it (nested: keeps the tab); Tab on a plain line moves focus, text unchanged; lint (now ignoring `.scratch/`), build, 132 tests green. Bundle +~190 KB minified (lang-markdown brings lang-html/css/js). *Not yet Obsidian:* nested bullets indent less than Obsidian's and have no indent guides (parking lot).
-### T3: a draggable divider between the notes and the right pane
-- [ ] Drag to resize (keyboard: arrow keys on the focused handle), width remembered with the layout in `core/store` UI state, sensible min/max; hidden on phones and in the "alone" views. **Verify:** drag changes both widths; reload keeps it; store test for the saved width.
+### T3: a draggable divider between the notes and the right pane (moved to S8.1)
+- [ ] ~~Drag to resize (keyboard: arrow keys on the focused handle), width remembered with the layout in `core/store` UI state, sensible min/max; hidden on phones and in the "alone" views.~~
 ### T4: tester-friendly messages
 - [ ] Error codes shown to readers (`daily_limit`, `network_error`, `invite_required`, `reference_too_long`, …) become plain sentences, in one table; a quiet "N AI replies left today" near the AI controls. **Verify:** each code maps to a sentence (test); screenshot of one error and the counter.
+
+## Sprint 8: daemons (D37; Ronith, 2026-10-13)
+**Goal:** the margin fills on its own with short, cited nuggets from named daemons, replacing React; plus the notes/right-pane divider. Order: divider, daemons (what readers get), context (what each daemon sees), framework (how it's organised). Sprint 7 (measure + write-up) follows.
+### S8.1: a draggable divider between the notes and the right pane (was T3)
+- [ ] Drag to resize (keyboard: arrow keys on the focused handle), width remembered with the layout in `core/store` UI state, sensible min/max; hidden on phones and in the "alone" views. **Verify:** drag changes both widths; reload keeps it; store test for the saved width.
+### S8.2: daemons (D37)
+- [ ] Daemon table in `core/` (persona × action) with The Author and The Devil's Advocate; panel draft + reviewer calls through `converse()`; nugget length rules; Claude drafts `prompts/daemon-*.md` and the reviewer prompt, Ronith refines.
+- [ ] Automatic cadence: idle gap + 10 changed lines of the reader's own words, seen-paragraph snapshots, runner-up pool, ~15-line floor, separate daily daemon cap; all numbers in `core/limits.ts`.
+- [ ] Remove React, its menu, the router, reaction kinds and thread replies; delete saved cards on load.
+- [ ] Simple caching: one cached prefix (system + whole reference text) shared by chat and the panel call.
+- **Verify:** _to set when the step starts_ (core tests for cadence and change detection; headless Chrome writing ~40 lines of notes on public-domain text shows 2–4 cards, none on pasted quotes; cache read on the second call).
+### S8.3: what each daemon sees (context, D38 to decide)
+- [ ] Per-action context recipes: whole book cached vs the section around the cited page vs retrieval vs tools; notes: excerpt, section, all, or a reader summary. Answers Q5 and Q12. Measure on one real book before choosing.
+### S8.4: agent framework (D39 to decide)
+- [ ] One runtime for daemons: who (persona), when (trigger), what it sees (context), what it can look up (tools), where it lands (margin); `checkCitations` and evals as guardrails. Includes the LangChain question (Claude's recommendation: no; Anthropic SDK + our own code).
 
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
@@ -88,6 +103,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ---
 
 ## Parking lot (ideas that are NOT in scope; write here instead of building)
+- After D37: "Elaborate" and replies that open a thread on a daemon nugget; custom daemons (a "New daemon" form); a Socratic daemon; a Researcher/Recommend daemon (outside articles and books, needs D5 reopened and a way to verify sources); other inline AI actions on a selection
 - EPUB upload; photo + OCR
 - Tester ideas Ronith passed on for now (2026-10-12): a Feedback link in the top bar (Google Form or email); a first-run public-domain sample book with a "how it works" screen; opening an existing Obsidian `.md` file into a book. Prompt caching + logging stays Sprint 7's first item
 - More Obsidian matching after T2: numbered lists renumbering, clickable `- [ ]` checkboxes, `==highlight==`, bullets drawn as dots with indent guides, `[[wikilinks]]`
