@@ -1,5 +1,6 @@
 // The reference text: paragraphs (for [¶n]) and the page each one is on (D13).
 import { citationPattern } from "./citations.ts";
+import { LIMITS } from "./limits.ts";
 
 // [¶n] is 1-based: paragraphs[n - 1]. `page` is a display label like "p. 101" or "PDF pp. 81–82".
 export type Paragraph = { text: string; page?: string };
@@ -111,7 +112,7 @@ export function citedPage(cite: string): number | undefined {
 // ---- The reference-text cap (D32) ----
 // Every AI call sends the whole reference text, so its size is capped: ~25K tokens is 2–3
 // chapters and ~5¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
-export const REFERENCE_TOKEN_LIMIT = 25_000;
+export const REFERENCE_TOKEN_LIMIT = LIMITS.referenceTokens; // set in core/limits.ts
 export const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 export const isReferenceTooLong = (reference: string) => estimateTokens(reference) > REFERENCE_TOKEN_LIMIT;
 

@@ -16,6 +16,9 @@ books/
 data/
 *.epub
 
+# Claude's test files (logs, cookies, screenshots, browser profile): kept inside the project
+.scratch/
+
 # eval run outputs (scorecards worth keeping go in docs/)
 evals/runs/
 

@@ -2,15 +2,16 @@
 // Like COMMANDS, each kind is a row; a router call picks the kind when the reader doesn't.
 // Browser-safe (no node:fs): the UI imports the kinds and the anchoring helpers too.
 import type { Turn } from "./converse.ts";
+import { LIMITS } from "./limits.ts";
 
 export const REACTIONS = {
-  question: { promptFile: "react-question.md", maxTokens: 4000 },
-  pushback: { promptFile: "react-pushback.md", maxTokens: 4000 },
-  connection: { promptFile: "react-connection.md", maxTokens: 4000 },
+  question: { promptFile: "react-question.md", maxTokens: LIMITS.replyTokens.question },
+  pushback: { promptFile: "react-pushback.md", maxTokens: LIMITS.replyTokens.pushback },
+  connection: { promptFile: "react-connection.md", maxTokens: LIMITS.replyTokens.connection },
 };
 // The router answers one word, but Sonnet 5.5 thinks adaptively even at effort low (no way to turn
 // it off without changing the cached request shape), so leave room for that before the word.
-export const ROUTER = { promptFile: "react-router.md", maxTokens: 1000 };
+export const ROUTER = { promptFile: "react-router.md", maxTokens: LIMITS.replyTokens.router };
 
 export type ReactionKind = keyof typeof REACTIONS;
 // `kind` absent → the router picks it. A thread reply always sends the kind it already has.

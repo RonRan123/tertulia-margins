@@ -50,6 +50,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Reference text capped at 25K tokens; PDF page picker | whole reference text every call | D32 |
 | Page references in the notes linked to the PDF (exact, word overlap, page), as a computed layer | page numbers as plain text | D33 |
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
+| Hosted for invited testers: Vercel deploy, then Supabase accounts and data | BYO-key demo (D9), browser-only storage (D7) | D34 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -77,7 +78,7 @@ These are deliberately excluded so they cannot creep back in silently.
 - **Rich-text editor.** The notes are plain markdown text. D25 adds CodeMirror live preview, which only styles that text; no WYSIWYG model, no formatting toolbar.
 - **A reading app.** The PDF view is for checking a source, not for reading the book in the app (D22 reopens the view D14 closed; this line keeps its spirit). No annotation on the PDF itself.
 - **Tensions across a body of work** (multiple books/authors). This is a research problem. v4 does one book only.
-- **Accounts, auth, multi-user, sync.** Single user, single browser.
+- **Sharing, collaboration, multi-user books.** ~~Accounts, auth, sync~~: D34 adds invite-only accounts and hosted data; each book still belongs to one user.
 - **OCR / photo input** in the first week.
 - **DRM'd ebooks.** We never handle DRM.
 - **Recommendations or summaries.** Blinkist-style summaries are the opposite of the point.
@@ -86,7 +87,7 @@ These are deliberately excluded so they cannot creep back in silently.
 
 - **21 hours total.** Every decision is judged first by hours saved.
 - **The user is learning.** Ronith must understand and make the key decisions, so the code must be legible to someone who did not type it.
-- **Copyright.** Book text is the user's private input. It is never committed to git and never shipped in the public demo.
+- **Copyright.** Book text is the user's private input. It is never committed to git. On the hosted app (D34) each user's books are private to them, and the landing page asks testers to upload only books they own.
 - **Cost.** Personal API key; a session should cost cents, not dollars. Measured, not guessed.
 
 ## 5. The core loop
@@ -125,7 +126,7 @@ Browser (one page)        [ Notes+Margin | Notes | PDF | Chat ]   ← view switc
   prompts/  (markdown files the user owns and edits)
 ```
 
-The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
+On the hosted app (D34), `proxy.ts` lets a request through only with the invite cookie that `/invite` sets (off when `INVITE_CODE` is unset). The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
 
 ### 6.1 Why it is shaped like this
 
@@ -230,7 +231,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q1. Storage.** *Resolved (D7): browser localStorage behind a small `store` module, plus markdown export.*
 - **Q2. Outside knowledge.** *Resolved (D5): strictly the passage for the MVP; labelled outside knowledge is added later.*
 - **Q3. Model per command.** Confirm the §6.4 routing after measuring.
-- **Q4. Hosting.** *Resolved (D9): public Vercel demo where visitors bring their own API key; public-domain sample text only.*
+- **Q4. Hosting.** *Resolved (D34, superseding D9): Vercel + Supabase for invited testers; stage 1 deploys behind an invite code, stage 2 adds magic-link accounts and hosted data; Ronith's key with a $3/day per-account cap.*
 - **Q5. v3 approach.** Long-context + caching vs chunked retrieval.
 - **Q6. Write-up audience.** *Resolved (D10): LLM engineers, with a one-paragraph product story and screenshots up top.*
 - **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*
