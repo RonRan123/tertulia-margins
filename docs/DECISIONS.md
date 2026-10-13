@@ -51,7 +51,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** typing everything yourself proves too slow in real use.
 
 ## D7. Storage: browser localStorage + markdown export (Q1)
-- **Status:** Accepted (2026-10-08, Ronith); amended by D23 (PDFs go in IndexedDB)
+- **Status:** Accepted (2026-10-08, Ronith); amended by D23 (PDFs go in IndexedDB); superseded by D34 stage 2 (data moves to Supabase)
 - **Context:** passage and notes must survive a reload; D1 chose a Vercel-deployable stack.
 - **Alternatives:** `.md` files on disk through route handlers (~3 h, needs a writable disk); SQLite (3-4 h, new dependency, same disk limit).
 - **Why:** about 2 h cheaper than the alternatives and keeps the Vercel path open. Only the `store` module touches storage, so swapping later is one module.
@@ -69,7 +69,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** printed-page detection proves unreliable (fall back to PDF page numbers only), or Days 1-2 slip.
 
 ## D9. Hosting: public demo, bring-your-own API key (Q4)
-- **Status:** Accepted (2026-10-08, Ronith)
+- **Status:** Superseded by D34 (2026-10-12, Ronith)
 - **Context:** a live link helps the portfolio; Anthropic API cost and book copyright rule out an open demo on Ronith's key with uploaded books.
 - **Alternatives:** local-only with screenshots (0 h); public demo on Ronith's key with rate limit and spend cap (2-3 h, open-ended cost).
 - **Why:** gives a live link for about 1 h with no cost exposure. D1 and D7 already allow it (Vercel, browser storage).
@@ -322,6 +322,18 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** gives most references an exact or near-exact link at no cost, and keeps the markdown file the reader's own.
 - **Cost we accept:** paraphrases only link by shared words (no meaning); a wrong link can't be corrected by hand; links are only as good as the PDF's text layer.
 - **Revisit if:** too many ◐/○ links land wrong (then embeddings or Claude ranking, Parking lot), or Ronith wants to fix links by hand.
+
+## D34. Hosted for testers: Vercel + Supabase, staged (supersedes D9; D7 at stage 2; amends DESIGN.md §3)
+- **Status:** Accepted (2026-10-12, Ronith)
+- **Context:** Ronith wants outside testers for feedback: a public URL, a landing page, sign-up and login, and books and notes in a database. Accounts and sync were non-goals (§3), data lived in the browser (D7), and the planned demo was bring-your-own-key with public-domain text (D9).
+- **Alternatives:** accounts and Supabase all at once before anyone tests (~10–12 h); accounts with notes in the database but book text and PDFs left in the browser (~7–8 h; a new device loses the book); deploy only, behind an invite code, no accounts (~2 h).
+- **Rules:**
+  - *Stage 1 (~2 h):* deploy the app as-is to Vercel behind a shared invite code; Ronith's Anthropic key on the server; route size caps (Parking lot) and a global daily spend ceiling (amount set by Ronith in stage 1; proposed $20). Data stays in each tester's browser.
+  - *Stage 2 (~8–10 h):* Supabase magic-link sign-in limited to an invite list; a landing page with sign-up and login; every book's title, reference text, notes, chat and threads in Postgres and its PDF in a private Storage bucket, each row and file visible only to its owner (row-level security); a per-account cap of $3/day of AI usage, counted from per-call usage rows (which also feed Sprint 7's cost logging). A tester's existing browser data is offered for import on first login.
+  - *Copyright:* each user's books are private to that user; the landing page says to upload only books you own. Book text is still never committed to git.
+- **Why:** accounts with hosted data are the only option where a tester's work persists across devices; staging gets feedback in about 2 h instead of 12.
+- **Cost we accept:** ~10–12 h before Sprint 7; Ronith pays testers' AI use (up to $3/day each); the app hosts private copies of users' books; `core/store` becomes async.
+- **Revisit if:** spend nears the ceiling, testers ask to share books, or a rights holder complains.
 
 ---
 

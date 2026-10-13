@@ -54,6 +54,17 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] `core/page-links.ts`: find page references in the notes (bracketed, loose, after a quote), link each to the PDF by exact quote, then word overlap near the estimated page, then page alone; learn the PDF − book page offset from exact hits. The PDF's text is split at every page marker so each piece knows its page. **Verify:** 7 core tests (every reference form once; cites, roman numerals and stray numbers ignored; quote/blockquote/sentence context; exact + offset + overlap + page; quotes, case, spacing, hyphens; PDF-page refs and clamping; marker splitting).
 - [x] Editor layer (`lib/page-link-view.ts`): references underlined, ●/◐/○ marker after each, a click opens the PDF at the page and selects the words; nothing written to the notes. **Verify:** headless Chrome with a PDF whose book page N is PDF page N+2: five references linked to PDF pages 5 (exact), 4 (overlap), 7 (overlap), 8 (exact), 6 (page, offset +2 learned); notes byte-identical after linking; clicking ● opened page 5 with the quote selected, ◐ opened page 7 with the paragraph's start selected; clicking the reference text itself opened page 5 too, a plain click on it while editing its line only placed the caret, ⌘-click there opened page 8; typing above them kept the marks on the references; 130 tests, lint, build green.
 
+## Hosted for testers (D34)
+**Goal:** invited testers use the app at a public URL. Sprint 7 follows.
+### H1: deploy behind an invite code (~2 h)
+- [ ] Vercel project, `ANTHROPIC_API_KEY` on the server, shared invite code, route size caps, global daily spend ceiling (Ronith sets the amount).
+- **Verify:** the public URL refuses calls without the code; with it, a chat turn streams; an oversized body is refused before any paid call.
+### H2: accounts and hosted data (~8–10 h; steps detailed at the start of H2)
+- [ ] Supabase project, schema and row-level security; magic-link login limited to an invite list; landing page.
+- [ ] `core/store` reads and writes Supabase; PDFs in a private bucket; import of existing browser data on first login.
+- [ ] Per-call usage rows; $3/day per-account cap enforced in the route.
+- **Verify:** two test accounts can't see each other's books or PDFs; a book edited on one browser shows on another; the cap refuses the call that would pass $3.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
@@ -77,7 +88,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Sprint 5 QA: "Not in the text" (system.md's wording) appears capitalised mid-sentence ("Whether he'll go is Not in the text here."), Ronith's prompt; React on a paragraph that has a Define quote pasted under it sends the quote line in the excerpt; the router call's tokens aren't in `stats` (Sprint 7 cost logging must add them); at 48–84rem Define/Quiz don't auto-open the drawer (unread dot instead) because it would cover the margin
 - Define: the quote is inserted with no undo (Cmd+Z); running Define twice on the same word inserts the quote twice; the status line is truncated at phone width with no tooltip
 - Export: notes that start with their own `---` frontmatter get a second block (Obsidian shows it as a rule); the page range uses first/last label in order, so out-of-order markers read "p. 5 to p. 4"
-- Route size caps (passage length, turns): needed before the public demo (Sprint 5, D9)
+- ~~Route size caps (passage length, turns)~~ → H1 (D34)
 - Labelled, opt-in outside knowledge in a separate uncited block (D5; post-MVP)
 - ~~UX redesign: marginalia-first~~ → scheduled by D18 (Sprints 5–6)
 - Per-book page offset so PDF pages map to the paper book's pages (Q10 option)
@@ -93,7 +104,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - Smarter margin trigger (Ronith, D18): instead of a per-block button, reactions that thread and connect across blocks, or a periodic pass over all notes and thoughts. "Every block seems forced and overwhelming."
 - Commands typed inside a block, Jupyter-style (`/quiz`, `/define` run from the notes; Ronith, D18). Needs a D6 check: where the AI's answer lands
 - Moved out by D18: `/expand` on selection; model routing per command (Q3); book-level memory (Q5: long-context vs retrieval); `/tensions` over one book; cost-per-session readout in the UI
-- Public demo deploy, bring-your-own API key (D9, ~1 h); needs the route size caps above (moved out by D18)
+- ~~Public demo deploy, bring-your-own API key (D9)~~ → superseded by D34 (H1–H2)
   - Open questions for the `/decide`: (a) D6 says AI text lives only in the chat pane, so margin comments need a visibly distinct AI-only area that never edits notes, and the invariant needs restating; (b) trigger and cost (on pause, per paragraph, on a button?), since auto-calls multiply spend and interact with caching (Sprint 5); (c) probing questions vs. grounded claims: do they need `[¶n]` citations and `checkCitations`?; (d) how this relates to Augment and disagreement flags (Sprint 5), which may fold into it; (e) whether it replaces `/define` and `/quiz` in Sprint 4 or sits beside them.
 
 ## Time log
