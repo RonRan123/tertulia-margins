@@ -1,7 +1,7 @@
 // Sprint 2 test pass: PDF import → reference text → parsePassage, plus [p. N] marker edge cases.
 import { expect, test } from "vitest";
 import { checkCitations } from "./citations.ts";
-import { parsePassage } from "./passage.ts";
+import { parsePages, parsePassage } from "./passage.ts";
 import { paragraphsFromPages, type PdfPage, type PdfTextItem } from "./pdf-paragraphs.ts";
 
 const referenceTextFromPages = (pages: PdfPage[]) => paragraphsFromPages(pages).text;
@@ -92,8 +92,7 @@ test("a verbatim quote across a hyphen rejoin passes checkCitations", () => {
       { text: "four, then stopped." },
     ]),
   ]);
-  const paragraphs = parsePassage(reference).map((p) => p.text);
-  expect(checkCitations('She writes "counted to twenty-four, then stopped" [¶1].', paragraphs)[0].status).toBe("ok");
+  expect(checkCitations('She writes "counted to twenty-four, then stopped" [p. 1].', parsePages(reference))[0].status).toBe("ok");
 });
 
 // Regression (passage.ts): stripping a marker that sits right before punctuation left "word ,".

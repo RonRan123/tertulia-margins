@@ -158,7 +158,7 @@ export function CitationWarnings({ citations }: { citations?: CitationCheck[] })
     <ul className="warning">
       {failed.map((c, i) => (
         <li key={i}>
-          “{c.quote}”{c.cited.length > 0 && ` [¶${c.cited.join(", ")}]`}: {c.status}
+          “{c.quote}”{c.pages?.length > 0 && ` (p. ${c.pages.join("–")})`}: {c.status}
         </li>
       ))}
     </ul>

@@ -28,7 +28,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** v3 (whole book) needs it, or pasting proves harder than the Obsidian habit.
 
 ## D4. Grounding via paragraph IDs + deterministic citation check
-- **Status:** Provisional (2026-10-08), proposed in DESIGN.md §6.2
+- **Status:** Provisional (2026-10-08), proposed in DESIGN.md §6.2; paragraph IDs replaced by page cites in D38 (the deterministic check stays)
 - **Alternatives:** prompt-only grounding; Anthropic citations API feature.
 - **Why:** a check we control makes hallucination a number, not a vibe.
 - **Open sub-question:** compare against the API's built-in citations on day 2 (`/decide` then).
@@ -373,6 +373,21 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** the reader writes and the margin quietly fills with the one point worth reading, in a voice that says who's speaking. Generating is separated from showing, so cost scales with how much the reader writes rather than how often they pause.
 - **Cost we accept:** testers' existing reactions are deleted. Automatic runs spend without a click; the daemon cap and the Anthropic monthly limit are the ceilings. The panel call blends both personas in one reply, so their voices may drift together. "Substantially changed" and "significant" are tuned by feel at first. The Author speaks in the first person as a real person, so the eval must test notes about things the book never discusses.
 - **Revisit if:** the voices blur (then one draft call per daemon); the margin feels too empty or too noisy (tune the thresholds); spend grows faster than notes do; the Author invents views (then third person: "the book argues…").
+
+## D38. AI cites pages, not paragraphs, and only when it quotes or points at a passage; daemons get their own role (amends D4, D13, D37)
+- **Status:** Accepted (2026-10-13, Ronith)
+- **Context:** reviewing S8.2a, Ronith found the `[¶n · PDF p. 2]` cites cluttered and ugly and the daemon prompts basic. He wants a plain page number the reader can click to see the cited section highlighted in the PDF, and prompts that follow current agent-prompting practice.
+- **Alternatives:** the model keeps citing `[¶n]` and the UI shows only a page link (keeps paragraph-level checks); a page cite on every claim; asking for page markers before the AI works; `(p. 12)` as the written form; daemons keep chat's `system.md` with nugget rules in the user turn.
+- **Rules:**
+  - *What the model sees:* the reference text split at its page markers into `<page n="…">` blocks inside `<book_text>`, placed first, before any instructions (long-context practice; also the prefix every call shares, for caching). Text with no markers is sent unsplit. Paragraph labels `[¶n]` are gone.
+  - *When to cite:* when AI text quotes the book or points to a specific passage, it cites the page as `[p. N]` (or `[pp. N–M]`), N being the `<page>` it came from. General remarks need no cite. Unsupported claims still say "not in the text".
+  - *Check (`checkCitations`):* every quote of three words or more is checked: with a cite in its sentence, it must be on that page (or run into the next one); without a cite, it must be in the book or in the reader's notes. Codes: `page_not_found`, `quote_not_on_page`, `quote_not_in_text`. Quotes of the reader's notes stop being false alarms.
+  - *What the reader sees:* a cite renders as a small "p. 12" link; a click opens the PDF at the matching page with the quote selected, found the same way as page references in the notes (D33: exact quote, then word overlap, then the page). Old messages with `[¶n]` render as before.
+  - *Daemon role:* a daemon run's instructions are their own system prompt (`prompts/daemon-role.md`), after the book; chat, React and commands keep `system.md` there. Daemon and reviewer prompts follow Anthropic's prompting guidance: say why, show 3–5 canonical examples, say what to do, "think it through before you answer" for JSON on reasoning tasks.
+  - *Prompts:* Ronith's `system.md`, `define.md` and `quiz.md` change only where they name `[¶n]`, as a diff for his approval.
+- **Why:** a page is what a reader of a paper book looks for, and a click shows the exact words; the model reads page numbers from the text rather than guessing them, so D13's protection holds.
+- **Cost we accept:** a page holds several paragraphs, so a cite is checked less precisely than a `[¶n]` was; claims without a quote aren't checked at all; a book typed with paper page markers and a separate PDF links through D33's estimate when a cite has no quote.
+- **Revisit if:** cites land on the wrong page often, or replies stop citing what they quote.
 
 ---
 

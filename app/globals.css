@@ -1122,6 +1122,29 @@ main[data-view="chat"] .panes {
   color: var(--ai);
 }
 
+/* A page cite in AI text (D38): a small, quiet "p. 12" that opens the PDF at the passage. */
+.page-cite {
+  display: inline;
+  padding: 0 0.15em;
+  font: inherit;
+  font-size: 0.8em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: none;
+  border: 0;
+}
+
+button.page-cite {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+button.page-cite:hover,
+button.page-cite:focus-visible {
+  color: var(--ai);
+}
+
 /* Chat alone keeps a readable line length. */
 main[data-view="chat"] .chat-pane {
   width: 100%;

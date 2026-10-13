@@ -84,3 +84,10 @@ test("a paragraph the import joined across a page break is split at the marker, 
     { text: "More on five.", page: 5 },
   ]);
 });
+
+// Regression (S8.2a, an AI reply): a short straight-quoted phrase before a long one paired the
+// short quote's closing mark with the long one's opening, so the cite got the text between them.
+test("straight quotes pair in order; a short quote before a long one doesn't swallow the text between", () => {
+  const text = 'Her "large fortune" echoes the opening line\'s "a single man in possession of a good fortune" [p. 1].';
+  expect(findPageRefs(text)[0].quote).toBe("a single man in possession of a good fortune");
+});

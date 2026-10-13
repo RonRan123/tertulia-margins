@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 import { checkCitations } from "./citations.ts";
 import { COMMANDS, commandLabel, defineQuote, insertAfterLine, isDefinable, trimPhrase } from "./commands.ts";
-import { parsePassage } from "./passage.ts";
+import { parsePages } from "./passage.ts";
 
 // Word "levity" on p. 5 and on p. 50; "gravitas" only on p. 5.
 const passage = [
@@ -108,8 +108,7 @@ test("trimPhrase drops markdown and punctuation at the ends only", () => {
 test("the quoted sentence is verbatim: checkCitations accepts it", () => {
   const quote = quoteFor("[p. 48] levity", "levity")!;
   const sentence = quote.match(/“(.*)”/)![1];
-  const paragraphs = parsePassage(passage).map((p) => p.text);
-  expect(checkCitations(`“${sentence}” [¶3]`, paragraphs)).toEqual([{ quote: sentence, cited: [3], status: "ok" }]);
+  expect(checkCitations(`“${sentence}” [p. 50]`, parsePages(passage))).toEqual([{ quote: sentence, pages: ["50"], status: "ok" }]);
 });
 
 test("insert goes on the line after the selection's last line, even when selected mid-line", () => {

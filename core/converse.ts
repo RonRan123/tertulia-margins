@@ -3,9 +3,10 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
 import { COMMANDS, isCommandName, type Command } from "./commands.ts";
+import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type Nugget } from "./daemons.ts";
 import { LIMITS } from "./limits.ts";
-import { isReferenceTooLong, parsePassage } from "./passage.ts";
-import { isReactionKind, parseRouterKind, REACTIONS, ROUTER, type ReactionKind, type ReactionRequest } from "./reactions.ts";
+import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
+import { findExcerpt, isReactionKind, parseRouterKind, REACTIONS, ROUTER, type ReactionKind, type ReactionRequest } from "./reactions.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
@@ -24,6 +25,7 @@ export type ConverseRequest = {
   book?: Book;
   command?: Command;
   reaction?: ReactionRequest;
+  daemons?: DaemonsRequest; // a daemon run (D37): no question, no history
 };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
 export type ConverseRequestError =
@@ -42,10 +44,11 @@ export type ConverseRequestError =
   | "command_unknown"
   | "selection_missing" // /define needs a selected word
   | "reaction_invalid" // not { excerpt: string, kind? }
+  | "daemons_invalid" // not { excerpt: string, mustPick?: boolean }
   | "excerpt_missing"
   | "kind_unknown"
   | "kind_missing" // a thread reply must say its kind: the router only runs on a first reaction
-  | "request_conflict"; // a command and a reaction in one request
+  | "request_conflict"; // more than one of a command, a reaction and a daemon run in one request
 
 export type ConverseStats = {
   model: string;
@@ -53,6 +56,7 @@ export type ConverseStats = {
   ttftMs: number | null; // time to first text token; null if no text came back
   totalMs: number;
   usage: Anthropic.Beta.BetaUsage;
+  reviewerUsage?: Anthropic.Beta.BetaUsage; // a daemon run's second call, when it ran
   citations: CitationCheck[];
 };
 
@@ -60,11 +64,14 @@ export type ConverseStats = {
 // "kind" event first, then a "text" event per delta, then "done" or "error".
 export type ConverseEvent =
   | { type: "kind"; kind: ReactionKind }
+  // A daemon run's result: every nugget that survived the grounding check, and the one the reviewer
+  // picked to show (null: nothing worth interrupting the reader). The rest are runners-up.
+  | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[] }
   | { type: "text"; text: string }
   | { type: "done"; stats: ConverseStats }
   | { type: "error"; code: ConverseErrorCode };
 // What converse() yields while it runs; the route forwards each one as is.
-export type ConverseChunk = Extract<ConverseEvent, { type: "kind" | "text" }>;
+export type ConverseChunk = Extract<ConverseEvent, { type: "kind" | "text" | "daemons" }>;
 
 // prompts/*.md are Ronith's: drop the owner comment before sending.
 function readPrompt(file: string): string {
@@ -80,10 +87,10 @@ function systemPrompt(book: Book = {}): string {
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, notes, history, book, command, reaction } = body;
+  const { passage, question, notes, history, book, command, reaction, daemons } = body;
   if (!isText(passage)) return { error: "passage_missing" };
   const isFirstReaction = reaction !== undefined && !(Array.isArray(history) && history.length > 0);
-  const isQuestionOptional = isFirstReaction && (question === undefined || typeof question === "string");
+  const isQuestionOptional = (isFirstReaction || daemons !== undefined) && (question === undefined || typeof question === "string");
   if (!isText(question) && !isQuestionOptional) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
   if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
@@ -118,6 +125,12 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   // A thread starts with the AI's reaction: core re-sends the opening user turn itself.
   if (isReply && (history as Turn[])[0].role !== "assistant") return { error: "history_invalid" };
 
+  if (daemons !== undefined && (command !== undefined || reaction !== undefined)) return { error: "request_conflict" };
+  const isDaemonsShaped = daemons === undefined || (isRecord(daemons) && typeof daemons.excerpt === "string" &&
+    (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean"));
+  if (!isDaemonsShaped) return { error: "daemons_invalid" };
+  if (daemons !== undefined && !isText(daemons.excerpt)) return { error: "excerpt_missing" };
+
   return {
     passage,
     question: typeof question === "string" ? question : "",
@@ -126,6 +139,7 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
     book: book === undefined ? undefined : pickBook(book as Book),
     ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
     ...(reaction !== undefined && { reaction: pickReaction(reaction as ReactionRequest) }),
+    ...(daemons !== undefined && { daemons: { excerpt: daemons.excerpt as string, mustPick: daemons.mustPick === true } }),
   };
 }
 
@@ -143,12 +157,13 @@ export async function* converse(
   client: Anthropic = new Anthropic(), // reads ANTHROPIC_API_KEY
 ): AsyncGenerator<ConverseChunk, ConverseStats> {
   const start = performance.now(); // before the router: TTFT is what the reader waits for
+  if (request.daemons) return yield* runDaemons(client, request, request.daemons, start, signal);
   if (request.reaction) {
     const kind = request.reaction.kind ?? (await routeReaction(client, request, signal));
     request = { ...request, reaction: { ...request.reaction, kind } };
     yield { type: "kind", kind };
   }
-  const { paragraphs, system, messages, maxTokens } = buildContext(request);
+  const { pages, system, messages, maxTokens } = buildContext(request);
   let ttftMs: number | null = null;
   let text = "";
 
@@ -176,7 +191,7 @@ export async function* converse(
     ttftMs,
     totalMs: performance.now() - start,
     usage: final.usage,
-    citations: checkCitations(text, paragraphs),
+    citations: checkCitations(text, pages, request.notes),
   };
 }
 
@@ -196,6 +211,152 @@ async function routeReaction(client: Anthropic, request: ConverseRequest, signal
   return parseRouterKind(answer);
 }
 
+// A daemon run (D37): one panel call where every daemon drafts a nugget or passes, a grounding
+// filter, then (only if there is a choice to make) a small reviewer call that picks one or none.
+// Not streamed: nuggets are short and only the reviewer's pick is shown.
+async function* runDaemons(
+  client: Anthropic,
+  request: ConverseRequest,
+  run: DaemonsRequest,
+  start: number,
+  signal?: AbortSignal,
+): AsyncGenerator<ConverseChunk, ConverseStats> {
+  const { pages, system } = systemBlocks(request, "daemon-role.md");
+  const panel = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: LIMITS.replyTokens.panel,
+    output_config: { effort: "low", format: { type: "json_schema", schema: PANEL_SCHEMA } },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system,
+    messages: [{ role: "user", content: panelTurn(run.excerpt) }],
+  }, { signal });
+  // Structured output cut off by max_tokens may still parse, but it is a failed run (Sonnet 5.5 guide).
+  const isCutOff = panel.stop_reason === "max_tokens";
+  const nuggets = isCutOff ? [] : groundedNuggets(jsonOf(panel), pages, request.notes ?? "", run.excerpt);
+
+  const { pick, usage: reviewerUsage } = await reviewNuggets(client, nuggets, pages, run, signal);
+  yield { type: "daemons", pick, nuggets };
+  const picked = nuggets.find((n) => n.daemon === pick);
+  return {
+    model: panel.model,
+    stopReason: panel.stop_reason,
+    ttftMs: null,
+    totalMs: performance.now() - start,
+    usage: panel.usage,
+    ...(reviewerUsage && { reviewerUsage }),
+    citations: picked ? checkCitations(picked.text, pages, request.notes) : [],
+  };
+}
+
+const PANEL_SCHEMA = {
+  type: "object",
+  properties: {
+    drafts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          daemon: { type: "string", enum: DAEMON_IDS },
+          pass: { type: "boolean" },
+          nugget: { type: "string" },
+          anchor: { type: "string" },
+        },
+        required: ["daemon", "pass", "nugget", "anchor"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["drafts"],
+  additionalProperties: false,
+};
+
+// The panel's user turn: each daemon (its action, then its persona), then the excerpt. The shared
+// rules and examples are the daemon role, in the system blocks.
+export function panelTurn(excerpt: string): string {
+  const daemons = DAEMON_IDS.map((id) => {
+    const { name, action, promptFile } = DAEMONS[id];
+    const actionPrompt = readPrompt(ACTIONS[action].promptFile).trim();
+    return `<daemon id="${id}" name="${name}">\n<action>\n${actionPrompt}\n</action>\n<persona>\n${readPrompt(promptFile).trim()}\n</persona>\n</daemon>`;
+  });
+  return [`<daemons>\n${daemons.join("\n\n")}\n</daemons>`, `<excerpt>\n${excerpt.trim()}\n</excerpt>`].join("\n\n");
+}
+
+// The panel's drafts → nuggets worth reviewing: passes and blanks dropped, one per daemon, and any
+// whose quote fails the check (D38: cites a missing page, isn't on its page, or is in neither the
+// book nor the notes). An anchor that isn't in the excerpt falls back to the excerpt's first line.
+export function groundedNuggets(output: unknown, pages: BookPage[], notes: string, excerpt: string): Nugget[] {
+  const drafts = isRecord(output) && Array.isArray(output.drafts) ? output.drafts : [];
+  const firstLine = excerpt.trim().split("\n")[0].trim();
+  const nuggets: Nugget[] = [];
+  for (const draft of drafts) {
+    if (!isRecord(draft) || draft.pass === true || !isText(draft.nugget)) continue;
+    const daemon = draft.daemon as DaemonId;
+    const isKnown = DAEMON_IDS.includes(daemon) && !nuggets.some((n) => n.daemon === daemon);
+    if (!isKnown) continue;
+    const text = draft.nugget.trim();
+    const isInvented = checkCitations(text, pages, notes).some((c) => c.status !== "ok");
+    if (isInvented) continue;
+    const anchor = typeof draft.anchor === "string" && findExcerpt(excerpt, draft.anchor) ? draft.anchor.trim() : firstLine;
+    nuggets.push({ daemon, text, anchor });
+  }
+  return nuggets;
+}
+
+// The reviewer sees no book: only the excerpt, the nuggets and the pages they cite. No call
+// when there is nothing to choose: no nuggets, or one that must be shown anyway.
+async function reviewNuggets(
+  client: Anthropic,
+  nuggets: Nugget[],
+  pages: BookPage[],
+  run: DaemonsRequest,
+  signal?: AbortSignal,
+): Promise<{ pick: DaemonId | null; usage?: Anthropic.Beta.BetaUsage }> {
+  if (nuggets.length === 0) return { pick: null };
+  if (nuggets.length === 1 && run.mustPick) return { pick: nuggets[0].daemon };
+  const choices = [...nuggets.map((n) => n.daemon), ...(run.mustPick ? [] : ["none"])];
+  const review = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: LIMITS.replyTokens.reviewer,
+    output_config: {
+      effort: "low",
+      format: { type: "json_schema", schema: { type: "object", properties: { pick: { type: "string", enum: choices } }, required: ["pick"], additionalProperties: false } },
+    },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system: readPrompt("daemon-reviewer.md").trim(),
+    messages: [{ role: "user", content: reviewerTurn(nuggets, pages, run) }],
+  }, { signal });
+  const answer = jsonOf(review);
+  const pick = isRecord(answer) ? nuggets.find((n) => n.daemon === answer.pick)?.daemon ?? null : null;
+  return { pick: pick ?? (run.mustPick ? nuggets[0].daemon : null), usage: review.usage };
+}
+
+export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsRequest): string {
+  const candidates = nuggets.map((n) => `<candidate id="${n.daemon}" name="${DAEMONS[n.daemon].name}">\n${n.text}\n</candidate>`);
+  // Every page any nugget cites ([pp. 3–4] spelled out), in book order.
+  const cites = nuggets.flatMap(({ text }) => [...text.matchAll(pageCitePattern())].map((m) => ({ from: m[2].toLowerCase(), to: (m[3] ?? m[2]).toLowerCase() })));
+  const isCited = (page?: string) =>
+    page !== undefined && cites.some(({ from, to }) => page === from || page === to || (Number(page) >= Number(from) && Number(page) <= Number(to)));
+  const cited = pages.filter((p) => isCited(p.page)).map((p) => `<page n="${p.page}">\n${p.text}\n</page>`).join("\n\n");
+  return [
+    `<excerpt>\n${run.excerpt.trim()}\n</excerpt>`,
+    ...candidates,
+    `<cited>\n${cited}\n</cited>`,
+    `<must_pick>${run.mustPick === true}</must_pick>`,
+  ].join("\n\n");
+}
+
+// A structured-output reply's JSON, or undefined if it isn't any (cut off, refused).
+function jsonOf(message: Anthropic.Beta.BetaMessage): unknown {
+  const text = message.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 // What the model sees, ordered stable to volatile (DESIGN §6.3) so a cache prefix stays valid:
 // instructions, the passage, the reader's notes (only if any), then the conversation and the question.
 // A command's instructions go in the last user turn, not the system blocks, so that prefix is the
@@ -205,7 +366,7 @@ async function routeReaction(client: Anthropic, request: ConverseRequest, signal
 // On a first reaction that is the last user turn; on a reply it is re-sent before the thread
 // (which starts with the AI's reaction), and the reader's reply is the last turn.
 export function buildContext(request: ConverseRequest) {
-  const { paragraphs, system } = systemBlocks(request);
+  const { pages, system } = systemBlocks(request);
   const { reaction } = request;
   if (reaction) {
     if (!reaction.kind) throw new Error("reaction_kind_missing"); // converse() routes before this
@@ -215,11 +376,11 @@ export function buildContext(request: ConverseRequest) {
     const messages: Turn[] = history.length === 0
       ? [{ role: "user", content: [opening, request.question.trim()].filter(Boolean).join("\n\n") }]
       : [{ role: "user", content: opening }, ...history, { role: "user", content: request.question }];
-    return { paragraphs, system, messages, maxTokens: prompt.maxTokens };
+    return { pages, system, messages, maxTokens: prompt.maxTokens };
   }
   const messages: Turn[] = [...(request.history ?? []), { role: "user", content: userTurn(request) }];
   const maxTokens = request.command ? COMMANDS[request.command.name].maxTokens : LIMITS.replyTokens.chat;
-  return { paragraphs, system, messages, maxTokens };
+  return { pages, system, messages, maxTokens };
 }
 
 // The router sees the same prefix and one user turn: <router>prompt file</router>, <excerpt>.
@@ -230,17 +391,20 @@ export function routerContext(request: ConverseRequest) {
   return { system, messages };
 }
 
-function systemBlocks(request: ConverseRequest) {
-  // Page markers are stripped here: the model sees [¶n] only; pages are for the reader (D13).
-  const paragraphs = parsePassage(request.passage).map((p) => p.text);
-  const labelled = paragraphs.map((p, i) => `[¶${i + 1}] ${p}`).join("\n\n");
+// D38: the book comes first (long documents above instructions; the prefix every call shares), split
+// at its page markers so the AI cites pages it can see. Then the role: chat's system.md, or the
+// daemon role. Then the reader's notes, if any.
+function systemBlocks(request: ConverseRequest, rolePrompt = "system.md") {
+  const pages = parsePages(request.passage);
+  const book = pages.map((p) => (p.page === undefined ? p.text : `<page n="${p.page}">\n${p.text}\n</page>`)).join("\n\n");
   const notes = request.notes?.trim() ?? "";
+  const role = rolePrompt === "system.md" ? systemPrompt(request.book) : readPrompt(rolePrompt).trim();
   const system: Anthropic.Beta.BetaTextBlockParam[] = [
-    { type: "text", text: systemPrompt(request.book) },
-    { type: "text", text: `<passage>\n${labelled}\n</passage>` },
+    { type: "text", text: `<book_text>\n${book}\n</book_text>` },
+    { type: "text", text: role },
   ];
   if (notes !== "") system.push({ type: "text", text: `<notes>\n${notes}\n</notes>` });
-  return { paragraphs, system };
+  return { pages, system };
 }
 
 // "<tag>\nprompt\n</tag>\n\n<excerpt>\nexcerpt\n</excerpt>"

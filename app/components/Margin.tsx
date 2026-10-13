@@ -2,7 +2,7 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ConverseRequest } from "@/core/converse.ts";
-import { labelCitations } from "@/core/passage.ts";
+import { labelCitations, pageCitePattern } from "@/core/passage.ts";
 import { threadHistory, type ReactionKind } from "@/core/reactions.ts";
 import type { Reaction } from "@/core/store.ts";
 import { streamMessage, type MessagePatch } from "@/lib/converse-client.ts";
@@ -227,7 +227,7 @@ function Card({ reaction, isActive, isChoosing, replyTitle, onShowExcerpt, onRep
           <span className="clamp">
             {messages[0]?.error && !messages[0].content
               ? `Reply failed: ${messages[0].error}`
-              : labelCitations(messages[0]?.content ?? "", messages[0]?.pages ?? {})}
+              : labelCitations(messages[0]?.content ?? "", messages[0]?.pages ?? {}).replace(pageCitePattern(), (cite) => cite.slice(1, -1))}
           </span>
           <span className="more">
             {replyCount > 0 && `· ${replyCount} ${replyCount === 1 ? "reply" : "replies"} `}

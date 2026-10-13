@@ -30,8 +30,10 @@ const REF_PATTERNS: { pattern: RegExp }[] = [
   { pattern: new RegExp(String.raw`(?<=["”]\s*)()\(${RANGE}\)`, "g") },
   { pattern: new RegExp(String.raw`(?<=["”]\s*)()[—–]\s*${RANGE}\b`, "g") },
 ];
-// “…” or "…" of at least three words.
-const QUOTE = /[“"]([^“”"\n]*?\S(?:\s+\S+){2,}[^“”"\n]*?)[”"]/g;
+// “…” or "…", paired in order (a straight " can open or close), then kept if at least three words:
+// skipping short quotes inside the pattern would pair one quote's closing mark with the next's opening.
+const QUOTE = /[“"]([^“”"\n]+)[”"]/g;
+const isLongQuote = (quote: string) => quote.trim().split(/\s+/).length >= 3;
 
 export function findPageRefs(notes: string): PageRef[] {
   const refs: PageRef[] = [];
@@ -55,7 +57,7 @@ function contextOf(notes: string, start: number, end: number): { quote?: string;
   const nextBreak = notes.indexOf("\n\n", end);
   const paragraphEnd = nextBreak === -1 ? notes.length : nextBreak;
   const before = notes.slice(paragraphStart, start);
-  const quote = [...before.matchAll(QUOTE)].at(-1)?.[1];
+  const quote = [...before.matchAll(QUOTE)].map((m) => m[1]).filter(isLongQuote).at(-1);
   if (quote) return { quote: quote.trim(), context: quote.trim() };
   const blockquote = before.match(/^\s*>\s*(.+)$/m)?.[1];
   if (blockquote && blockquote.trim().split(/\s+/).length >= 3) return { quote: blockquote.trim(), context: blockquote.trim() };

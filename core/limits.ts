@@ -22,5 +22,7 @@ export const LIMITS = {
     pushback: 4_000,
     connection: 4_000,
     router: 1_000, // picks a reaction's kind; one word, plus Sonnet's adaptive thinking
+    panel: 6_000, // a daemon run (D37): every daemon's nugget (≤40 words each) as JSON, plus thinking
+    reviewer: 2_000, // picks one nugget or none; one word of JSON, plus thinking
   },
 };
