@@ -58,8 +58,11 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 **Goal:** invited testers use the app at a public URL. Sprint 7 follows.
 ### H1: deploy behind an invite code (~2 h)
 - [x] Invite gate (`proxy.ts`, `/invite`, `INVITE_COOKIE`; off when `INVITE_CODE` is unset), size caps (notes 50K chars, question 4K, history 40 turns); every AI limit (these, the reference cap, reply lengths) now lives in `core/limits.ts` (Ronith), prompts bundled with the route. **Verify (local `next start`, INVITE_CODE set):** `/` without the cookie → 307 to `/invite`; `/api/converse` → 401 `invite_required`; wrong code → 401; right code → 204 with an HttpOnly cookie; then `/` → 200 and a chat turn streamed a cited reply; 50,001-char notes → 400 `notes_too_long`; 131 tests, lint, build green.
-- [ ] Deploy: Vercel project from the repo; `ANTHROPIC_API_KEY` from a dedicated Console workspace with a monthly spend limit; `INVITE_CODE` set. **Verify:** the same checks on the public URL.
-### H2: accounts and hosted data (~8–10 h; steps detailed at the start of H2)
+- [x] Deploy: Vercel project from the repo at https://notebook.ronithranjan.com; `ANTHROPIC_API_KEY` from a dedicated Console workspace with a monthly spend limit; `INVITE_CODE` set. **Verify (curl, 2026-10-12):** `/` without the cookie → 307 to `/invite`; `/api/converse` → 401 `invite_required`; wrong code → 401; right code → 204 with a Secure HttpOnly cookie; then `/` → 200; 50,001-char notes → 400 `notes_too_long`; a chat turn streamed a cited reply (prompts load on Vercel). *Before the merge, `main` served the app ungated for a short while.*
+### H1b: daily AI reply cap (D35)
+- [x] 60 AI replies per browser per local day, counted in localStorage by `lib/converse-client`; at the cap React, chat and thread replies pause until midnight. **Verify:** 1 new store test (count per day, new day resets, corrupt or throwing storage → 0); headless Chrome on public-domain text: at 60 the chat box and React were disabled with the reset message; at 59 they were enabled, one chat reply streamed and the count reached 60, pausing them; yesterday's 60 read as a new day, AI enabled; 132 tests, lint, build green.
+
+### H2: accounts and hosted data — tabled (D35); steps detailed if it resumes
 - [ ] Supabase project, schema and row-level security; magic-link login limited to an invite list; landing page.
 - [ ] `core/store` reads and writes Supabase; PDFs in a private bucket; import of existing browser data on first login.
 - [ ] Per-call usage rows; $3/day per-account cap enforced in the route.
