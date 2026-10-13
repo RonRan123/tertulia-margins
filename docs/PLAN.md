@@ -57,8 +57,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ## Hosted for testers (D34)
 **Goal:** invited testers use the app at a public URL. Sprint 7 follows.
 ### H1: deploy behind an invite code (~2 h)
-- [ ] Vercel project, `ANTHROPIC_API_KEY` on the server, shared invite code, route size caps, global daily spend ceiling (Ronith sets the amount).
-- **Verify:** the public URL refuses calls without the code; with it, a chat turn streams; an oversized body is refused before any paid call.
+- [x] Invite gate (`proxy.ts`, `/invite`, `INVITE_COOKIE`; off when `INVITE_CODE` is unset), size caps (notes 50K chars, question 4K, history 40 turns); every AI limit (these, the reference cap, reply lengths) now lives in `core/limits.ts` (Ronith), prompts bundled with the route. **Verify (local `next start`, INVITE_CODE set):** `/` without the cookie → 307 to `/invite`; `/api/converse` → 401 `invite_required`; wrong code → 401; right code → 204 with an HttpOnly cookie; then `/` → 200 and a chat turn streamed a cited reply; 50,001-char notes → 400 `notes_too_long`; 131 tests, lint, build green.
+- [ ] Deploy: Vercel project from the repo; `ANTHROPIC_API_KEY` from a dedicated Console workspace with a monthly spend limit; `INVITE_CODE` set. **Verify:** the same checks on the public URL.
 ### H2: accounts and hosted data (~8–10 h; steps detailed at the start of H2)
 - [ ] Supabase project, schema and row-level security; magic-link login limited to an invite list; landing page.
 - [ ] `core/store` reads and writes Supabase; PDFs in a private bucket; import of existing browser data on first login.

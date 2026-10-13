@@ -3,12 +3,12 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
 import { COMMANDS, isCommandName, type Command } from "./commands.ts";
+import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, parsePassage } from "./passage.ts";
 import { isReactionKind, parseRouterKind, REACTIONS, ROUTER, type ReactionKind, type ReactionRequest } from "./reactions.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
-const CHAT_MAX_TOKENS = 16000; // a command uses its row's maxTokens instead
 
 export type Book = { title?: string; author?: string; edition?: string };
 export type Turn = { role: "user" | "assistant"; content: string };
@@ -32,8 +32,11 @@ export type ConverseRequestError =
   | "passage_empty" // only page markers: nothing to ground on
   | "reference_too_long" // over the D32 cap: refused before any paid call
   | "question_missing"
+  | "question_too_long"
   | "notes_invalid"
+  | "notes_too_long"
   | "history_invalid"
+  | "history_too_long"
   | "book_invalid"
   | "command_invalid" // not { name, selection: string }
   | "command_unknown"
@@ -86,10 +89,13 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
   const isNotesValid = notes === undefined || typeof notes === "string";
   if (!isNotesValid) return { error: "notes_invalid" };
+  if (typeof question === "string" && question.length > LIMITS.questionChars) return { error: "question_too_long" };
+  if (typeof notes === "string" && notes.length > LIMITS.notesChars) return { error: "notes_too_long" };
 
   const isTurn = (t: unknown) => isRecord(t) && (t.role === "user" || t.role === "assistant") && isText(t.content);
   const isHistoryValid = history === undefined || (Array.isArray(history) && history.every(isTurn));
   if (!isHistoryValid) return { error: "history_invalid" };
+  if (Array.isArray(history) && history.length > LIMITS.historyTurns) return { error: "history_too_long" };
 
   const isOptionalString = (v: unknown) => v === undefined || typeof v === "string";
   const isBookValid = book === undefined || (isRecord(book) && [book.title, book.author, book.edition].every(isOptionalString));
@@ -212,7 +218,7 @@ export function buildContext(request: ConverseRequest) {
     return { paragraphs, system, messages, maxTokens: prompt.maxTokens };
   }
   const messages: Turn[] = [...(request.history ?? []), { role: "user", content: userTurn(request) }];
-  const maxTokens = request.command ? COMMANDS[request.command.name].maxTokens : CHAT_MAX_TOKENS;
+  const maxTokens = request.command ? COMMANDS[request.command.name].maxTokens : LIMITS.replyTokens.chat;
   return { paragraphs, system, messages, maxTokens };
 }
 

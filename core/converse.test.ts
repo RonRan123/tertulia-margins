@@ -47,6 +47,14 @@ test("notes must be a string when present", () => {
   expect(parseConverseRequest({ ...valid, notes: "Mine" })).toMatchObject({ notes: "Mine" });
 });
 
+test("oversized notes, question or history are refused before any paid call (D34)", () => {
+  const turn = { role: "user", content: "Hi" };
+  expect(errorOf({ ...valid, notes: "x".repeat(50_001) })).toBe("notes_too_long");
+  expect(errorOf({ ...valid, question: "x".repeat(4_001) })).toBe("question_too_long");
+  expect(errorOf({ ...valid, history: Array(41).fill(turn) })).toBe("history_too_long");
+  expect(errorOf({ ...valid, notes: "x".repeat(50_000), question: "x".repeat(4_000), history: Array(40).fill(turn) })).toBeUndefined();
+});
+
 test("context is ordered stable to volatile: system prompt, passage, notes, history, question", () => {
   const history = [{ role: "user" as const, content: "Q1" }, { role: "assistant" as const, content: "A1" }];
   const { system, messages, paragraphs } = buildContext({ ...valid, notes: "  My note  \n", history });

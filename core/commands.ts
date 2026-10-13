@@ -1,10 +1,11 @@
 // Commands on a selection (DESIGN §6.1, D17): a command is a row in a table. No model column
 // yet: the MVP uses one model (D11, D12). Browser-safe (no node:fs): the UI imports this too.
+import { LIMITS } from "./limits.ts";
 import { parsePassage } from "./passage.ts";
 
 export const COMMANDS = {
-  define: { promptFile: "define.md", maxTokens: 4000 },
-  quiz: { promptFile: "quiz.md", maxTokens: 8000 },
+  define: { promptFile: "define.md", maxTokens: LIMITS.replyTokens.define },
+  quiz: { promptFile: "quiz.md", maxTokens: LIMITS.replyTokens.quiz },
 };
 
 export type CommandName = keyof typeof COMMANDS;

@@ -126,7 +126,7 @@ Browser (one page)        [ Notes+Margin | Notes | PDF | Chat ]   ← view switc
   prompts/  (markdown files the user owns and edits)
 ```
 
-The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
+On the hosted app (D34), `proxy.ts` lets a request through only with the invite cookie that `/invite` sets (off when `INVITE_CODE` is unset). The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
 
 ### 6.1 Why it is shaped like this
 

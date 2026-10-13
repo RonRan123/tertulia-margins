@@ -1284,3 +1284,37 @@ dialog.reference form button {
     display: none;
   }
 }
+
+/* The invite page (D34, H1) */
+.invite {
+  max-width: 26rem;
+  margin: 18vh auto 0;
+  padding: 0 16px;
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+.invite h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+.invite p { color: var(--ink-soft); margin: 0 0 1rem; }
+.invite form { display: flex; gap: 0.5rem; }
+.invite input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.invite button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  color: var(--sheet);
+  background: var(--ai);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.invite button:disabled { opacity: 0.5; cursor: default; }
+.invite .invite-wrong { color: var(--warn); margin-top: 0.75rem; }
+.invite .invite-note { font-size: 0.875rem; margin-top: 2rem; }
