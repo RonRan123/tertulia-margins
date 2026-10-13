@@ -1,12 +1,14 @@
 "use client";
 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { indentUnit } from "@codemirror/language";
 import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { blockAt, layoutRows, splitBlocks, stackCards, type Row } from "@/core/blocks.ts";
 import type { Reaction } from "@/core/store.ts";
 import type { PageLink } from "@/core/page-links.ts";
+import { listKeys } from "@/lib/list-keys.ts";
 import { livePreview, markdownLanguage } from "@/lib/live-preview.ts";
 import { linkAt, pageLinksField, setPageLinks } from "@/lib/page-link-view.ts";
 
@@ -60,10 +62,13 @@ export function Notes({ notes, reactions, onChange, onReactShortcut, renderMargi
           history(),
           keymap.of([
             { key: "Mod-Enter", run: () => (latest.current.onReactShortcut(), true) },
+            ...listKeys,
             ...defaultKeymap,
             ...historyKeymap,
           ]),
           markdownLanguage.extension,
+          indentUnit.of("\t"),
+          EditorState.tabSize.of(4),
           livePreview,
           pageLinksField,
           EditorView.domEventHandlers({

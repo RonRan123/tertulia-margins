@@ -50,7 +50,8 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Reference text capped at 25K tokens; PDF page picker | whole reference text every call | D32 |
 | Page references in the notes linked to the PDF (exact, word overlap, page), as a computed layer | page numbers as plain text | D33 |
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
-| Hosted for invited testers: Vercel deploy, then Supabase accounts and data | BYO-key demo (D9), browser-only storage (D7) | D34 |
+| Hosted for invited testers: Vercel deploy behind an invite code (accounts and Supabase tabled) | BYO-key demo (D9) | D34 |
+| 60 AI replies per browser per day, counted in localStorage | no cap | D35 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -78,7 +79,7 @@ These are deliberately excluded so they cannot creep back in silently.
 - **Rich-text editor.** The notes are plain markdown text. D25 adds CodeMirror live preview, which only styles that text; no WYSIWYG model, no formatting toolbar.
 - **A reading app.** The PDF view is for checking a source, not for reading the book in the app (D22 reopens the view D14 closed; this line keeps its spirit). No annotation on the PDF itself.
 - **Tensions across a body of work** (multiple books/authors). This is a research problem. v4 does one book only.
-- **Sharing, collaboration, multi-user books.** ~~Accounts, auth, sync~~: D34 adds invite-only accounts and hosted data; each book still belongs to one user.
+- **Accounts, auth, multi-user, sync.** Single user, single browser. D34's accounts and hosted data are tabled (D35); testers share one invite code.
 - **OCR / photo input** in the first week.
 - **DRM'd ebooks.** We never handle DRM.
 - **Recommendations or summaries.** Blinkist-style summaries are the opposite of the point.
@@ -87,7 +88,7 @@ These are deliberately excluded so they cannot creep back in silently.
 
 - **21 hours total.** Every decision is judged first by hours saved.
 - **The user is learning.** Ronith must understand and make the key decisions, so the code must be legible to someone who did not type it.
-- **Copyright.** Book text is the user's private input. It is never committed to git. On the hosted app (D34) each user's books are private to them, and the landing page asks testers to upload only books they own.
+- **Copyright.** Book text is the user's private input. It is never committed to git. On the hosted app (D34) books stay in each tester's browser, and the invite page asks them to upload only books they own.
 - **Cost.** Personal API key; a session should cost cents, not dollars. Measured, not guessed.
 
 ## 5. The core loop
@@ -126,7 +127,7 @@ Browser (one page)        [ Notes+Margin | Notes | PDF | Chat ]   ← view switc
   prompts/  (markdown files the user owns and edits)
 ```
 
-On the hosted app (D34), `proxy.ts` lets a request through only with the invite cookie that `/invite` sets (off when `INVITE_CODE` is unset). The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
+On the hosted app (D34), `proxy.ts` lets a request through only with the invite cookie that `/invite` sets (off when `INVITE_CODE` is unset); `lib/converse-client` counts each AI reply against a daily cap in localStorage (D35). The route answers with NDJSON (one JSON event per line: for a reaction a `kind` event first, then `text` deltas, then `done` with stats or `error`), and rejects invalid bodies with a 400 code from `parseConverseRequest` before any paid call. The browser has one client for the route, `lib/converse-client.ts`; chat, commands, reactions and thread replies all stream through it, each into its own message, so several streams can run at once. PDF import runs in the browser: `lib/pdf-import.ts` is the adapter that reads pages with pdfjs and hands them to `core/pdf-paragraphs.ts`.
 
 ### 6.1 Why it is shaped like this
 
@@ -146,7 +147,7 @@ On the hosted app (D34), `proxy.ts` lets a request through only with the invite 
 
 **The PDF view is pdfjs's viewer with our toolbar (D29).** Each book's PDF is stored in IndexedDB (`lib/pdf-store.ts`, keyed by book id; D23). `PdfPane` shows a drop zone until there is one, then `PdfViewer`: pdfjs's `PDFViewer` (pages with a selectable text layer) and its find controller (highlighted matches), under a floating toolbar: zoom out, fit width, zoom in, "N of M", download, search. Adding a PDF fills the book's reference text from its text (`lib/pdf-import.ts`, D13), or asks first if there is some. Each open document gets its own pdfjs worker, closed with it. A labelled cite in AI text ("[¶3 · PDF p. 2]", `CitedText`) opens the PDF at that page (`citedPage` in `core/passage.ts`); a page asked for while the view is hidden waits until it is shown and fitted. MVP: the page as given. Later: match the cited text around that page (regex, then AI) so an off-by-a-few page still lands on the right passage.
 
-**Notes are one file with live preview (D25).** The notes are one markdown string in one CodeMirror editor (`app/components/Notes.tsx`). `lib/live-preview.ts` parses it with `@lezer/markdown` (GFM) and decorates it in place: headings, bold, italics, code, links, quotes, bullets and `[¶n]` cites render, and their symbols show only on the lines the selection touches. Decorations never change the text, and raw HTML stays text. `core/blocks.ts` still splits the notes into paragraphs (runs of non-blank lines): React acts on the selection or the paragraph at the caret, and the margin groups cards by the paragraph their excerpt starts in. The margin works like comments in a document: on wide screens each group starts level with its paragraph's first line and slides down past earlier groups (`stackCards`); on phones the cards list under the notes. *(v1: Jupyter-style blocks rendered with `marked`, D18/D20; superseded.)*
+**Notes are one file with live preview (D25).** The notes are one markdown string in one CodeMirror editor (`app/components/Notes.tsx`). `lib/live-preview.ts` parses it with `@lezer/markdown` (GFM) and decorates it in place: headings, bold, italics, code, links, quotes, bullets and `[¶n]` cites render, and their symbols show only on the lines the selection touches. Decorations never change the text, and raw HTML stays text. Lists edit as in Obsidian (`lib/list-keys.ts`, D36): Enter continues an item or quote, Tab and Shift-Tab nest list items by a tab. `core/blocks.ts` still splits the notes into paragraphs (runs of non-blank lines): React acts on the selection or the paragraph at the caret, and the margin groups cards by the paragraph their excerpt starts in. The margin works like comments in a document: on wide screens each group starts level with its paragraph's first line and slides down past earlier groups (`stackCards`); on phones the cards list under the notes. *(v1: Jupyter-style blocks rendered with `marked`, D18/D20; superseded.)*
 
 **Reactions go through `converse()` too (D18, D20).** A request with `reaction: {excerpt, kind?}` is a margin reaction. With no `kind`, a short non-streamed router call (`prompts/react-router.md`) picks question, pushback or connection; `converse()` yields the kind (the route sends it as a `kind` event), then streams the reply from `prompts/react-<kind>.md`, citations checked as usual. Kinds are a table in `core/reactions.ts`, like commands, next to the anchoring helpers (`reactTarget`, `findExcerpt`). A reply in a thread sends the kind it already has (no router call), the thread as `history` and the reply as `question`.
 
@@ -231,7 +232,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q1. Storage.** *Resolved (D7): browser localStorage behind a small `store` module, plus markdown export.*
 - **Q2. Outside knowledge.** *Resolved (D5): strictly the passage for the MVP; labelled outside knowledge is added later.*
 - **Q3. Model per command.** Confirm the §6.4 routing after measuring.
-- **Q4. Hosting.** *Resolved (D34, superseding D9): Vercel + Supabase for invited testers; stage 1 deploys behind an invite code, stage 2 adds magic-link accounts and hosted data; Ronith's key with a $3/day per-account cap.*
+- **Q4. Hosting.** *Resolved (D34, superseding D9): Vercel behind an invite code for invited testers, on Ronith's key with a monthly Anthropic spend limit and a 60-replies-a-day cap per browser (D35); Supabase accounts and hosted data tabled.*
 - **Q5. v3 approach.** Long-context + caching vs chunked retrieval.
 - **Q6. Write-up audience.** *Resolved (D10): LLM engineers, with a one-paragraph product story and screenshots up top.*
 - **Q7. Day-0 findings.** *Resolved (D6): the AI never writes into the notes; §5 amended.*

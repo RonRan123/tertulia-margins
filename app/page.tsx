@@ -5,6 +5,7 @@ import { commandTarget } from "@/core/blocks.ts";
 import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
+import { LIMITS } from "@/core/limits.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
 import {
   addBook,
@@ -13,7 +14,9 @@ import {
   LIBRARY_KEY,
   loadLibrary,
   loadState,
+  loadRepliesToday,
   loadUi,
+  localDay,
   renameBook,
   saveLibrary,
   saveState,
@@ -114,9 +117,13 @@ export default function Home() {
   const isTooLong = isReferenceTooLong(reference);
   // Why the AI can't be asked right now (React, chat, thread replies), or undefined. D32: over the
   // cap, every call would send too much text.
+  const [repliesToday, setRepliesToday] = useState(0); // D35: read from storage after loading
+  const isOverDailyLimit = repliesToday >= LIMITS.dailyReplies;
   const aiBlock = !hasReference
     ? "Add reference text first."
-    : isTooLong
+    : isOverDailyLimit
+      ? `You've used today's ${LIMITS.dailyReplies} AI replies; they reset at midnight.`
+      : isTooLong
       ? `The reference text is ~${Math.round(estimateTokens(reference) / 1000)}K tokens, over the ${REFERENCE_TOKEN_LIMIT / 1000}K limit, so the AI is paused. Choose fewer PDF pages or trim it.`
       : undefined;
   const reactTitle = aiBlock;
@@ -188,6 +195,8 @@ export default function Home() {
     };
     // A closed or reloaded tab saves only what it changed and hasn't saved yet: never its stale copy.
     const onPageHide = () => pendingSave.current?.();
+    // The daily count may have changed in another tab, or the day may have turned (D35).
+    const onFocus = () => setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())));
     // A one-time sync from storage after mount: the cascading render this rule warns about is the point.
     /* eslint-disable react-hooks/set-state-in-effect */
     const opened = loadLibrary(browserStorage);
@@ -196,13 +205,16 @@ export default function Home() {
     show(loadState(browserStorage, currentKey.current));
     const savedUi = loadUi(browserStorage);
     setUi({ ...savedUi, isSidebarOpen: savedUi.isSidebarOpen && !isPhone() }); // on a phone it would cover the page
+    onFocus();
     setIsLoaded(true);
     /* eslint-enable react-hooks/set-state-in-effect */
     window.addEventListener("storage", onStorage);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("focus", onFocus);
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -233,9 +245,16 @@ export default function Home() {
     if (isLoaded) saveUi(browserStorage, ui);
   }, [isLoaded, ui]);
 
-  // ---- Books (D31) ----
-  // Switching is blocked while a reply streams: it would land in the newly opened book.
+  // ---- Daily AI replies (D35) ----
+  // lib/converse-client counts each reply as it starts; a streaming change is the cue to re-read it.
   const isStreaming = messages.at(-1)?.isStreaming === true || reactions.some((r) => r.messages.at(-1)?.isStreaming === true);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-reading storage is the point
+    if (isLoaded) setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())));
+  }, [isLoaded, isStreaming, messages.length, reactions.length]);
+
+  // ---- Books (D31) ----
+  // Switching is blocked while a reply streams (isStreaming, above): it would land in the newly opened book.
   const currentBook = library.books.find((b) => b.id === library.currentId);
 
   // Saves the open book's last edits, then shows `next`'s book.

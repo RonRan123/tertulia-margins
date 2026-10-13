@@ -3,7 +3,8 @@
 import type { ConverseEvent, ConverseRequest } from "@/core/converse.ts";
 import { citedPages, parsePassage } from "@/core/passage.ts";
 import type { ReactionKind } from "@/core/reactions.ts";
-import type { ChatMessage } from "@/core/store.ts";
+import { LIMITS } from "@/core/limits.ts";
+import { loadRepliesToday, localDay, recordReply, type ChatMessage } from "@/core/store.ts";
 
 export type MessagePatch = (message: ChatMessage) => ChatMessage;
 
@@ -17,6 +18,14 @@ export async function streamMessage(
   options: { onKind?: (kind: ReactionKind) => void; signal?: AbortSignal } = {},
 ): Promise<void> {
   const paragraphs = parsePassage(body.passage); // as sent, for the finished reply's page labels
+  // D35: every AI reply passes here, so the daily count lives here too. The page also pauses the
+  // buttons at the cap; this catches a request that started before the page caught up.
+  const day = localDay(new Date());
+  if (loadRepliesToday(window.localStorage, day) >= LIMITS.dailyReplies) {
+    update((m) => ({ ...m, error: "daily_limit", isStreaming: false }));
+    return;
+  }
+  recordReply(window.localStorage, day);
   try {
     const requestError = await streamReply(body, options.signal, (event) => {
       if (event.type === "kind") options.onKind?.(event.kind);

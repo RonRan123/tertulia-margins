@@ -165,6 +165,33 @@ export function saveUi(storage: KeyValueStorage, ui: UiState) {
   } catch {}
 }
 
+// ---- Daily AI replies (D35) ----
+// Per browser, under its own key: how many AI replies were asked for on `day` (local "YYYY-MM-DD").
+// Another day's count reads as 0. Never throws: unreadable storage counts as 0 and a failed save
+// is ignored, as the cap is a courtesy and the Anthropic spend limit the real ceiling (D34).
+export const USAGE_KEY = "tertulia-margins:usage";
+export const localDay = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+export function loadRepliesToday(storage: KeyValueStorage, day: string): number {
+  try {
+    const saved: unknown = JSON.parse(storage.getItem(USAGE_KEY) ?? "null");
+    const isToday = isRecord(saved) && saved.day === day && Number.isInteger(saved.replies);
+    return isToday ? Math.max(0, saved.replies as number) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Counts one more reply today; returns the new count.
+export function recordReply(storage: KeyValueStorage, day: string): number {
+  const replies = loadRepliesToday(storage, day) + 1;
+  try {
+    storage.setItem(USAGE_KEY, JSON.stringify({ day, replies }));
+  } catch {}
+  return replies;
+}
+
 // A reply still streaming is not saved, nor the question that prompted it: after a reload it would
 // be a half-written answer, and history must keep its (question, reply) pairs.
 function finishedMessages(messages: ChatMessage[]): ChatMessage[] {

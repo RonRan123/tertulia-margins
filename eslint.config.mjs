@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Claude's local test files and headless Chrome profile (gitignored)
+    ".scratch/**",
   ]),
 ]);
 

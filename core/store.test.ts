@@ -6,7 +6,10 @@ import {
   emptyState,
   loadLibrary,
   loadState,
+  loadRepliesToday,
   loadUi,
+  localDay,
+  recordReply,
   renameBook,
   saveLibrary,
   saveState,
@@ -189,4 +192,18 @@ test("each book's state lives under its own key", () => {
   saveState(storage, bookKey("b"), { ...emptyState(), notes: "other" });
   expect(loadState(storage, bookKey("a"))).toEqual(state);
   expect(loadState(storage, bookKey("b")).notes).toBe("other");
+});
+
+test("daily replies count per local day, reset on a new day, and never throw (D35)", () => {
+  const { storage } = memoryStorage();
+  expect(localDay(new Date(2026, 9, 2))).toBe("2026-10-02");
+  expect(loadRepliesToday(storage, "2026-10-12")).toBe(0);
+  expect(recordReply(storage, "2026-10-12")).toBe(1);
+  expect(recordReply(storage, "2026-10-12")).toBe(2);
+  expect(loadRepliesToday(storage, "2026-10-12")).toBe(2);
+  expect(loadRepliesToday(storage, "2026-10-13")).toBe(0);
+  expect(recordReply(storage, "2026-10-13")).toBe(1);
+  expect(loadRepliesToday(memoryStorage({ "tertulia-margins:usage": "{oops" }).storage, "2026-10-12")).toBe(0);
+  expect(loadRepliesToday(throwing, "2026-10-12")).toBe(0);
+  expect(recordReply(throwing, "2026-10-12")).toBe(1);
 });
