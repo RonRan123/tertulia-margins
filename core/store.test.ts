@@ -121,19 +121,29 @@ test("storage that throws never crashes: load is empty, save reports save_failed
 
 test("layout round-trips under its own key and leaves the notes' key alone", () => {
   const { storage, data } = memoryStorage();
-  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
-  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
+  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
+  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
   expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
 });
 
-test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme", () => {
-  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light" };
+test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme, 60% notes", () => {
+  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6 };
   expect(loadUi(memoryStorage().storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
   expect(loadUi(throwing)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"chat","isSidebarOpen":false,"theme":"purple"}' }).storage)).toEqual({ ...fallback, view: "chat", isSidebarOpen: false });
-  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light" })).not.toThrow();
+  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light", notesShare: 0.6 })).not.toThrow();
+});
+
+test("the divider's saved width is clamped to its range; a non-number falls back to 60%", () => {
+  const load = (notesShare: unknown) => loadUi(memoryStorage({ "tertulia-margins:ui": JSON.stringify({ notesShare }) }).storage).notesShare;
+  expect(load(0.42)).toBe(0.42);
+  expect(load(0.123456 + 0.4)).toBe(0.523);
+  expect(load(0.1)).toBe(0.35);
+  expect(load(0.99)).toBe(0.75);
+  expect(load("wide")).toBe(0.6);
+  expect(load(null)).toBe(0.6);
 });
 
 // ---- Books (D31) ----

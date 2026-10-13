@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { commandTarget } from "@/core/blocks.ts";
 import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
@@ -10,6 +10,7 @@ import type { ReactionKind } from "@/core/reactions.ts";
 import {
   addBook,
   bookKey,
+  defaultUi,
   deleteBook,
   LIBRARY_KEY,
   loadLibrary,
@@ -34,6 +35,7 @@ import {
 import { Chat } from "./components/Chat";
 import { MarginCell, useReactions } from "./components/Margin";
 import { Notes, type NotesHandle } from "./components/Notes";
+import { PaneDivider } from "./components/PaneDivider";
 import {
   BookIcon,
   ChatIcon,
@@ -106,7 +108,7 @@ export default function Home() {
   const [pdfText, setPdfText] = useState<string>(); // the open book's whole PDF text, for page links
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
-  const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
+  const [ui, setUi] = useState<UiState>(defaultUi);
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -342,7 +344,11 @@ export default function Home() {
 
   return (
     <OpenPageContext value={openPage}>
-      <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
+      <main
+        data-view={ui.view}
+        data-sidebar-open={ui.isSidebarOpen || undefined}
+        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
+      >
         <header className="app-header">
           <span className="brand">tertulia</span>
           <button
@@ -485,6 +491,7 @@ export default function Home() {
                   )}
                 />
               </div>
+              <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />
               <section className="side-pane" aria-label="Beside the notes">
                 <div className="pdf-pane">
                   <PdfPane

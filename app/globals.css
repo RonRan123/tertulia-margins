@@ -407,7 +407,7 @@ main[data-view="chat"] .react-slot {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, var(--notes-share, 60%)) minmax(0, 1fr);
 }
 
 /* Takes the rest of the height, so the notes sheet and the margin rule reach the bottom. */
@@ -851,12 +851,14 @@ main[data-view="chat"] .react-slot {
 }
 
 /* The area under the header. Which panes show is the view (main's data-view, D22): "notes+…"
-   views put the notes in the 3/5 column and margin, PDF or chat in the 2/5 one (the margin is the
-   rows' second column, so the panes span both); the others show one thing across both columns.
-   Hidden panes stay mounted (display: none), so streams, threads and edits carry on. */
+   views put the notes in the first column (--notes-share, set by the divider; 60% by default) and
+   margin, PDF or chat in the second (the margin is the rows' second column, so the panes span
+   both); the others show one thing across both columns. Hidden panes stay mounted
+   (display: none), so streams, threads and edits carry on. */
 .workspace {
+  position: relative; /* for the divider */
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, var(--notes-share, 60%)) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr); /* one row the height of the window: each pane scrolls inside it */
   flex: 1;
   min-height: 0;
@@ -864,6 +866,42 @@ main[data-view="chat"] .react-slot {
 
 .panes {
   grid-column: 1 / -1;
+}
+
+/* The divider (S8.1): a wide invisible grip centred on the column edge; light blue on hover,
+   focus and drag. Only when a pane sits beside the notes. */
+.pane-divider {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--notes-share, 60%);
+  z-index: 5;
+  width: 9px;
+  translate: -50%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  border-radius: 2px;
+}
+
+.pane-divider:hover::after,
+.pane-divider:focus-visible::after,
+.pane-divider:active::after {
+  background: var(--focus);
+}
+
+.pane-divider:focus-visible {
+  outline: none;
+}
+
+main[data-view^="notes+"] .pane-divider {
+  display: block;
 }
 
 .side-pane {
@@ -1227,6 +1265,10 @@ dialog.reference form button {
 
   .workspace {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  main[data-view^="notes+"] .pane-divider {
+    display: none;
   }
 
   /* Beside the notes, there is no room: the chosen pane shows instead of them. */
