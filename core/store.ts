@@ -5,6 +5,7 @@ import type { CitationCheck } from "./citations.ts";
 import type { Turn } from "./converse.ts";
 import type { PageLabels } from "./passage.ts";
 import { DAEMON_IDS, freshDaemonState, type DaemonCard, type DaemonState } from "./daemons.ts";
+import { freshQuiz, pickQuiz, type QuizState } from "./quiz.ts";
 
 // An assistant message keeps the page labels of the paragraphs it cites (see citedPages), so
 // editing the reference text later doesn't change old replies' labels. Only those few labels:
@@ -16,8 +17,9 @@ export type ChatMessage = Turn & {
   isStreaming?: boolean;
 };
 // `daemons`: the margin's cards and what the daemons have read (D37). Margin reactions (D18, D20)
-// were replaced by daemons: a book saved with them loads without them.
-export type AppState = { reference: string; notes: string; messages: ChatMessage[]; daemons: DaemonState };
+// were replaced by daemons: a book saved with them loads without them. `quiz`: the current quiz,
+// so a reload or a book switch resumes it (D42).
+export type AppState = { reference: string; notes: string; messages: ChatMessage[]; daemons: DaemonState; quiz: QuizState };
 export type KeyValueStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -26,7 +28,7 @@ export type KeyValueStorage = {
 export type StoreError = "save_failed"; // storage full, blocked (private mode) or unavailable
 
 export const STORAGE_KEY = "tertulia-margins:v1"; // v1's single book; kept as a backup after migration
-export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], daemons: freshDaemonState("") });
+export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], daemons: freshDaemonState(""), quiz: freshQuiz() });
 
 // ---- Books (D31) ----
 // The library lists the books and which one is open; each book's state lives under its own key,
@@ -120,13 +122,14 @@ export function loadState(storage: KeyValueStorage, key: string): AppState {
     messages: finishedMessages(messages),
     // No daemon state yet (a new book, or one saved before D37): what's written counts as seen.
     daemons: pickDaemons(saved.daemons) ?? freshDaemonState(notes),
+    quiz: pickQuiz(saved.quiz) ?? freshQuiz(),
   };
 }
 
 export function saveState(storage: KeyValueStorage, key: string, state: AppState): StoreError | undefined {
-  const { reference, notes, messages, daemons } = state;
+  const { reference, notes, messages, daemons, quiz } = state;
   try {
-    const saved = { reference, notes, messages: finishedMessages(messages), daemons };
+    const saved = { reference, notes, messages: finishedMessages(messages), daemons, quiz };
     storage.setItem(key, JSON.stringify(saved));
   } catch {
     return "save_failed";
@@ -134,8 +137,8 @@ export function saveState(storage: KeyValueStorage, key: string, state: AppState
 }
 
 // Layout (D22), remembered per browser under its own key so it never touches the reader's data.
-// "notes+…" views put margin, PDF or chat beside the notes; the others fill the space alone.
-export const VIEWS = ["notes+margin", "notes+pdf", "notes+chat", "notes", "pdf", "chat"] as const;
+// "notes+…" views put margin, quiz (D42), PDF or chat beside the notes; the others fill the space alone.
+export const VIEWS = ["notes+margin", "notes+quiz", "notes+pdf", "notes+chat", "notes", "quiz", "pdf", "chat"] as const;
 export type View = (typeof VIEWS)[number];
 export type Theme = "light" | "dark"; // D28: light unless the reader switches
 // notesShare: the notes' fraction of the width beside the sidebar when a pane sits beside them

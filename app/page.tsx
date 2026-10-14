@@ -30,8 +30,10 @@ import {
   type View,
 } from "@/core/store.ts";
 import { DAEMONS, freshDaemonState, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { freshQuiz, type QuizState } from "@/core/quiz.ts";
 import { Chat } from "./components/Chat";
 import { DaemonPanel, MarginCell, useDaemons } from "./components/Margin";
+import { Quiz } from "./components/Quiz";
 import { Notes } from "./components/Notes";
 import { PaneDivider } from "./components/PaneDivider";
 import {
@@ -39,6 +41,7 @@ import {
   ChatIcon,
   FileTextIcon,
   MarginIcon,
+  QuizIcon,
   MaximizeIcon,
   MinimizeIcon,
   MoonIcon,
@@ -66,15 +69,16 @@ const STATUS_MS = 5000;
 // globals.css's phone breakpoint: one pane at a time, the sidebar over the page.
 const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
 
-// The view (D22, D26) is two choices: what sits beside the notes (margin, PDF or chat), and
+// The view (D22, D26) is two choices: what sits beside the notes (margin, quiz, PDF or chat), and
 // whether it shows alone. Margin "alone" means the notes alone.
-type Side = "margin" | "pdf" | "chat";
+type Side = "margin" | "quiz" | "pdf" | "chat";
 const SIDES: { side: Side; label: string; icon: ReactNode }[] = [
   { side: "margin", label: "Margin", icon: <MarginIcon /> },
+  { side: "quiz", label: "Quiz", icon: <QuizIcon /> },
   { side: "pdf", label: "PDF", icon: <FileTextIcon /> },
   { side: "chat", label: "Chat", icon: <ChatIcon /> },
 ];
-const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : "margin");
+const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : view.endsWith("quiz") ? "quiz" : "margin");
 const isAlone = (view: View) => !view.startsWith("notes+");
 const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
@@ -96,6 +100,7 @@ export default function Home() {
   const [notes, setNotes] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [daemons, setDaemons] = useState<DaemonState>(() => freshDaemonState(""));
+  const [quiz, setQuiz] = useState<QuizState>(freshQuiz); // the current quiz (D42), saved with the book
   // Counts the reader's own edits in this tab: the daemons wait for a pause after one (D37). Notes
   // loaded from storage (another tab, another book) don't count, so two tabs never both run.
   const [edits, setEdits] = useState(0);
@@ -173,6 +178,7 @@ export default function Home() {
       setNotes(state.notes);
       setMessages(state.messages);
       setDaemons(state.daemons);
+      setQuiz(state.quiz);
     };
     // Another tab's library change updates the list; this tab keeps its open book while it exists.
     const onStorage = (e: StorageEvent) => {
@@ -215,12 +221,12 @@ export default function Home() {
     if (!isLoaded) return;
     const last = stored.current;
     const isUnchanged =
-      last?.reference === reference && last.notes === notes && last.messages === messages && last.daemons === daemons;
+      last?.reference === reference && last.notes === notes && last.messages === messages && last.daemons === daemons && last.quiz === quiz;
     if (isUnchanged) {
       pendingSave.current = undefined;
       return;
     }
-    const state = { reference, notes, messages, daemons };
+    const state = { reference, notes, messages, daemons, quiz };
     const key = currentKey.current; // the book these edits belong to, even if another opens before saving
     const save = () => {
       pendingSave.current = undefined;
@@ -230,7 +236,7 @@ export default function Home() {
     pendingSave.current = save;
     const timer = setTimeout(save, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [isLoaded, reference, notes, messages, daemons]);
+  }, [isLoaded, reference, notes, messages, daemons, quiz]);
 
   useEffect(() => {
     if (isLoaded) saveUi(browserStorage, ui);
@@ -260,6 +266,7 @@ export default function Home() {
     setNotes(stored.current.notes);
     setMessages(stored.current.messages);
     setDaemons(stored.current.daemons);
+    setQuiz(stored.current.quiz);
     setIsChangedElsewhere(false);
     clearStatus();
   }
@@ -471,6 +478,17 @@ export default function Home() {
               </div>
               <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />
               <section className="side-pane" aria-label="Beside the notes">
+                <div className="quiz-pane">
+                  <Quiz
+                    bookId={library.currentId}
+                    quiz={quiz}
+                    setQuiz={setQuiz}
+                    reference={reference}
+                    notes={notes}
+                    aiBlock={aiBlock}
+                    onAsked={() => setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())))}
+                  />
+                </div>
                 <div className="pdf-pane">
                   <PdfPane
                     ref={pdfPane}

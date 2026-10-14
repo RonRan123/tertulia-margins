@@ -1,8 +1,10 @@
-// Browser-only: the one client for POST /api/converse. Chat (and Define/Quiz) stream through
-// streamMessage; a daemon run goes through runDaemons. The NDJSON parsing lives in one place.
+// Browser-only: the one client for POST /api/converse. Chat (and Define) stream through
+// streamMessage; a daemon run goes through runDaemons, a quiz through makeQuiz. The NDJSON parsing
+// lives in one place.
 import type { ConverseEvent, ConverseRequest } from "@/core/converse.ts";
 import { citedPages, parsePassage } from "@/core/passage.ts";
 import type { DaemonId, Nugget } from "@/core/daemons.ts";
+import type { QuizQuestion } from "@/core/quiz.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { loadDaemonRunsToday, loadRepliesToday, localDay, recordDaemonRun, recordReply, type ChatMessage } from "@/core/store.ts";
 
@@ -63,6 +65,29 @@ export async function runDaemons(
     error ??= requestError;
   } catch {
     error = "network_error";
+  }
+  return result && !error ? result : { error: error ?? "empty_reply" };
+}
+
+// One quiz (D42): its questions, or the agent's reason there aren't any, or an error code. A quiz
+// counts as one of the day's AI replies (D35). Never throws.
+export async function makeQuiz(
+  body: ConverseRequest,
+  signal: AbortSignal,
+): Promise<{ verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] } | { error: string }> {
+  const day = localDay(new Date());
+  if (loadRepliesToday(window.localStorage, day) >= LIMITS.dailyReplies) return { error: "daily_limit" };
+  recordReply(window.localStorage, day);
+  let result: { verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] } | undefined;
+  let error: string | undefined;
+  try {
+    const requestError = await streamReply(body, signal, (event) => {
+      if (event.type === "quiz") result = { verdict: event.verdict, feedback: event.feedback, questions: event.questions };
+      if (event.type === "error") error = event.code;
+    });
+    error ??= requestError;
+  } catch {
+    error = signal.aborted ? "aborted" : "network_error";
   }
   return result && !error ? result : { error: error ?? "empty_reply" };
 }

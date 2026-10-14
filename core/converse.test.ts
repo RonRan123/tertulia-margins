@@ -85,7 +85,7 @@ test("command must be a known name with a string selection; /define needs a sele
   expect(errorOf({ ...valid, command: { name: "expand", selection: "x" } })).toBe("command_unknown");
   expect(errorOf({ ...valid, command: { name: "toString", selection: "x" } })).toBe("command_unknown");
   expect(errorOf({ ...valid, command: { name: "define", selection: " " } })).toBe("selection_missing");
-  expect(errorOf({ ...valid, command: { name: "quiz", selection: "" } })).toBeUndefined();
+  expect(errorOf({ ...valid, command: { name: "quiz", selection: "" } })).toBe("command_unknown"); // now the Quiz view (D42)
   const body = { ...valid, command: { name: "define", selection: "levity", extra: 1 } };
   expect(parseConverseRequest(body)).toMatchObject({ command: { name: "define", selection: "levity" } });
   expect(parseConverseRequest(body)).not.toHaveProperty("command.extra");
@@ -93,7 +93,7 @@ test("command must be a known name with a string selection; /define needs a sele
 });
 
 test("a command's prompt goes in the last user turn; system blocks and history are unchanged", () => {
-  const history = [{ role: "user" as const, content: "/quiz" }, { role: "assistant" as const, content: "A1" }];
+  const history = [{ role: "user" as const, content: "Q1" }, { role: "assistant" as const, content: "A1" }];
   const chat = buildContext({ ...valid, notes: "Mine", history });
   const define = buildContext({ ...valid, notes: "Mine", history, question: "/define levity", command: { name: "define", selection: "levity" } });
   expect(define.system).toEqual(chat.system);
@@ -104,9 +104,6 @@ test("a command's prompt goes in the last user turn; system blocks and history a
   expect(turn).not.toContain("OWNER");
   expect(define.maxTokens).toBe(COMMANDS.define.maxTokens);
   expect(chat.maxTokens).toBe(16000);
-
-  const quiz = buildContext({ ...valid, question: "/quiz", command: { name: "quiz", selection: "" } });
-  expect(quiz.messages.at(-1)!.content).toMatch(/^<command>\nIf "quiz"[^]*<\/command>\n\n\/quiz$/);
 });
 
 test("a mid-stream overloaded error (no HTTP status) maps to overloaded", () => {
@@ -191,7 +188,7 @@ test("daemon run validation: shape, excerpt, mustPick, and nothing else alongsid
   expect(errorOf({ ...valid, daemons: "Mine" })).toBe("daemons_invalid");
   expect(errorOf({ ...valid, daemons: { excerpt: "Mine", mustPick: "yes" } })).toBe("daemons_invalid");
   expect(errorOf({ ...valid, daemons: { excerpt: " " } })).toBe("excerpt_missing");
-  expect(errorOf({ ...valid, daemons: { excerpt: "Mine" }, command: { name: "quiz", selection: "" } })).toBe("request_conflict");
+  expect(errorOf({ ...valid, daemons: { excerpt: "Mine" }, command: { name: "define", selection: "x" } })).toBe("request_conflict");
 });
 
 test("the panel call shares chat's book and notes but has its own role; its turn holds each daemon, then the excerpt", async () => {
@@ -271,4 +268,76 @@ test("the reviewer may show nothing, unless the run must pick", async () => {
   const shown = await run(mustPick, single.client);
   expect(single.calls).toHaveLength(1); // one nugget that must be shown: no reviewer call
   expect(shown.events[0]).toMatchObject({ pick: "devils-advocate" });
+});
+
+// ---- Quiz (D42) ----
+const quizSetup = { topics: ["book-concepts"], count: 2, difficulty: "easy", style: "multiple-choice" } as const;
+const quizRun = { ...book, question: "", quiz: { ...quizSetup, topics: [...quizSetup.topics] } };
+const mcDraft = (question: string, right = "On Tuesday") => ({
+  topic: "book-concepts",
+  kind: "multiple-choice",
+  question,
+  choices: [right, "On Monday", "On Friday", "On Sunday", "At night"].map((text, i) => ({ text, correct: i === 0, why: `${text} [p. 1].` })),
+});
+
+test("quiz request validation: a setup, and nothing else alongside", () => {
+  expect(parseConverseRequest({ passage: book.passage, quiz: { ...quizSetup, topics: ["book-concepts", "book-concepts"], extra: 1 } })).toMatchObject({
+    question: "",
+    quiz: { topics: ["book-concepts"], count: 2, difficulty: "easy", style: "multiple-choice" },
+  });
+  expect(parseConverseRequest({ passage: book.passage, quiz: quizSetup })).not.toHaveProperty("quiz.extra");
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, count: 11 } })).toBe("quiz_invalid");
+  expect(errorOf({ ...valid, quiz: quizSetup, daemons: { excerpt: "Mine" } })).toBe("request_conflict");
+  expect(errorOf({ ...valid, quiz: quizSetup, command: { name: "define", selection: "x" } })).toBe("request_conflict");
+});
+
+test("a quiz: one call after the book with its own role; checked, shuffled questions", async () => {
+  const { client, calls } = daemonClient({ verdict: "ok", feedback: "", questions: [mcDraft("When did the sky fall?"), mcDraft("What fell?", "The sky")] });
+  const { events, stats } = await run(quizRun, client);
+  expect(calls).toHaveLength(1);
+  const call = calls[0] as { system: { text: string }[]; messages: { content: string }[]; output_config: { effort: string; format: { type: string } } };
+  expect(call.system[0]).toEqual(buildContext({ ...book, question: "x" }).system[0]); // the book first (D38)
+  expect(call.system[1].text).toMatch(/^<role>\nYou write a short quiz/);
+  expect(call.system[1].text).not.toContain("DRAFTED BY CLAUDE");
+  expect(call.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
+  expect(call.messages[0].content).toBe(
+    "<quiz_request>\n<topics>\n- book-concepts (\"Key concepts from the book\"): the book's key ideas, arguments, events, characters and relationships\n</topics>\n<questions>2</questions>\n<difficulty>easy</difficulty>\n<style>multiple-choice: every question has exactly 5 choices (Multiple choice)</style>\n</quiz_request>",
+  );
+  const quiz = events[0];
+  expect(quiz).toMatchObject({ type: "quiz", verdict: "ok", feedback: "" });
+  if (quiz.type !== "quiz") throw new Error("no quiz");
+  expect(quiz.questions.map((q) => q.choices[q.answer].text)).toEqual(["On Tuesday", "The sky"]);
+  expect(stats).not.toHaveProperty("reviewerUsage");
+});
+
+test("too little material: the agent's feedback, no questions", async () => {
+  const feedback = "Your notes define only 1 word. Ask for 1 question.";
+  const { client, calls } = daemonClient({ verdict: "insufficient", feedback, questions: [mcDraft("Padding?")] });
+  const { events } = await run(quizRun, client);
+  expect(calls).toHaveLength(1);
+  expect(events).toEqual([{ type: "quiz", verdict: "insufficient", feedback, questions: [] }]);
+});
+
+test("questions that fail the checks are replaced by one more call, told why; still short, the quiz runs shorter", async () => {
+  const giveaway = mcDraft("Q2", "On Tuesday, after the long and ominous storm had passed");
+  const { client, calls } = daemonClient(
+    { verdict: "ok", feedback: "", questions: [mcDraft("Q1"), giveaway] },
+    { verdict: "ok", feedback: "", questions: [mcDraft("Q3")] },
+  );
+  const { events, stats } = await run(quizRun, client);
+  expect(calls).toHaveLength(2);
+  const topUp = (calls[1] as { messages: { content: string }[] }).messages[0].content;
+  expect(topUp).toContain("<questions>1</questions>");
+  expect(topUp).toContain("<already_in_the_quiz>\n- Q1\n</already_in_the_quiz>");
+  expect(topUp).toMatch(/<set_aside>\n- Q2 \(the right answer is much longer[^]*Write 1 new question on/);
+  expect(events[0]).toMatchObject({ verdict: "ok", questions: [{ question: "Q1" }, { question: "Q3" }] });
+  expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
+
+  const short = daemonClient({ verdict: "ok", feedback: "", questions: [mcDraft("Q1"), giveaway] }, { verdict: "ok", feedback: "", questions: [giveaway] });
+  const shorter = await run(quizRun, short.client);
+  expect(shorter.events[0]).toMatchObject({ verdict: "ok", questions: [{ question: "Q1" }] });
+
+  const none = daemonClient({ verdict: "ok", feedback: "", questions: [giveaway] }, { verdict: "ok", feedback: "", questions: [] });
+  const failed = await run(quizRun, none.client);
+  expect(failed.events[0]).toMatchObject({ verdict: "insufficient", feedback: expect.stringMatching(/couldn't be written/), questions: [] });
 });

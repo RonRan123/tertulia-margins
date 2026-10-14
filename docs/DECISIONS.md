@@ -225,7 +225,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** grounded linking needs highlights (then pdfjs rendering), or a browser ignores `#page=`.
 
 ## D24. Define and Quiz leave the UI for now (amends D17)
-- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors")
+- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors"); Quiz returns as its own view (D42)
 - **Context:** after R1, Define and Quiz switched the right pane to chat and Define pasted a quote into the notes; Ronith dislikes both behaviours.
 - **Alternatives:** keep them and only change where replies land (unread dot, or a margin card).
 - **Rules:** the toolbar buttons and the page/chat wiring go. `core/commands.ts` (with its tests), `prompts/define.md` and `prompts/quiz.md` stay untouched, so they can return with a better shape. Chat still asks free-form questions; React is unchanged.
@@ -410,6 +410,23 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** every cause of the nit-picking was in the framing, so reframing fixes it cheaply without losing the quote check; outside knowledge is the one kind of connection the book can't give, so it gets its own clearly labelled voice rather than loosening grounding for all.
 - **Cost we accept:** the third daemon's claims about other works aren't verified and may be wrong or invented; the label is the only guard. The panel call drafts three remarks, so it costs a little more and the voices may blur more. Fewer remarks carry a checkable quote.
 - **Revisit if:** the outside daemon cites works or facts that don't exist (then add a check or a search tool, S8.4); remarks turn vague without quotes; three voices blur (one call per daemon).
+
+## D42. Quiz: a view where the reader tests themselves, written by a quiz agent (supersedes the /quiz command of D17; amends D24)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** Ronith wants self-testing built into the app, like Claude's own quiz interface: "the top of quiz is to enable users to test themselves on their understanding of content". D24 had taken the old /quiz command out of the UI.
+- **Alternatives:** keep the old command beside the new quiz; keep the quiz for this session only, or keep a history of past quizzes; multiple choice only, or true/false too; two sub-steps (agent, then view) or one.
+- **Rules:**
+  - *Where:* a **Quiz** view in the top bar between Margin and PDF; beside the notes or alone, like the others.
+  - *Setup:* topics as checkboxes (one or more): words defined in the notes, words from the book, key concepts from the book, key concepts from the notes; 1–10 questions; easy, medium or hard; a style: multiple choice (5 options, the default), true/false, or mixed (Ronith: "let the user select the style… default should be 5-option multiple choice"); **Start**.
+  - *Too little material:* checks the app can make without a call (no topic picked, no notes for a notes topic, no book text for a book topic, reference over the cap) answer at once; the quiz agent judges the rest and, when the material can't support the request, says why specifically (e.g. "your notes define 3 words: ask for 3 questions or add a topic"), and no quiz starts.
+  - *The agent:* one call, after the book (D38), with its own role prompt (`prompts/quiz-maker.md`, Claude drafts, Ronith refines) and JSON output (structured outputs): a verdict, feedback, and questions each with choices, the right one, and why each choice is right or wrong. Our code, not the model, shuffles multiple-choice options, and checks each question: the right number of choices, exactly one right, no duplicates, the right answer not conspicuously the longest, quotes passing `checkCitations`. Failing questions are replaced by one more call; if still short, the quiz runs with fewer and says so. One quiz counts as one of the day's AI replies (D35).
+  - *Taking it:* "Question 2 of 10" and the score so far ("1/10"); picking a choice locks it and shows whether it was right, why, and why the right answer is right; Next; at the end, a review of every question, the reader's answer, the right one and the explanations; New quiz. Page cites open the PDF (D38).
+  - *Saved:* the current quiz (setup, questions, answers, position) is saved with the book, so a reload or a book switch resumes it; no history of past quizzes.
+  - *Old /quiz:* the `quiz` command row and Ronith's `prompts/quiz.md` are removed (he approved); Define stays as D24 left it.
+  - *Built in one step* (Ronith).
+- **Why:** self-testing is a different act from conversation, so it gets its own view and a structured flow rather than chat; JSON lets our code own the parts the model gets wrong (answer position, giveaway lengths, invented quotes).
+- **Cost we accept:** each quiz sends the whole book (up to the 50K cap) plus a long JSON reply; explanations about words or ideas beyond a quote aren't checked; no history of past quizzes.
+- **Revisit if:** quizzes feel repetitive or off-topic, the length check rejects too many questions, or Ronith wants a history.
 
 ---
 

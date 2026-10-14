@@ -15,6 +15,7 @@
   --pill: #e3edff; /* the selected top-bar toggle */
   --quote: #8a7650; /* book binding: passage quotes */
   --warn: #b4441a;
+  --ok: #2f7a3e; /* a right quiz answer (D42) */
   --focus: #2b6cd4;
   /* Obsidian's default stacks (D27): one system face for notes, AI and interface. */
   --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
@@ -45,6 +46,7 @@
   --pill: #22324d;
   --quote: #c4ae84;
   --warn: #f2a47a;
+  --ok: #7fcf8f;
   --focus: #7fb0ff;
   --margin-ink: #b4bac4;
 }
@@ -814,6 +816,7 @@ main[data-view^="notes+"] .pane-divider {
   border-left: 1px solid var(--rule);
 }
 
+.quiz-pane,
 .pdf-pane,
 .chat-pane {
   display: none;
@@ -823,27 +826,296 @@ main[data-view^="notes+"] .pane-divider {
   padding: var(--s3) var(--s4);
 }
 
+main[data-view="notes+quiz"] .panes,
 main[data-view="notes+pdf"] .panes,
 main[data-view="notes+chat"] .panes {
   grid-column: 1;
 }
 
+main[data-view$="quiz"] .side-pane,
 main[data-view$="pdf"] .side-pane,
 main[data-view$="chat"] .side-pane,
+main[data-view$="quiz"] .quiz-pane,
 main[data-view$="pdf"] .pdf-pane,
 main[data-view$="chat"] .chat-pane {
   display: flex;
 }
 
+main[data-view="quiz"] .side-pane,
 main[data-view="pdf"] .side-pane,
 main[data-view="chat"] .side-pane {
   grid-column: 1 / -1;
   border-left: 0;
 }
 
+main[data-view="quiz"] .panes,
 main[data-view="pdf"] .panes,
 main[data-view="chat"] .panes {
   display: none;
+}
+
+/* The Quiz view (D42): one scrolling column; alone, a readable width. */
+.quiz-pane {
+  overflow-y: auto;
+}
+
+main[data-view="quiz"] .quiz {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+.quiz {
+  display: grid;
+  gap: var(--s4);
+  width: 100%;
+  padding-bottom: var(--s8);
+}
+
+.quiz h2 {
+  margin: 0;
+  font: 600 1.125rem/1.4 var(--font-ui);
+  color: var(--ink);
+}
+
+.quiz fieldset {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.quiz legend,
+.quiz-legend {
+  margin-bottom: var(--s2);
+  padding: 0;
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.quiz-row label {
+  display: grid;
+  justify-items: start;
+}
+
+.quiz select {
+  padding: var(--s1) var(--s2);
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.quiz-check {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  cursor: pointer;
+}
+
+.segments {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.segment {
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+  border-left: 1px solid var(--rule);
+}
+
+.segment:first-child {
+  border-left: 0;
+}
+
+.segment.selected {
+  background: var(--pill);
+  color: var(--ai);
+  font-weight: 600;
+}
+
+.segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.quiz-feedback {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: var(--ink);
+}
+
+.quiz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+}
+
+.quiz-hint,
+.quiz-topic {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.quiz-progress {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  font: 600 0.875rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.quiz-progress .quiz-score {
+  color: var(--ink);
+}
+
+.quiz-progress button {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.quiz-choices {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-choice > button {
+  display: flex;
+  gap: var(--s3);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  text-align: left;
+  font: 1rem/1.5 var(--font-text);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+}
+
+.quiz-choice > button:not(:disabled):hover {
+  border-color: var(--ai);
+}
+
+/* After an answer the choices are disabled but stay fully readable. */
+.quiz-choice > button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.quiz-choice .letter {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.quiz-choice .text {
+  flex: 1;
+}
+
+.quiz-choice .verdict {
+  font: 600 0.75rem/1.4 var(--font-ui);
+  white-space: nowrap;
+}
+
+.quiz-choice.right > button {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.quiz-choice.right .verdict {
+  color: var(--ok);
+}
+
+.quiz-choice.wrong > button {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.quiz-choice.wrong .verdict {
+  color: var(--warn);
+}
+
+.quiz-choice.other > button {
+  color: var(--ink-soft);
+}
+
+.quiz-choice .why {
+  margin: var(--s1) 0 0 var(--s6);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.quiz-choice.right .why,
+.quiz-choice.wrong .why {
+  color: var(--ink);
+}
+
+.quiz-result {
+  margin: 0;
+  font-weight: 600;
+}
+
+.quiz-result.right {
+  color: var(--ok);
+}
+
+.quiz-result.wrong {
+  color: var(--warn);
+}
+
+.quiz-review-list {
+  display: grid;
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-item {
+  padding-left: var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.review-item.right {
+  border-left-color: var(--ok);
+}
+
+.review-item.wrong {
+  border-left-color: var(--warn);
+}
+
+.review-item p {
+  margin: 0 0 var(--s1);
+}
+
+.review-question {
+  font-weight: 600;
+}
+
+.review-item.right .review-mark {
+  color: var(--ok);
+}
+
+.review-item.wrong .review-mark {
+  color: var(--warn);
 }
 
 /* The PDF view (D29): pdfjs needs an absolutely positioned scroll box; the toolbar floats on it. */
@@ -1197,6 +1469,7 @@ dialog.reference form button {
   }
 
   /* Beside the notes, there is no room: the chosen pane shows instead of them. */
+  main[data-view="notes+quiz"] .panes,
   main[data-view="notes+pdf"] .panes,
   main[data-view="notes+chat"] .panes {
     display: none;

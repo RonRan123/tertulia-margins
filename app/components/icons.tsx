@@ -36,6 +36,17 @@ export const MarginIcon = () => (
   </Icon>
 );
 
+// Lucide "list-checks": the Quiz view (D42).
+export const QuizIcon = () => (
+  <Icon>
+    <path d="m3 17 2 2 4-4" />
+    <path d="m3 7 2 2 4-4" />
+    <path d="M13 6h8" />
+    <path d="M13 12h8" />
+    <path d="M13 18h8" />
+  </Icon>
+);
+
 export const FileTextIcon = () => (
   <Icon>
     <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />

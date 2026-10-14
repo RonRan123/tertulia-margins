@@ -7,6 +7,7 @@ import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type 
 import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
 import { findExcerpt } from "./blocks.ts";
+import { checkQuestions, isQuizSetup, QUIZ_STYLES, QUIZ_TOPICS, quizSchema, shuffleChoices, CHOICES_PER_QUESTION, type QuizQuestion, type QuizSetup } from "./quiz.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
@@ -22,6 +23,7 @@ export type ConverseRequest = {
   book?: Book;
   command?: Command;
   daemons?: DaemonsRequest; // a daemon run (D37): no question, no history
+  quiz?: QuizSetup; // a quiz to write (D42): no question, no history
 };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
 export type ConverseRequestError =
@@ -41,7 +43,8 @@ export type ConverseRequestError =
   | "selection_missing" // /define needs a selected word
   | "daemons_invalid" // not { excerpt: string, mustPick?: boolean }
   | "excerpt_missing"
-  | "request_conflict"; // a command and a daemon run in one request
+  | "quiz_invalid" // not a QuizSetup
+  | "request_conflict"; // more than one of a command, a daemon run and a quiz in one request
 
 export type ConverseStats = {
   model: string;
@@ -49,7 +52,7 @@ export type ConverseStats = {
   ttftMs: number | null; // time to first text token; null if no text came back
   totalMs: number;
   usage: Anthropic.Beta.BetaUsage;
-  reviewerUsage?: Anthropic.Beta.BetaUsage; // a daemon run's second call, when it ran
+  reviewerUsage?: Anthropic.Beta.BetaUsage; // a daemon run's second call, or a quiz's top-up call, when it ran
   citations: CitationCheck[];
 };
 
@@ -59,11 +62,13 @@ export type ConverseEvent =
   // A daemon run's result: every nugget that survived the grounding check, and the one the reviewer
   // picked to show (null: nothing worth interrupting the reader). The rest are runners-up.
   | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[] }
+  // A quiz (D42): its questions, checked and shuffled, or (verdict "insufficient") why not.
+  | { type: "quiz"; verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] }
   | { type: "text"; text: string }
   | { type: "done"; stats: ConverseStats }
   | { type: "error"; code: ConverseErrorCode };
 // What converse() yields while it runs; the route forwards each one as is.
-export type ConverseChunk = Extract<ConverseEvent, { type: "text" | "daemons" }>;
+export type ConverseChunk = Extract<ConverseEvent, { type: "text" | "daemons" | "quiz" }>;
 
 // prompts/*.md are Ronith's: drop the owner comment before sending.
 function readPrompt(file: string): string {
@@ -79,9 +84,9 @@ function systemPrompt(book: Book = {}): string {
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, notes, history, book, command, daemons } = body;
+  const { passage, question, notes, history, book, command, daemons, quiz } = body;
   if (!isText(passage)) return { error: "passage_missing" };
-  const isQuestionOptional = daemons !== undefined && (question === undefined || typeof question === "string");
+  const isQuestionOptional = (daemons !== undefined || quiz !== undefined) && (question === undefined || typeof question === "string");
   if (!isText(question) && !isQuestionOptional) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
   if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
@@ -105,7 +110,9 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isSelectionMissing = command?.name === "define" && !isText(command.selection);
   if (isSelectionMissing) return { error: "selection_missing" };
 
-  if (daemons !== undefined && command !== undefined) return { error: "request_conflict" };
+  const kinds = [command, daemons, quiz].filter((v) => v !== undefined).length;
+  if (kinds > 1) return { error: "request_conflict" };
+  if (quiz !== undefined && !isQuizSetup(quiz)) return { error: "quiz_invalid" };
   const isDaemonsShaped = daemons === undefined || (isRecord(daemons) && typeof daemons.excerpt === "string" &&
     (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean"));
   if (!isDaemonsShaped) return { error: "daemons_invalid" };
@@ -119,6 +126,7 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
     book: book === undefined ? undefined : pickBook(book as Book),
     ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
     ...(daemons !== undefined && { daemons: { excerpt: daemons.excerpt as string, mustPick: daemons.mustPick === true } }),
+    ...(isQuizSetup(quiz) && { quiz: { topics: [...new Set(quiz.topics)], count: quiz.count, difficulty: quiz.difficulty, style: quiz.style } }),
   };
 }
 
@@ -136,6 +144,7 @@ export async function* converse(
 ): AsyncGenerator<ConverseChunk, ConverseStats> {
   const start = performance.now();
   if (request.daemons) return yield* runDaemons(client, request, request.daemons, start, signal);
+  if (request.quiz) return yield* runQuiz(client, request, request.quiz, start, signal);
   const { pages, system, messages, maxTokens } = buildContext(request);
   let ttftMs: number | null = null;
   let text = "";
@@ -305,6 +314,98 @@ export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsR
     ...candidates,
     `<cited>\n${cited}\n</cited>`,
     `<must_pick>${run.mustPick === true}</must_pick>`,
+  ].join("\n\n");
+}
+
+// A quiz (D42): one call writes the questions as JSON (or says why the material can't support
+// them); our code checks each one and shuffles its choices. If some fail, one more call asks for
+// replacements, told what went wrong; a quiz still short after that runs with what passed.
+async function* runQuiz(
+  client: Anthropic,
+  request: ConverseRequest,
+  setup: QuizSetup,
+  start: number,
+  signal?: AbortSignal,
+): AsyncGenerator<ConverseChunk, ConverseStats> {
+  const { pages, system } = systemBlocks(request, "quiz-maker.md");
+  const notes = request.notes ?? "";
+  const ask = (turn: string) =>
+    client.beta.messages.create({
+      model: MODEL,
+      max_tokens: LIMITS.replyTokens.quiz,
+      output_config: { effort: "medium", format: { type: "json_schema", schema: quizSchema(setup) } },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system,
+      messages: [{ role: "user", content: turn }],
+    }, { signal });
+
+  const first = await ask(quizTurn(setup));
+  // Structured output cut off by max_tokens may still parse, but it is a failed run (Sonnet 5.5 guide).
+  const output = first.stop_reason === "max_tokens" ? undefined : jsonOf(first);
+  const isInsufficient = isRecord(output) && output.verdict === "insufficient";
+  const feedback = isRecord(output) && typeof output.feedback === "string" ? output.feedback.trim() : "";
+  const checked = checkQuestions(isInsufficient ? undefined : output, setup, pages, notes);
+  let questions = checked.questions;
+  let topUpUsage: Anthropic.Beta.BetaUsage | undefined;
+
+  const missing = setup.count - questions.length;
+  if (!isInsufficient && output !== undefined && missing > 0) {
+    const message = await ask(quizTurn(setup, { missing, kept: questions, rejected: checked.rejected }));
+    topUpUsage = message.usage;
+    const more = message.stop_reason === "max_tokens" ? undefined : jsonOf(message);
+    const isMoreOk = isRecord(more) && more.verdict === "ok";
+    if (isMoreOk) questions = [...questions, ...checkQuestions(more, setup, pages, notes).questions].slice(0, setup.count);
+  }
+
+  const isFailed = !isInsufficient && questions.length === 0;
+  yield {
+    type: "quiz",
+    verdict: isInsufficient || isFailed ? "insufficient" : "ok",
+    feedback: isInsufficient
+      ? feedback || "There isn't enough material for this quiz. Try fewer questions or another topic."
+      : isFailed
+        ? "The quiz couldn't be written this time. Try again, or try fewer questions."
+        : "",
+    questions: isInsufficient ? [] : questions.map((q) => shuffleChoices(q)),
+  };
+  return {
+    model: first.model,
+    stopReason: first.stop_reason,
+    ttftMs: null,
+    totalMs: performance.now() - start,
+    usage: first.usage,
+    ...(topUpUsage && { reviewerUsage: topUpUsage }),
+    citations: [],
+  };
+}
+
+// The quiz agent's user turn: the request, and for a top-up, the questions kept (not to repeat)
+// and the ones set aside, with why.
+export function quizTurn(setup: QuizSetup, topUp?: { missing: number; kept: QuizQuestion[]; rejected: { question: string; reason: string }[] }): string {
+  const topics = setup.topics.map((t) => `- ${t} ("${QUIZ_TOPICS[t].label}"): ${QUIZ_TOPICS[t].ask}`).join("\n");
+  const style = {
+    "multiple-choice": `multiple-choice: every question has exactly ${CHOICES_PER_QUESTION} choices`,
+    "true-false": "true-false: every question is a statement with the choices True and False",
+    mixed: `mixed: choose per question between multiple-choice (exactly ${CHOICES_PER_QUESTION} choices) and true-false (True and False)`,
+  }[setup.style];
+  const count = topUp ? topUp.missing : setup.count;
+  const request = [
+    "<quiz_request>",
+    `<topics>\n${topics}\n</topics>`,
+    `<questions>${count}</questions>`,
+    `<difficulty>${setup.difficulty}</difficulty>`,
+    `<style>${style} (${QUIZ_STYLES[setup.style].label})</style>`,
+    "</quiz_request>",
+  ].join("\n");
+  if (!topUp) return request;
+  const kept = topUp.kept.map((q) => `- ${q.question}`).join("\n");
+  const rejected = topUp.rejected.map((r) => `- ${r.question} (${r.reason})`).join("\n");
+  return [
+    request,
+    `<already_in_the_quiz>\n${kept || "(none)"}\n</already_in_the_quiz>`,
+    `<set_aside>\n${rejected || "(none)"}\n</set_aside>`,
+    `These questions were set aside for the reasons given. Write ${count} new question${count === 1 ? "" : "s"} on words or ideas not already in the quiz, avoiding those problems.`,
   ].join("\n\n");
 }
 

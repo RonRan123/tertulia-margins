@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { freshQuiz } from "./quiz.ts";
 import {
   addBook,
   bookKey,
@@ -54,6 +55,13 @@ const state: AppState = {
     seen: ["my note"],
     linesSinceCard: 0,
   },
+  quiz: {
+    stage: "taking",
+    setup: { topics: ["book-concepts"], count: 1, difficulty: "easy", style: "true-false" },
+    questions: [{ topic: "book-concepts", kind: "true-false", question: "One comes first.", choices: [{ text: "True", why: "It does [p. 1]." }, { text: "False", why: "It does." }], answer: 0 }],
+    answers: [null],
+    current: 0,
+  },
 };
 
 test("save then load round-trips the state", () => {
@@ -83,6 +91,7 @@ test("malformed messages are dropped and unknown fields stripped", () => {
     notes: "N",
     messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }],
     daemons: { cards: [], pool: [], seen: ["n"], linesSinceCard: 0 },
+    quiz: freshQuiz(), // none saved (or a malformed one): a fresh setup
   });
 });
 

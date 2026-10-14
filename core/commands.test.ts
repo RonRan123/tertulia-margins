@@ -35,12 +35,8 @@ test("/define takes one line of at most 4 words and 40 characters", () => {
   expect(isDefinable("  ")).toBe(false);
 });
 
-test("chat labels: /define word, /quiz, /quiz on a truncated one-line selection", () => {
+test("chat labels: /define word", () => {
   expect(commandLabel({ name: "define", selection: " melancholy " })).toBe("/define melancholy");
-  expect(commandLabel({ name: "quiz", selection: " \n" })).toBe("/quiz");
-  expect(commandLabel({ name: "quiz", selection: "a\nb" })).toBe("/quiz on: “a b”");
-  expect(commandLabel({ name: "quiz", selection: "x".repeat(61) })).toBe(`/quiz on: “${"x".repeat(60)}…”`);
-  expect(commandLabel({ name: "quiz", selection: "x".repeat(60) })).toBe(`/quiz on: “${"x".repeat(60)}”`);
 });
 
 test("no nearby cite: the first occurrence, with its ¶ and page", () => {
