@@ -687,6 +687,13 @@ button.pill[aria-pressed="true"] {
   cursor: pointer;
 }
 
+/* D39: a remark from outside the book says so; its claims aren't checked against the text. */
+.card .beyond-book {
+  margin-right: auto;
+  font: italic 0.75rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+
 .card .daemon-name:hover {
   text-decoration: underline;
   text-underline-offset: 2px;

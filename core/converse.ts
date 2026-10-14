@@ -290,7 +290,11 @@ async function reviewNuggets(
 }
 
 export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsRequest): string {
-  const candidates = nuggets.map((n) => `<candidate id="${n.daemon}" name="${DAEMONS[n.daemon].name}">\n${n.text}\n</candidate>`);
+  const candidates = nuggets.map((n) => {
+    const { name, action } = DAEMONS[n.daemon];
+    const beyond = ACTIONS[action].isBeyondBook ? ' beyond_the_book="true"' : "";
+    return `<candidate id="${n.daemon}" name="${name}"${beyond}>\n${n.text}\n</candidate>`;
+  });
   // Every page any nugget cites ([pp. 3–4] spelled out), in book order.
   const cites = nuggets.flatMap(({ text }) => [...text.matchAll(pageCitePattern())].map((m) => ({ from: m[2].toLowerCase(), to: (m[3] ?? m[2]).toLowerCase() })));
   const isCited = (page?: string) =>

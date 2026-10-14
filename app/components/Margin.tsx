@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { Row } from "@/core/blocks.ts";
-import { afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { ACTIONS, afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { runDaemons } from "@/lib/converse-client.ts";
 import { CitedText } from "./CitedText";
@@ -154,6 +154,7 @@ export function MarginCell({ row, margin, activeId, onToggle }: MarginCellProps)
               <button type="button" className="daemon-name" aria-pressed={isActive} title="Highlight the words this answers" onClick={() => onToggle(card)}>
                 {daemon.name}
               </button>
+              {ACTIONS[daemon.action].isBeyondBook && <span className="beyond-book">beyond the book</span>}
               <button type="button" className="delete" aria-label={`Dismiss ${daemon.name}'s note`} onClick={() => margin.dismiss(card.id)}>
                 ×
               </button>

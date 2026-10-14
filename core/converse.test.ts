@@ -204,7 +204,7 @@ test("the panel call shares chat's book and notes but has its own role; its turn
   expect(panel.system[2]).toEqual(chat[2]); // the notes
   expect(panel.output_config.format.type).toBe("json_schema");
   const turn = panel.messages[0].content;
-  expect(turn).toMatch(/^<daemons>\n<daemon id="author" name="The Author">\n<action>\nConnect [^]*<persona>\nVoice:[^]*<daemon id="devils-advocate"[^]*<action>\nCounter [^]*<\/daemons>\n\n<excerpt>\n- Everyone panicked\.\n- Tuesday matters\.\n<\/excerpt>$/);
+  expect(turn).toMatch(/^<daemons>\n<daemon id="author" name="The Author">\n<action>\nConnect [^]*<persona>\nVoice:[^]*<daemon id="devils-advocate"[^]*<action>\nOffer the strongest other reading[^]*<daemon id="scholar" name="The Scholar">\n<action>\nWiden [^]*<\/daemons>\n\n<excerpt>\n- Everyone panicked\.\n- Tuesday matters\.\n<\/excerpt>$/);
   expect(turn + panel.system[1].text).not.toContain("DRAFTED BY CLAUDE");
 });
 
@@ -248,6 +248,13 @@ test("two nuggets: the reviewer sees the excerpt, both, and only the pages they 
   expect(reviewer.messages[0].content).not.toContain("The sky fell on Tuesday.");
   expect(events).toEqual([{ type: "daemons", pick: "devils-advocate", nuggets: drafts.map((d) => ({ daemon: d.daemon, text: d.nugget, anchor: d.anchor })) }]);
   expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
+});
+
+test("the reviewer is told which candidates draw on knowledge beyond the book (D39)", () => {
+  const nuggets = [{ daemon: "author", text: "See [p. 2].", anchor: "a" }, { daemon: "scholar", text: "Arendt names this.", anchor: "a" }] as const;
+  const turn = reviewerTurn([...nuggets], bookPages, { excerpt: "a" });
+  expect(turn).toContain('<candidate id="author" name="The Author">\n');
+  expect(turn).toContain('<candidate id="scholar" name="The Scholar" beyond_the_book="true">\nArendt names this.\n</candidate>');
 });
 
 test("the reviewer may show nothing, unless the run must pick", async () => {

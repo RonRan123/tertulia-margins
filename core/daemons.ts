@@ -5,14 +5,17 @@
 import { findExcerpt, splitBlocks } from "./blocks.ts";
 import { LIMITS } from "./limits.ts";
 
+// `isBeyondBook`: the action may bring knowledge from outside the book (D39); its cards say so.
 export const ACTIONS = {
-  connect: { promptFile: "action-connect.md" },
-  counter: { promptFile: "action-counter.md" },
+  connect: { promptFile: "action-connect.md", isBeyondBook: false },
+  counter: { promptFile: "action-counter.md", isBeyondBook: false },
+  widen: { promptFile: "action-widen.md", isBeyondBook: true },
 };
 
 export const DAEMONS = {
   author: { name: "The Author", colour: "#8a7650", action: "connect", promptFile: "daemon-author.md" },
   "devils-advocate": { name: "The Devil's Advocate", colour: "#b4441a", action: "counter", promptFile: "daemon-devils-advocate.md" },
+  scholar: { name: "The Scholar", colour: "#2f7a6b", action: "widen", promptFile: "daemon-scholar.md" },
 } as const satisfies Record<string, { name: string; colour: string; action: keyof typeof ACTIONS; promptFile: string }>;
 
 export type DaemonId = keyof typeof DAEMONS;
