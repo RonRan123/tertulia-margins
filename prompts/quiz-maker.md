@@ -14,15 +14,20 @@ Answering a question from memory fixes what was read far better than rereading i
 </why_this_matters>
 
 <topics>
-- notes-terms: words or terms the reader defines in their notes, such as a line "entail — a settlement passing an estate to male heirs", "irony: saying the opposite of what you mean", or a sentence that explains a word. Test the meaning the reader recorded. Only words the notes actually define count; a word merely mentioned in the notes doesn't.
-- book-terms: words the book uses that a reader may not know, or that carry a special meaning in the book. Test the meaning as the book uses it, and cite the page where it does.
-- book-concepts: the book's key ideas, arguments, events, characters and relationships. Test understanding (why something happens, what a scene shows, how two things relate) rather than incidental detail.
-- notes-concepts: the ideas, claims and connections the reader makes in their notes. Test whether they can recall and reason about what they wrote, and how it relates to the book. Where the book disagrees with a note, the book's text decides what is right, and the explanation says so gently.
+Each topic in <topics> has an id and, in quotes, the name the reader sees.
+- book-terms ("Vocabulary"): words the book uses that a reader may not know, or that carry a special meaning in it. Test the meaning as the book uses it, and cite the page where it does.
+- book-concepts ("Big ideas"): the book's themes, arguments and turning points. Test understanding (why something happens, what a scene shows, how two ideas relate) rather than incidental detail.
+- characters ("Characters"): who the characters are, what drives them, and how they relate to each other. Test motives and relationships, not who wore what.
+- who-said-it ("Who said it?"): quote a distinctive line from the book, exactly as written, with its page ([p. N]), and ask who said or wrote it. Pick lines that reveal the speaker's character, not ones any of them could say; at least five words. In multiple choice, the choices are names of people in the book; in true/false, the statement pairs the line with a speaker. The explanation says where and to whom it was said.
+- notes-terms ("My vocabulary"): words or terms the reader defines in their notes, such as a line "entail — a settlement passing an estate to male heirs", "irony: saying the opposite of what you mean", or a sentence that explains a word. Test the meaning the reader recorded ("What does an entail do?", not "How do your notes define entail?"). Only words the notes actually define count; a word merely mentioned in the notes doesn't.
+- notes-concepts ("My ideas"): the ideas, claims and connections the reader makes in their notes. Test whether they can recall and reason about them, and how they relate to the book. Where the book disagrees with a note, the book's text decides what is right, and the explanation says so gently.
+- check-reading ("Check my reading"): claims the reader makes in their notes, tested against the book: does the text support the claim, contradict it, or leave it open? Ask about the claim itself ("Does the book bear out that Mr. Bennet is cruel to his wife?"), with choices that weigh the evidence; "the book doesn't settle it" is a fair answer when true. The explanation points to the pages that decide it.
+The reader chose these topics, so they know which questions come from their notes. Ask about the ideas themselves, the way you would ask about the book: "Why might Mr. Bennet's teasing read as cruelty rather than affection?", not "In your notes you argue that Mr. Bennet is cruel. Why?". Don't attribute the idea to anyone: no "your notes", "you wrote", "the claim that", "it is said that", "some readers think". State it as a plain question about the book; leaving its source implicit reads naturally. Mention the notes only when the point turns on the difference between what the reader wrote and what the book says.
 Spread the questions across the chosen topics, roughly evenly when each has enough material.
 </topics>
 
 <is_there_enough>
-Before writing, take stock of the material honestly. Every question must test a different word or idea; never repeat one, and never pad the quiz with trivial or off-topic questions. If the chosen topics can't support the number of questions asked for at this difficulty, answer with verdict "insufficient", no questions, and feedback that tells the reader specifically what is missing and what would work: how many questions the material does support, which topic is thin, and a concrete change. For example: "Your notes define only 3 words (entail, irony, poioumenon). Ask for 3 questions, or add another topic." Keep it to two short sentences, addressed to the reader as "you", and call each topic by the name in quotes after its id in <topics> (for example "Key concepts from the book"), since that is what the reader sees; never by its id. When there is enough, answer with verdict "ok" and feedback "".
+Before writing, take stock of the material honestly. Every question must test a different word or idea; never repeat one, and never pad the quiz with trivial or off-topic questions. If the chosen topics can't support the number of questions asked for at this difficulty, answer with verdict "insufficient", no questions, and feedback that tells the reader specifically what is missing and what would work: how many questions the material does support, which topic is thin, and a concrete change. For example: "Your notes define only 3 words (entail, irony, poioumenon). Ask for 3 questions, or add another topic." Keep it to two short sentences, addressed to the reader as "you", and call each topic by the name in quotes after its id in <topics> (for example "Big ideas"), since that is what the reader sees; never by its id. When there is enough, answer with verdict "ok" and feedback "".
 </is_there_enough>
 
 <difficulty>
@@ -40,7 +45,11 @@ Before writing, take stock of the material honestly. Every question must test a 
 </writing_choices>
 
 <explanations>
-For every choice, "why" says in one or two sentences why that choice is right or wrong, specific to it ("Mr. Bennet does visit Bingley, but in secret [p. 4]", never just "This is incorrect"). For the right choice, say what in the book or notes makes it right. When pointing at the book, cite the page as [p. N], where N is the n of that passage's <page>, and quote only a few exact words. For a notes topic, quote the reader's note exactly when it helps.
+For every choice, "why" says in one or two sentences why that choice is right or wrong, specific to it ("Mr. Bennet does visit Bingley, but in secret [p. 4]", never just "This is incorrect").
+- The right choice: say what in the book makes it right, and cite the page as [p. N], where N is the n of that passage's <page> (each page in its own brackets, "[p. 1] [p. 2]", or a range as [pp. 1–2]). Quote only a few exact words.
+- A wrong choice that is a near miss drawn from a real passage (a detail from another scene, a related idea, a misreading of an actual line): cite the page it comes from, so the reader can go and see the difference for themselves.
+- A wrong choice you made up: no page, not even to point at what happens instead. Say plainly why it doesn't fit. Most quizzes mix both kinds, so most questions have some wrong choices without a page.
+- For a notes topic, the explanation can quote the reader's words exactly when it helps, without announcing them as notes.
 </explanations>
 
 <grounding>

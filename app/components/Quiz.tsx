@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import {
   DIFFICULTIES,
   QUESTION_LIMITS,
+  QUIZ_SOURCES,
   QUIZ_STYLES,
   QUIZ_TOPIC_IDS,
   QUIZ_TOPICS,
@@ -114,15 +115,18 @@ function QuizSetupForm({
       }}
     >
       <h2>Quiz yourself</h2>
-      <fieldset disabled={isMaking}>
-        <legend>Topics</legend>
-        {QUIZ_TOPIC_IDS.map((topic) => (
-          <label key={topic} className="quiz-check">
-            <input type="checkbox" checked={setup.topics.includes(topic)} onChange={(e) => toggleTopic(topic, e.target.checked)} />
-            {QUIZ_TOPICS[topic].label}
-          </label>
-        ))}
-      </fieldset>
+      {(Object.keys(QUIZ_SOURCES) as (keyof typeof QUIZ_SOURCES)[]).map((source) => (
+        <fieldset key={source} disabled={isMaking}>
+          <legend>{QUIZ_SOURCES[source]}</legend>
+          {QUIZ_TOPIC_IDS.filter((topic) => QUIZ_TOPICS[topic].source === source).map((topic) => (
+            <label key={topic} className="quiz-check">
+              <input type="checkbox" checked={setup.topics.includes(topic)} onChange={(e) => toggleTopic(topic, e.target.checked)} />
+              <span className="quiz-topic-label">{QUIZ_TOPICS[topic].label}</span>
+              <span className="quiz-topic-hint">{QUIZ_TOPICS[topic].hint}</span>
+            </label>
+          ))}
+        </fieldset>
+      ))}
       <fieldset disabled={isMaking} className="quiz-row">
         <label>
           <span className="quiz-legend">Questions</span>

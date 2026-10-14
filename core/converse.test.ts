@@ -301,7 +301,7 @@ test("a quiz: one call after the book with its own role; checked, shuffled quest
   expect(call.system[1].text).not.toContain("DRAFTED BY CLAUDE");
   expect(call.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
   expect(call.messages[0].content).toBe(
-    "<quiz_request>\n<topics>\n- book-concepts (\"Key concepts from the book\"): the book's key ideas, arguments, events, characters and relationships\n</topics>\n<questions>2</questions>\n<difficulty>easy</difficulty>\n<style>multiple-choice: every question has exactly 5 choices (Multiple choice)</style>\n</quiz_request>",
+    "<quiz_request>\n<topics>\n- book-concepts (\"Big ideas\"): the book's themes, arguments and turning points\n</topics>\n<questions>2</questions>\n<difficulty>easy</difficulty>\n<style>multiple-choice: every question has exactly 5 choices (Multiple choice)</style>\n</quiz_request>",
   );
   const quiz = events[0];
   expect(quiz).toMatchObject({ type: "quiz", verdict: "ok", feedback: "" });

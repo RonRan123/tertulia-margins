@@ -6,13 +6,19 @@ import { checkCitations } from "./citations.ts";
 import { ownLines } from "./daemons.ts";
 import type { BookPage } from "./passage.ts";
 
-// `ask`: how the quiz agent is told what the topic covers.
+// Grouped by source, in the order the setup lists them (D43). `hint`: the line under the label.
+// `ask`: how the quiz agent is told what the topic covers. Ids predate D43's labels, so saved
+// quizzes still load.
 export const QUIZ_TOPICS = {
-  "notes-terms": { label: "Words defined in my notes", source: "notes", ask: "words or terms the reader defines in their notes" },
-  "book-terms": { label: "Words from the book", source: "book", ask: "words the book uses that a reader may not know, or that carry a special meaning in it" },
-  "book-concepts": { label: "Key concepts from the book", source: "book", ask: "the book's key ideas, arguments, events, characters and relationships" },
-  "notes-concepts": { label: "Key concepts from my notes", source: "notes", ask: "the ideas, claims and connections the reader makes in their notes" },
+  "book-terms": { label: "Vocabulary", hint: "words the book uses", source: "book", ask: "words the book uses that a reader may not know, or that carry a special meaning in it" },
+  "book-concepts": { label: "Big ideas", hint: "themes, arguments, turning points", source: "book", ask: "the book's themes, arguments and turning points" },
+  characters: { label: "Characters", hint: "who's who, motives, relationships", source: "book", ask: "the book's characters: who they are, what drives them, and how they relate to each other" },
+  "who-said-it": { label: "Who said it?", hint: "match a line to its speaker", source: "book", ask: "lines of dialogue or writing from the book, quoted exactly, to be matched to who said or wrote them" },
+  "notes-terms": { label: "My vocabulary", hint: "words I've defined", source: "notes", ask: "words or terms the reader defines in their notes" },
+  "notes-concepts": { label: "My ideas", hint: "the claims and connections I made", source: "notes", ask: "the ideas, claims and connections the reader makes in their notes" },
+  "check-reading": { label: "Check my reading", hint: "does the book back up what I wrote?", source: "notes", ask: "claims the reader makes in their notes, tested against the book: supported, contradicted, or not settled by the text" },
 } as const;
+export const QUIZ_SOURCES = { book: "From the book", notes: "From my notes" } as const;
 export type QuizTopic = keyof typeof QUIZ_TOPICS;
 export const QUIZ_TOPIC_IDS = Object.keys(QUIZ_TOPICS) as QuizTopic[];
 
@@ -93,8 +99,10 @@ export function quizSchema(setup: QuizSetup) {
   };
 }
 
-// A right answer this much longer than the average wrong one gives itself away.
+// A right answer this much longer than the average wrong one gives itself away; short answers
+// (names, single words) vary in length naturally, so it must also be this many characters longer.
 const GIVEAWAY_RATIO = 1.5;
+const GIVEAWAY_CHARS = 20;
 const CATCH_ALL = /\b(all|none|both|neither) of the (above|others)\b/i;
 
 // The agent's questions → the ones fit to ask, and why each other one isn't. A question must match
@@ -140,7 +148,7 @@ function questionProblem(draft: unknown, setup: QuizSetup, pages: BookPage[], no
     const rightLength = (right[0].text as string).trim().length;
     const others = texts.filter((t) => t !== (right[0].text as string).trim()).map((t) => t.length);
     const average = others.reduce((sum, n) => sum + n, 0) / others.length;
-    const isGiveaway = rightLength > GIVEAWAY_RATIO * average && rightLength > Math.max(...others);
+    const isGiveaway = rightLength > GIVEAWAY_RATIO * average && rightLength - average >= GIVEAWAY_CHARS && rightLength > Math.max(...others);
     if (isGiveaway) return "the right answer is much longer than the others, which gives it away";
   }
   const written = [draft.question, ...choices.flatMap((c) => [c.text, c.why])].join("\n");

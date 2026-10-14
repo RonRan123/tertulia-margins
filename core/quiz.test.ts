@@ -22,6 +22,7 @@ test("setup validation: topics, 1–10 questions, difficulty, style", () => {
   expect(isQuizSetup(defaultSetup)).toBe(true);
   expect(isQuizSetup({ ...setup, topics: [] })).toBe(false);
   expect(isQuizSetup({ ...setup, topics: ["gossip"] })).toBe(false);
+  expect(isQuizSetup({ ...setup, topics: ["characters", "who-said-it", "check-reading"] })).toBe(true); // D43
   expect(isQuizSetup({ ...setup, count: 0 })).toBe(false);
   expect(isQuizSetup({ ...setup, count: 11 })).toBe(false);
   expect(isQuizSetup({ ...setup, count: 2.5 })).toBe(false);
@@ -34,6 +35,7 @@ test("what the app says without asking the agent", () => {
   expect(quizBlocker(setup, "", "Add reference text first.")).toBe("Add reference text first.");
   expect(quizBlocker({ ...setup, topics: ["notes-terms"] }, "> “A copied quote from the book.”")).toMatch(/^Your notes have nothing of your own/);
   expect(quizBlocker({ ...setup, topics: ["notes-terms"] }, "irony — saying the opposite of what you mean")).toBeUndefined();
+  expect(quizBlocker({ ...setup, topics: ["check-reading"] }, "")).toMatch(/^Your notes have nothing of your own/);
   expect(quizBlocker(setup, "")).toBeUndefined(); // book topics don't need notes
 });
 
@@ -64,6 +66,9 @@ test("checks: each way a question fails, with a reason", () => {
     expect(questions).toEqual([]);
     expect(rejected[0].reason).toMatch(reason);
   }
+  // Names vary in length naturally: a longer right name isn't a giveaway (D43).
+  const names = ["Sir William Lucas", "Jane", "Lydia", "Kitty", "Mary"].map((text, i) => ({ text, correct: i === 0, why: "w" }));
+  expect(checkQuestions({ questions: [mc("Who said “so far”?", { choices: names })] }, setup, pages, "").rejected).toEqual([]);
   const wrongTf = { ...tf("x", true), choices: [{ text: "Yes", correct: true, why: "w" }, { text: "No", correct: false, why: "w" }] };
   expect(checkQuestions({ questions: [wrongTf] }, { ...setup, style: "true-false" }, pages, "").rejected[0].reason).toMatch(/True and False/);
   // A quote from the reader's notes is fine (a notes topic).

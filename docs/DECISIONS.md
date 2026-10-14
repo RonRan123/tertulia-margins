@@ -428,6 +428,19 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** each quiz sends the whole book (up to the 50K cap) plus a long JSON reply; explanations about words or ideas beyond a quote aren't checked; no history of past quizzes.
 - **Revisit if:** quizzes feel repetitive or off-topic, the length check rejects too many questions, or Ronith wants a history.
 
+## D43. Quiz topics: two groups, short names, three new topics (amends D42)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** after trying the quiz ("the best feature yet"), Ronith asked for better topic names than his first ideas and for other things to quiz on. D5 still holds: topics come from the book or the reader's notes.
+- **Alternatives:** rename and group only; rename and add about nine topics (plot, themes, craft too), at the cost of overlap.
+- **Rules:**
+  - *From the book:* **Vocabulary** (words the book uses), **Big ideas** (themes, arguments, turning points), **Characters** (who's who, motives, relationships; new), **Who said it?** (match a line to its speaker; new: the line is quoted exactly with its page, so `checkCitations` verifies it).
+  - *From my notes:* **My vocabulary** (words I've defined), **My ideas** (the claims and connections I made), **Check my reading** (new: does the book back up what I wrote? Supported, contradicted, or not settled by the text).
+  - The old ids stay (`book-terms`, `book-concepts`, `notes-terms`, `notes-concepts`) so saved quizzes load; only labels change.
+  - The length check that rejects a giveaway right answer now also needs the right answer to be 20+ characters longer than the average, so short answers like names ("Sir William Lucas" against "Jane") aren't rejected for length.
+- **Why:** each new topic tests something the first four didn't (who's who, exact words, whether a reading holds) without overlapping them; grouping by source makes the list scannable.
+- **Cost we accept:** seven checkboxes instead of four; "Big ideas" and "Characters" can overlap on a character's motive.
+- **Revisit if:** Ronith rarely picks a topic, or two topics keep producing the same questions.
+
 ---
 
 ## Template

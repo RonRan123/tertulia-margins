@@ -909,10 +909,31 @@ main[data-view="quiz"] .quiz {
 }
 
 .quiz-check {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 9rem minmax(0, 1fr);
   gap: var(--s2);
-  align-items: center;
+  align-items: baseline;
   cursor: pointer;
+}
+
+.quiz-topic-hint {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+/* Narrow panes: the hint goes under the label. */
+@container (max-width: 26rem) {
+  .quiz-check {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .quiz-topic-hint {
+    grid-column: 2;
+  }
+}
+
+.quiz-setup {
+  container-type: inline-size;
 }
 
 .segments {
