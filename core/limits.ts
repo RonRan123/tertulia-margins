@@ -30,6 +30,7 @@ export const LIMITS = {
     chat: 16_000,
     define: 4_000,
     quiz: 16_000, // a quiz (D42): up to 10 questions with an explanation per choice, as JSON, plus thinking
+    grade: 2_000, // a free response's grade (D44): a verdict and one line, as JSON, plus thinking
     panel: 6_000, // a daemon run (D37): every daemon's nugget (≤40 words each) as JSON, plus thinking
     reviewer: 2_000, // picks one nugget or none; one word of JSON, plus thinking
   },

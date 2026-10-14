@@ -972,6 +972,35 @@ main[data-view="quiz"] .quiz {
   outline-offset: -2px;
 }
 
+.quiz-risk {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--quote);
+  background: color-mix(in srgb, var(--quote) 10%, transparent);
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+/* Writing a quiz: a bar that eases toward 95% over the usual time (QuizProgress). */
+.quiz-loading {
+  display: grid;
+  gap: var(--s2);
+}
+
+.quiz-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.quiz-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ai);
+  transition: width 0.2s linear;
+}
+
 .quiz-feedback {
   margin: 0;
   padding: var(--s2) var(--s3);
@@ -1100,6 +1129,135 @@ main[data-view="quiz"] .quiz {
 
 .quiz-result.wrong {
   color: var(--warn);
+}
+
+/* Fill in the blanks (D44): dropdowns inline in the sentence; after Check, each blank's why. */
+.quiz-blanks {
+  line-height: 2;
+}
+
+.quiz-blanks select {
+  margin: 0 var(--s1);
+  padding: 0 var(--s1);
+  font: inherit;
+  font-weight: 500;
+  color: var(--ai);
+  background: var(--sheet);
+  border: 0;
+  border-bottom: 2px solid var(--ai);
+  border-radius: 0;
+}
+
+.quiz-blanks select:disabled {
+  opacity: 1;
+}
+
+.quiz-blanks select.right {
+  color: var(--ok);
+  border-bottom-color: var(--ok);
+}
+
+.quiz-blanks select.wrong {
+  color: var(--warn);
+  border-bottom-color: var(--warn);
+}
+
+.quiz-blank-whys {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}
+
+.quiz-blank-whys li {
+  padding-left: var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.quiz-blank-whys li.right {
+  border-left-color: var(--ok);
+}
+
+.quiz-blank-whys li.wrong {
+  border-left-color: var(--warn);
+}
+
+.quiz-blank-whys p {
+  margin: 0 0 var(--s1);
+}
+
+.quiz-blank-whys .verdict {
+  font: 600 0.75rem/1.4 var(--font-ui);
+}
+
+.quiz-blank-whys .right .verdict {
+  color: var(--ok);
+}
+
+.quiz-blank-whys .wrong .verdict {
+  color: var(--warn);
+}
+
+/* Free response (D44): the answer box, then the reader's answer, the grade and a full answer. */
+.quiz-free {
+  display: grid;
+  gap: var(--s3);
+}
+
+.quiz-free textarea {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  font: 1rem/1.5 var(--font-text);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.quiz-your-answer {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--rule);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.quiz-grade {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.quiz-grade.right {
+  border-left-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.quiz-grade.partial {
+  border-left-color: var(--quote);
+  background: color-mix(in srgb, var(--quote) 12%, transparent);
+}
+
+.quiz-grade.wrong {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.quiz-model {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.quiz-model p {
+  margin: 0 0 var(--s1);
+}
+
+.quiz-model ul {
+  margin: 0;
+  padding-left: var(--s6);
 }
 
 .quiz-review-list {

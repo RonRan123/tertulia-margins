@@ -1,10 +1,11 @@
 // Browser-only: the one client for POST /api/converse. Chat (and Define) stream through
-// streamMessage; a daemon run goes through runDaemons, a quiz through makeQuiz. The NDJSON parsing
+// streamMessage; a daemon run goes through runDaemons, a quiz through makeQuiz, a free response's
+// grade through gradeAnswer. The NDJSON parsing
 // lives in one place.
 import type { ConverseEvent, ConverseRequest } from "@/core/converse.ts";
 import { citedPages, parsePassage } from "@/core/passage.ts";
 import type { DaemonId, Nugget } from "@/core/daemons.ts";
-import type { QuizQuestion } from "@/core/quiz.ts";
+import type { QuizQuestion, Verdict } from "@/core/quiz.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { loadDaemonRunsToday, loadRepliesToday, localDay, recordDaemonRun, recordReply, type ChatMessage } from "@/core/store.ts";
 
@@ -83,6 +84,26 @@ export async function makeQuiz(
   try {
     const requestError = await streamReply(body, signal, (event) => {
       if (event.type === "quiz") result = { verdict: event.verdict, feedback: event.feedback, questions: event.questions };
+      if (event.type === "error") error = event.code;
+    });
+    error ??= requestError;
+  } catch {
+    error = signal.aborted ? "aborted" : "network_error";
+  }
+  return result && !error ? result : { error: error ?? "empty_reply" };
+}
+
+// One free response's grade (D44): a verdict and one line of feedback, or an error code. Each
+// grading counts as one of the day's AI replies (Ronith). Never throws.
+export async function gradeAnswer(body: ConverseRequest, signal: AbortSignal): Promise<{ verdict: Verdict; feedback: string } | { error: string }> {
+  const day = localDay(new Date());
+  if (loadRepliesToday(window.localStorage, day) >= LIMITS.dailyReplies) return { error: "daily_limit" };
+  recordReply(window.localStorage, day);
+  let result: { verdict: Verdict; feedback: string } | undefined;
+  let error: string | undefined;
+  try {
+    const requestError = await streamReply(body, signal, (event) => {
+      if (event.type === "grade") result = { verdict: event.verdict, feedback: event.feedback };
       if (event.type === "error") error = event.code;
     });
     error ??= requestError;

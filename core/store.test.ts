@@ -57,7 +57,7 @@ const state: AppState = {
   },
   quiz: {
     stage: "taking",
-    setup: { topics: ["book-concepts"], count: 1, difficulty: "easy", style: "true-false" },
+    setup: { topics: ["book-concepts"], count: 1, difficulty: "easy", styles: ["true-false"] },
     questions: [{ topic: "book-concepts", kind: "true-false", question: "One comes first.", choices: [{ text: "True", why: "It does [p. 1]." }, { text: "False", why: "It does." }], answer: 0 }],
     answers: [null],
     current: 0,

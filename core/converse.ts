@@ -7,7 +7,7 @@ import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type 
 import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
 import { findExcerpt } from "./blocks.ts";
-import { checkQuestions, isQuizSetup, QUIZ_STYLES, QUIZ_TOPICS, quizSchema, shuffleChoices, CHOICES_PER_QUESTION, type QuizQuestion, type QuizSetup } from "./quiz.ts";
+import { ANGLES, BLANK, BLANK_LIMITS, CHOICES_PER_QUESTION, checkQuestions, isAvoidList, isGradeRequest, isQuizSetup, pickAngles, type Angle, KEY_POINT_LIMITS, OPTIONS_PER_BLANK, QUIZ_STYLES, QUIZ_TOPICS, quizSchema, shuffleChoices, VERDICTS, type GradeRequest, type QuizQuestion, type QuizSetup, type Verdict } from "./quiz.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
@@ -23,7 +23,8 @@ export type ConverseRequest = {
   book?: Book;
   command?: Command;
   daemons?: DaemonsRequest; // a daemon run (D37): no question, no history
-  quiz?: QuizSetup; // a quiz to write (D42): no question, no history
+  quiz?: QuizRequest; // a quiz to write (D42): no question, no history
+  grade?: GradeRequest; // a free response to grade (D44): no question, no history
 };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
 export type ConverseRequestError =
@@ -44,7 +45,8 @@ export type ConverseRequestError =
   | "daemons_invalid" // not { excerpt: string, mustPick?: boolean }
   | "excerpt_missing"
   | "quiz_invalid" // not a QuizSetup
-  | "request_conflict"; // more than one of a command, a daemon run and a quiz in one request
+  | "grade_invalid" // not a GradeRequest
+  | "request_conflict"; // more than one of a command, a daemon run, a quiz and a grading in one request
 
 export type ConverseStats = {
   model: string;
@@ -56,6 +58,9 @@ export type ConverseStats = {
   citations: CitationCheck[];
 };
 
+// A quiz to write: the setup, and the book's recent questions not to repeat (variety).
+export type QuizRequest = QuizSetup & { avoid?: string[] };
+
 // The wire format of POST /api/converse: one JSON object per line (NDJSON): a "text" event per
 // delta (or one "daemons" event for a daemon run), then "done" or "error".
 export type ConverseEvent =
@@ -64,11 +69,13 @@ export type ConverseEvent =
   | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[] }
   // A quiz (D42): its questions, checked and shuffled, or (verdict "insufficient") why not.
   | { type: "quiz"; verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] }
+  // A free response's grade (D44): right, partly right or wrong, and one line on why.
+  | { type: "grade"; verdict: Verdict; feedback: string }
   | { type: "text"; text: string }
   | { type: "done"; stats: ConverseStats }
   | { type: "error"; code: ConverseErrorCode };
 // What converse() yields while it runs; the route forwards each one as is.
-export type ConverseChunk = Extract<ConverseEvent, { type: "text" | "daemons" | "quiz" }>;
+export type ConverseChunk = Extract<ConverseEvent, { type: "text" | "daemons" | "quiz" | "grade" }>;
 
 // prompts/*.md are Ronith's: drop the owner comment before sending.
 function readPrompt(file: string): string {
@@ -84,9 +91,9 @@ function systemPrompt(book: Book = {}): string {
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, notes, history, book, command, daemons, quiz } = body;
+  const { passage, question, notes, history, book, command, daemons, quiz, grade } = body;
   if (!isText(passage)) return { error: "passage_missing" };
-  const isQuestionOptional = (daemons !== undefined || quiz !== undefined) && (question === undefined || typeof question === "string");
+  const isQuestionOptional = (daemons !== undefined || quiz !== undefined || grade !== undefined) && (question === undefined || typeof question === "string");
   if (!isText(question) && !isQuestionOptional) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
   if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
@@ -110,9 +117,12 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isSelectionMissing = command?.name === "define" && !isText(command.selection);
   if (isSelectionMissing) return { error: "selection_missing" };
 
-  const kinds = [command, daemons, quiz].filter((v) => v !== undefined).length;
+  const kinds = [command, daemons, quiz, grade].filter((v) => v !== undefined).length;
   if (kinds > 1) return { error: "request_conflict" };
-  if (quiz !== undefined && !isQuizSetup(quiz)) return { error: "quiz_invalid" };
+  const avoid = isRecord(quiz) ? quiz.avoid : undefined;
+  const isQuizValid = isQuizSetup(quiz) && (avoid === undefined || isAvoidList(avoid));
+  if (quiz !== undefined && !isQuizValid) return { error: "quiz_invalid" };
+  if (grade !== undefined && !isGradeRequest(grade)) return { error: "grade_invalid" };
   const isDaemonsShaped = daemons === undefined || (isRecord(daemons) && typeof daemons.excerpt === "string" &&
     (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean"));
   if (!isDaemonsShaped) return { error: "daemons_invalid" };
@@ -126,7 +136,10 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
     book: book === undefined ? undefined : pickBook(book as Book),
     ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
     ...(daemons !== undefined && { daemons: { excerpt: daemons.excerpt as string, mustPick: daemons.mustPick === true } }),
-    ...(isQuizSetup(quiz) && { quiz: { topics: [...new Set(quiz.topics)], count: quiz.count, difficulty: quiz.difficulty, style: quiz.style } }),
+    ...(isQuizSetup(quiz) && {
+      quiz: { topics: [...new Set(quiz.topics)], count: quiz.count, difficulty: quiz.difficulty, styles: [...new Set(quiz.styles)], ...(isAvoidList(avoid) && { avoid: [...avoid] }) },
+    }),
+    ...(isGradeRequest(grade) && { grade: { question: grade.question, modelAnswer: grade.modelAnswer, keyPoints: [...grade.keyPoints], answer: grade.answer } }),
   };
 }
 
@@ -145,6 +158,7 @@ export async function* converse(
   const start = performance.now();
   if (request.daemons) return yield* runDaemons(client, request, request.daemons, start, signal);
   if (request.quiz) return yield* runQuiz(client, request, request.quiz, start, signal);
+  if (request.grade) return yield* runGrade(client, request, request.grade, start, signal);
   const { pages, system, messages, maxTokens } = buildContext(request);
   let ttftMs: number | null = null;
   let text = "";
@@ -304,11 +318,7 @@ export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsR
     const beyond = ACTIONS[action].isBeyondBook ? ' beyond_the_book="true"' : "";
     return `<candidate id="${n.daemon}" name="${name}"${beyond}>\n${n.text}\n</candidate>`;
   });
-  // Every page any nugget cites ([pp. 3–4] spelled out), in book order.
-  const cites = nuggets.flatMap(({ text }) => [...text.matchAll(pageCitePattern())].map((m) => ({ from: m[2].toLowerCase(), to: (m[3] ?? m[2]).toLowerCase() })));
-  const isCited = (page?: string) =>
-    page !== undefined && cites.some(({ from, to }) => page === from || page === to || (Number(page) >= Number(from) && Number(page) <= Number(to)));
-  const cited = pages.filter((p) => isCited(p.page)).map((p) => `<page n="${p.page}">\n${p.text}\n</page>`).join("\n\n");
+  const cited = citedPages(nuggets.map((n) => n.text), pages);
   return [
     `<excerpt>\n${run.excerpt.trim()}\n</excerpt>`,
     ...candidates,
@@ -323,7 +333,7 @@ export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsR
 async function* runQuiz(
   client: Anthropic,
   request: ConverseRequest,
-  setup: QuizSetup,
+  setup: QuizRequest,
   start: number,
   signal?: AbortSignal,
 ): AsyncGenerator<ConverseChunk, ConverseStats> {
@@ -340,7 +350,7 @@ async function* runQuiz(
       messages: [{ role: "user", content: turn }],
     }, { signal });
 
-  const first = await ask(quizTurn(setup));
+  const first = await ask(quizTurn(setup, pickAngles(setup.count)));
   // Structured output cut off by max_tokens may still parse, but it is a failed run (Sonnet 5.5 guide).
   const output = first.stop_reason === "max_tokens" ? undefined : jsonOf(first);
   const isInsufficient = isRecord(output) && output.verdict === "insufficient";
@@ -351,7 +361,7 @@ async function* runQuiz(
 
   const missing = setup.count - questions.length;
   if (!isInsufficient && output !== undefined && missing > 0) {
-    const message = await ask(quizTurn(setup, { missing, kept: questions, rejected: checked.rejected }));
+    const message = await ask(quizTurn(setup, pickAngles(missing), { missing, kept: questions, rejected: checked.rejected }));
     topUpUsage = message.usage;
     const more = message.stop_reason === "max_tokens" ? undefined : jsonOf(message);
     const isMoreOk = isRecord(more) && more.verdict === "ok";
@@ -382,20 +392,30 @@ async function* runQuiz(
 
 // The quiz agent's user turn: the request, and for a top-up, the questions kept (not to repeat)
 // and the ones set aside, with why.
-export function quizTurn(setup: QuizSetup, topUp?: { missing: number; kept: QuizQuestion[]; rejected: { question: string; reason: string }[] }): string {
+// Variety: each question's angle (chosen by our code, at random) and the book's recent questions.
+export function quizTurn(
+  setup: QuizRequest,
+  angles: Angle[],
+  topUp?: { missing: number; kept: QuizQuestion[]; rejected: { question: string; reason: string }[] },
+): string {
   const topics = setup.topics.map((t) => `- ${t} ("${QUIZ_TOPICS[t].label}"): ${QUIZ_TOPICS[t].ask}`).join("\n");
-  const style = {
-    "multiple-choice": `multiple-choice: every question has exactly ${CHOICES_PER_QUESTION} choices`,
-    "true-false": "true-false: every question is a statement with the choices True and False",
-    mixed: `mixed: choose per question between multiple-choice (exactly ${CHOICES_PER_QUESTION} choices) and true-false (True and False)`,
-  }[setup.style];
+  const kinds = {
+    "multiple-choice": `multiple-choice (exactly ${CHOICES_PER_QUESTION} choices)`,
+    "true-false": "true-false (a statement with the choices True and False)",
+    "fill-blanks": `fill-blanks (one sentence with ${BLANK_LIMITS.min}–${BLANK_LIMITS.max} blanks marked ${BLANK}, each with ${OPTIONS_PER_BLANK} options)`,
+    "free-response": `free-response (a model answer and ${KEY_POINT_LIMITS.min}–${KEY_POINT_LIMITS.max} key points)`,
+  };
+  const styles = setup.styles.map((s) => `${kinds[s]} ("${QUIZ_STYLES[s].label}")`);
+  const style = styles.length === 1 ? `${styles[0]} for every question` : `a mix: choose per question among ${styles.join(", ")}, using each at least once when there are enough questions`;
   const count = topUp ? topUp.missing : setup.count;
   const request = [
     "<quiz_request>",
     `<topics>\n${topics}\n</topics>`,
     `<questions>${count}</questions>`,
     `<difficulty>${setup.difficulty}</difficulty>`,
-    `<style>${style} (${QUIZ_STYLES[setup.style].label})</style>`,
+    `<style>${style}</style>`,
+    `<angles>\n${angles.map((a, i) => `${i + 1}. ${a}: ${ANGLES[a]}`).join("\n")}\n</angles>`,
+    ...(setup.avoid?.length ? [`<already_asked>\n${setup.avoid.map((q) => `- ${q}`).join("\n")}\n</already_asked>`] : []),
     "</quiz_request>",
   ].join("\n");
   if (!topUp) return request;
@@ -406,6 +426,55 @@ export function quizTurn(setup: QuizSetup, topUp?: { missing: number; kept: Quiz
     `<already_in_the_quiz>\n${kept || "(none)"}\n</already_in_the_quiz>`,
     `<set_aside>\n${rejected || "(none)"}\n</set_aside>`,
     `These questions were set aside for the reasons given. Write ${count} new question${count === 1 ? "" : "s"} on words or ideas not already in the quiz, avoiding those problems.`,
+  ].join("\n\n");
+}
+
+// Every page the texts cite ([pp. 3–4] spelled out), in book order, as <page> blocks.
+function citedPages(texts: string[], pages: BookPage[]): string {
+  const cites = texts.flatMap((text) => [...text.matchAll(pageCitePattern())].map((m) => ({ from: m[2].toLowerCase(), to: (m[3] ?? m[2]).toLowerCase() })));
+  const isCited = (page?: string) =>
+    page !== undefined && cites.some(({ from, to }) => page === from || page === to || (Number(page) >= Number(from) && Number(page) <= Number(to)));
+  return pages.filter((p) => isCited(p.page)).map((p) => `<page n="${p.page}">\n${p.text}\n</page>`).join("\n\n");
+}
+
+// A free response's grade (D44): one small call without the book. The grader sees the question,
+// the model answer, the key points, the pages they cite and the reader's answer, and replies with a
+// verdict and one line of feedback (JSON). No usable reply: no event, so the client reports it.
+async function* runGrade(
+  client: Anthropic,
+  request: ConverseRequest,
+  grade: GradeRequest,
+  start: number,
+  signal?: AbortSignal,
+): AsyncGenerator<ConverseChunk, ConverseStats> {
+  const message = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: LIMITS.replyTokens.grade,
+    output_config: {
+      effort: "low",
+      format: {
+        type: "json_schema",
+        schema: { type: "object", properties: { verdict: { type: "string", enum: VERDICTS }, feedback: { type: "string" } }, required: ["verdict", "feedback"], additionalProperties: false },
+      },
+    },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system: readPrompt("quiz-grader.md").trim(),
+    messages: [{ role: "user", content: gradeTurn(grade, parsePages(request.passage)) }],
+  }, { signal });
+  const answer = message.stop_reason === "max_tokens" ? undefined : jsonOf(message);
+  const isGraded = isRecord(answer) && VERDICTS.includes(answer.verdict as Verdict) && isText(answer.feedback);
+  if (isGraded) yield { type: "grade", verdict: answer.verdict as Verdict, feedback: (answer.feedback as string).trim() };
+  return { model: message.model, stopReason: message.stop_reason, ttftMs: null, totalMs: performance.now() - start, usage: message.usage, citations: [] };
+}
+
+export function gradeTurn({ question, modelAnswer, keyPoints, answer }: GradeRequest, pages: BookPage[]): string {
+  return [
+    `<question>\n${question.trim()}\n</question>`,
+    `<model_answer>\n${modelAnswer.trim()}\n</model_answer>`,
+    `<key_points>\n${keyPoints.map((p) => `- ${p.trim()}`).join("\n")}\n</key_points>`,
+    `<cited>\n${citedPages([modelAnswer, ...keyPoints], pages)}\n</cited>`,
+    `<answer>\n${answer.trim()}\n</answer>`,
   ].join("\n\n");
 }
 

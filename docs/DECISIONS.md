@@ -427,6 +427,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** self-testing is a different act from conversation, so it gets its own view and a structured flow rather than chat; JSON lets our code own the parts the model gets wrong (answer position, giveaway lengths, invented quotes).
 - **Cost we accept:** each quiz sends the whole book (up to the 50K cap) plus a long JSON reply; explanations about words or ideas beyond a quote aren't checked; no history of past quizzes.
 - **Revisit if:** quizzes feel repetitive or off-topic, the length check rejects too many questions, or Ronith wants a history.
+- *Amended (2026-10-14, Ronith: "when I click on the same things… I often get the same or very similar questions"):* variety, two of four proposals. Each book remembers its last 30 questions (`QuizState.asked`) and sends them with the next quiz as `<already_asked>`, not to be repeated or rephrased; our code gives each question an angle at random (cause, consequence, motive, comparison, turning point, detail in context; none repeated until all are used) in `<angles>`. Not chosen: a code-rotated focus on pages not yet quizzed, a "Pages __ to __" field. A progress bar shows while the quiz is written (an estimate: the call reports no progress).
 
 ## D43. Quiz topics: two groups, short names, three new topics (amends D42)
 - **Status:** Accepted (2026-10-14, Ronith)
@@ -440,6 +441,22 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** each new topic tests something the first four didn't (who's who, exact words, whether a reading holds) without overlapping them; grouping by source makes the list scannable.
 - **Cost we accept:** seven checkboxes instead of four; "Big ideas" and "Characters" can overlap on a character's motive.
 - **Revisit if:** Ronith rarely picks a topic, or two topics keep producing the same questions.
+- *Amended (2026-10-14, Ronith):* **Check my reading** is removed ("that seems more like a Daemon task"; Parking lot). **My ideas** takes the reader's notes as true: the right answer is the one the notes hold, and questions never test whether the book agrees. With **Big ideas** and **My ideas** both ticked, the setup warns that where the notes and the book disagree, a question's answer depends on which topic it came from (each question shows its topic). A saved setup with Check my reading drops it.
+
+## D44. Quiz styles: fill in the blanks (dropdowns) and free response (graded by an agent) (amends D42)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** Ronith wants two more styles: fill in the blank and free response, where "an agent should offer quick one line feedback on why it is right or wrong or why it is an incomplete answer missing something critical".
+- **Alternatives:** blanks typed and matched by code, by the grading agent, or both; partial credit as half a point; the grader also given the whole book; grading free of the daily cap.
+- **Rules:**
+  - *Styles:* Multiple choice (default), True / false, Fill in the blanks, Free response, Mixed (any of the four).
+  - *Fill in the blanks (Ronith: "a dropdown… 2-3 fill in the blanks per question and then explanation based on what they chose"):* one sentence with 2–3 blanks, each a dropdown of 4 options, one right; each option says why it is right or wrong. The reader fills every blank, then checks; the question is right only when every blank is. Our code checks each blank like a multiple-choice question and shuffles its options.
+  - *Free response:* the quiz agent also writes a model answer and the key points a full answer needs, with page cites. The reader writes an answer and submits it (locked, like a choice). A grading call (`prompts/quiz-grader.md`, Claude drafts) sees the question, the model answer, the key points and the pages they cite, not the whole book, and returns right, partly right or wrong with one line of feedback naming what is wrong or missing. Then the model answer and key points show.
+  - *Score:* "partly right" doesn't score (Ronith); its feedback still shows.
+  - *Daily cap:* each grading counts as one of the day's AI replies (Ronith). A grading that fails (network, the cap) can be retried or skipped; skipped counts as not right. A reload mid-grading offers to grade again.
+- **Why:** dropdown blanks keep grading instant and free while testing exact wording in context; free response tests recall without cues, so it needs judgement, and a grader grounded in the model answer and its pages stays cheap and consistent.
+- **Cost we accept:** a grader without the whole book may mark down a right answer the model answer didn't foresee; a 10-question free-response quiz uses 11 of the day's 60 replies.
+- **Revisit if:** graders mark good answers wrong (then the whole book, once cached), or the cap bites.
+- *Amended (2026-10-14, Ronith: "the mixed button looks weird… convert this to check box style… default selection be multiple choice"):* styles are checkboxes, one or more; ticking several mixes them (the agent uses each at least once when there are enough questions); "Mixed" is gone. Multiple choice is ticked by default, and difficulty defaults to Medium. A setup saved with the old single style loads as checkboxes ("mixed" ticks all four).
 
 ---
 

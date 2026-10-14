@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMANDS } from "./commands.ts";
 import { LIMITS } from "./limits.ts";
-import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, reviewerTurn, type ConverseRequest } from "./converse.ts";
+import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, quizTurn, reviewerTurn, type ConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
 const errorOf = (body: unknown) => {
@@ -271,8 +271,8 @@ test("the reviewer may show nothing, unless the run must pick", async () => {
 });
 
 // ---- Quiz (D42) ----
-const quizSetup = { topics: ["book-concepts"], count: 2, difficulty: "easy", style: "multiple-choice" } as const;
-const quizRun = { ...book, question: "", quiz: { ...quizSetup, topics: [...quizSetup.topics] } };
+const quizSetup = { topics: ["book-concepts"], count: 2, difficulty: "easy", styles: ["multiple-choice"] } as const;
+const quizRun = { ...book, question: "", quiz: { ...quizSetup, topics: [...quizSetup.topics], styles: [...quizSetup.styles] } };
 const mcDraft = (question: string, right = "On Tuesday") => ({
   topic: "book-concepts",
   kind: "multiple-choice",
@@ -283,7 +283,7 @@ const mcDraft = (question: string, right = "On Tuesday") => ({
 test("quiz request validation: a setup, and nothing else alongside", () => {
   expect(parseConverseRequest({ passage: book.passage, quiz: { ...quizSetup, topics: ["book-concepts", "book-concepts"], extra: 1 } })).toMatchObject({
     question: "",
-    quiz: { topics: ["book-concepts"], count: 2, difficulty: "easy", style: "multiple-choice" },
+    quiz: { topics: ["book-concepts"], count: 2, difficulty: "easy", styles: ["multiple-choice"] },
   });
   expect(parseConverseRequest({ passage: book.passage, quiz: quizSetup })).not.toHaveProperty("quiz.extra");
   expect(errorOf({ ...valid, quiz: { ...quizSetup, count: 11 } })).toBe("quiz_invalid");
@@ -300,13 +300,13 @@ test("a quiz: one call after the book with its own role; checked, shuffled quest
   expect(call.system[1].text).toMatch(/^<role>\nYou write a short quiz/);
   expect(call.system[1].text).not.toContain("DRAFTED BY CLAUDE");
   expect(call.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
-  expect(call.messages[0].content).toBe(
-    "<quiz_request>\n<topics>\n- book-concepts (\"Big ideas\"): the book's themes, arguments and turning points\n</topics>\n<questions>2</questions>\n<difficulty>easy</difficulty>\n<style>multiple-choice: every question has exactly 5 choices (Multiple choice)</style>\n</quiz_request>",
+  expect(call.messages[0].content).toMatch(
+    /^<quiz_request>\n<topics>\n- book-concepts \("Big ideas"\): the book's themes, arguments and turning points\n<\/topics>\n<questions>2<\/questions>\n<difficulty>easy<\/difficulty>\n<style>multiple-choice \(exactly 5 choices\) \("Multiple choice"\) for every question<\/style>\n<angles>\n1\. [a-z ]+: [^\n]+\n2\. [a-z ]+: [^\n]+\n<\/angles>\n<\/quiz_request>$/,
   );
   const quiz = events[0];
   expect(quiz).toMatchObject({ type: "quiz", verdict: "ok", feedback: "" });
   if (quiz.type !== "quiz") throw new Error("no quiz");
-  expect(quiz.questions.map((q) => q.choices[q.answer].text)).toEqual(["On Tuesday", "The sky"]);
+  expect(quiz.questions.map((q) => ("choices" in q ? q.choices[q.answer].text : ""))).toEqual(["On Tuesday", "The sky"]);
   expect(stats).not.toHaveProperty("reviewerUsage");
 });
 
@@ -340,4 +340,34 @@ test("questions that fail the checks are replaced by one more call, told why; st
   const none = daemonClient({ verdict: "ok", feedback: "", questions: [giveaway] }, { verdict: "ok", feedback: "", questions: [] });
   const failed = await run(quizRun, none.client);
   expect(failed.events[0]).toMatchObject({ verdict: "insufficient", feedback: expect.stringMatching(/couldn't be written/), questions: [] });
+});
+
+test("grading a free response (D44): one small call without the book; the verdict and one line", async () => {
+  const grade = { question: "When did the sky fall?", modelAnswer: "On Tuesday [p. 1].", keyPoints: ["Tuesday [p. 1]"], answer: "Tuesday, I think" };
+  expect(errorOf({ ...valid, grade: { ...grade, answer: "" } })).toBe("grade_invalid");
+  expect(errorOf({ ...valid, grade, quiz: quizSetup })).toBe("request_conflict");
+  const { client, calls } = daemonClient({ verdict: "right", feedback: "You named the day." });
+  const { events } = await run({ ...book, question: "", grade }, client);
+  const call = calls[0] as { system: string; messages: { content: string }[] };
+  expect(call.system).toMatch(/^You grade one answer/);
+  expect(call.messages[0].content).toBe(
+    "<question>\nWhen did the sky fall?\n</question>\n\n<model_answer>\nOn Tuesday [p. 1].\n</model_answer>\n\n<key_points>\n- Tuesday [p. 1]\n</key_points>\n\n<cited>\n<page n=\"1\">\nThe sky fell on Tuesday.\n</page>\n</cited>\n\n<answer>\nTuesday, I think\n</answer>",
+  );
+  expect(events).toEqual([{ type: "grade", verdict: "right", feedback: "You named the day." }]);
+  const bad = daemonClient({ verdict: "brilliant", feedback: "" });
+  expect((await run({ ...book, question: "", grade }, bad.client)).events).toEqual([]); // no usable grade: no event
+});
+
+test("several styles ticked: the agent mixes them, each at least once when it can", () => {
+  const turn = quizTurn({ topics: ["book-concepts"], count: 4, difficulty: "medium", styles: ["multiple-choice", "free-response"] }, ["motive", "cause", "comparison", "consequence"]);
+  expect(turn).toContain('<style>a mix: choose per question among multiple-choice (exactly 5 choices) ("Multiple choice"), free-response (a model answer and 1–4 key points) ("Free response"), using each at least once when there are enough questions</style>');
+});
+
+test("a quiz request may carry the book's recent questions; the turn asks not to repeat them", () => {
+  const avoid = ["When did the sky fall?"];
+  expect(parseConverseRequest({ passage: book.passage, quiz: { ...quizSetup, avoid } })).toMatchObject({ quiz: { avoid } });
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, avoid: "x" } })).toBe("quiz_invalid");
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, avoid: Array.from({ length: 31 }, () => "q") } })).toBe("quiz_invalid");
+  const turn = quizTurn({ topics: ["book-concepts"], count: 1, difficulty: "easy", styles: ["true-false"], avoid }, ["motive"]);
+  expect(turn).toContain("<angles>\n1. motive: what drives a character\n</angles>\n<already_asked>\n- When did the sky fall?\n</already_asked>\n</quiz_request>");
 });
