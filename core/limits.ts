@@ -13,15 +13,23 @@ export const LIMITS = {
   // pauses until midnight. Counted in localStorage, so it guards honest overuse, not abuse (D35).
   dailyReplies: 60,
 
+  // Daemons (D37): when they look at the notes, and how often they may per day. A run starts once
+  // the reader pauses for `idleMs` with at least `minLines` lines of their own words new or changed;
+  // after `floorLines` lines with no card, the reviewer must show one. Counted per browser per local
+  // day, apart from dailyReplies; at the cap daemons pause quietly and chat keeps working.
+  daemons: {
+    idleMs: 25_000,
+    minLines: 10,
+    floorLines: 15,
+    poolSize: 6, // runners-up kept per book, to fill the floor without a call
+    dailyRuns: 40,
+  },
+
   // How long a reply may run, in output tokens (thinking included).
   replyTokens: {
     chat: 16_000,
     define: 4_000,
     quiz: 8_000,
-    question: 4_000, // margin reactions (D18, D20)
-    pushback: 4_000,
-    connection: 4_000,
-    router: 1_000, // picks a reaction's kind; one word, plus Sonnet's adaptive thinking
     panel: 6_000, // a daemon run (D37): every daemon's nugget (≤40 words each) as JSON, plus thinking
     reviewer: 2_000, // picks one nugget or none; one word of JSON, plus thinking
   },

@@ -377,12 +377,6 @@ button.pill[aria-pressed="true"] {
   flex: none;
 }
 
-/* React needs the notes on screen. */
-main[data-view="pdf"] .react-slot,
-main[data-view="chat"] .react-slot {
-  display: none;
-}
-
 .unread {
   position: absolute;
   top: 2px;
@@ -424,16 +418,71 @@ main[data-view="chat"] .react-slot {
   border-left: var(--margin-rule);
 }
 
+/* The daemon panel (D37): at the top of the margin, who the daemons are, their status, and a
+   button to ask them now. Cards are placed below it. */
+.margin-header {
+  padding: var(--s4) var(--s4) 0;
+}
+
+.daemon-panel {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font: 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.daemon-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.daemon-list li::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s1);
+  border-radius: 50%;
+  background: var(--daemon);
+}
+
+.daemon-status {
+  margin: 0;
+}
+
+.react-notes {
+  justify-self: start;
+  padding: var(--s1) var(--s3);
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ai);
+  background: var(--ai-wash);
+  border: 1px solid color-mix(in srgb, var(--ai) 30%, transparent);
+  border-radius: var(--radius);
+}
+
+.react-notes:hover:not(:disabled) {
+  background: var(--pill);
+}
+
+.react-notes:disabled {
+  opacity: 0.55;
+}
+
 .margin-group {
   position: absolute;
   top: 0;
   left: var(--s4);
   right: var(--s4);
   z-index: 2;
-}
-
-.margin-stack {
-  position: relative; /* for its dot */
 }
 
 .cards {
@@ -594,114 +643,15 @@ main[data-view="chat"] .react-slot {
   white-space: nowrap;
 }
 
-/* React split button and kind menu */
-.split {
-  position: relative;
-  display: inline-flex;
-}
-
-.split > :first-child {
-  border-radius: var(--radius) 0 0 var(--radius);
-}
-
-.split > :nth-child(2) {
-  border-radius: 0 var(--radius) var(--radius) 0;
-  border-left-color: var(--sheet);
-  padding-inline: var(--s2);
-}
-
-.menu {
-  position: absolute;
-  top: calc(100% + var(--s1));
-  left: 0;
-  z-index: 20;
-  min-width: 15rem;
-  padding: var(--s1);
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-}
-
-.menu [role="menuitem"] {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  padding: var(--s2) var(--s3);
-  background: none;
-}
-
-.menu [role="menuitem"]:hover,
-.menu [role="menuitem"]:focus {
-  background: var(--ai-wash);
-}
-
-.menu [role="menuitem"] small {
-  display: block;
-  font-weight: 400;
-  color: var(--ink-soft);
-}
-
-/* The margin's one decoration: a dot on the rule at a paragraph with reactions. The button is a
-   larger, invisible hit area around the 7px dot. */
-.dot {
-  position: absolute;
-  top: calc((1rem * 1.5 - 21px) / 2);
-  left: calc(-1 * var(--s4) - 12px);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  width: auto;
-  height: 21px;
-  padding: 0 0 0 7px;
-  background: none;
-  border: 0;
-  border-radius: 0;
-}
-
-.dot::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ai);
-  box-shadow: 0 0 0 2px var(--paper);
-}
-
-.dot:hover::before,
-.dot[aria-pressed="true"]::before {
-  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px color-mix(in srgb, var(--ai) 35%, transparent);
-}
-
-.dot-count {
-  font: 600 0.6875rem/1 var(--font-ui);
-  color: var(--ai);
-  background: var(--paper);
-  padding: 1px 2px;
-}
-
+/* A daemon's card (D37): its name in its colour, then the remark. --daemon is set per card. */
 .card {
   padding: var(--s2) var(--s3);
   background: var(--ai-wash);
-  border-left: 2px solid var(--ai);
+  border-left: 2px solid var(--daemon, var(--ai));
   border-radius: 0 var(--radius) var(--radius) 0;
   font: 0.9375rem/1.5 var(--font-ui);
   color: var(--ai-ink);
   overflow-wrap: anywhere;
-}
-
-.card.is-active {
-  border-left-width: 4px;
-}
-
-.card.is-detached {
-  opacity: 0.7;
-}
-
-.card.is-detached .excerpt {
-  text-decoration: line-through;
 }
 
 .card-head {
@@ -711,15 +661,17 @@ main[data-view="chat"] .react-slot {
   gap: var(--s2);
 }
 
-.card .kind {
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--ai);
+.card .daemon-name {
+  padding: 0;
+  font: 600 0.8rem/1.4 var(--font-ui);
+  color: var(--daemon, var(--ai));
+  background: none;
+  border: 0;
 }
 
-.card .kind.is-choosing {
-  font-weight: 500;
-  color: var(--ink-soft);
+.card .daemon-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .card .delete {
@@ -731,112 +683,14 @@ main[data-view="chat"] .react-slot {
   color: var(--ink-soft);
 }
 
-.card .confirm {
-  font-size: 0.8125rem;
-  color: var(--ink);
-}
-
-.card .confirm button {
-  padding: 0 var(--s2);
-  font-size: 0.8125rem;
-}
-
-.card .excerpt {
-  display: block;
-  margin: var(--s1) 0;
-  font: italic 0.875rem/1.4 var(--font-text);
-  color: var(--ink-soft);
-  background: none;
-  border: 0;
-  padding: 0;
-  text-align: left;
-}
-
 .card p {
-  margin: var(--s1) 0;
+  margin: var(--s1) 0 0;
   white-space: pre-wrap;
-}
-
-.card .follow-up,
-.card .reply-user {
-  margin-left: var(--s3);
-}
-
-.card .reply-user {
-  font: 1rem/1.55 var(--font-text);
-  color: var(--ink);
-}
-
-.card textarea {
-  margin-top: var(--s1);
-  font: 1rem/1.5 var(--font-text);
-  resize: vertical;
-}
-
-.card .link {
-  margin-top: var(--s1);
-}
-
-.card .less {
-  margin-left: var(--s3);
-}
-
-/* Collapsed (not the current block's): the opening clamped to 4 lines, one click to open. */
-.card.is-collapsed {
-  background: color-mix(in srgb, var(--ai-wash) 60%, transparent);
-}
-
-.card .expand {
-  display: block;
-  width: 100%;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  background: none;
-  border: 0;
-}
-
-.card .clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
-  white-space: pre-wrap;
-}
-
-.card .more {
-  display: block;
-  margin-top: var(--s1);
-  font-size: 0.8125rem;
-  color: var(--ai);
-}
-
-.card .expand:hover .more {
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .margin-cell > .empty {
   padding-top: var(--s2);
   font-size: 0.8125rem;
-}
-
-.detached-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-}
-
-.detached-divider::before,
-.detached-divider::after {
-  content: "";
-  flex: 1;
-  border-top: 1px dashed var(--ink-soft);
 }
 
 .caret {
@@ -1343,10 +1197,6 @@ dialog.reference form button {
   .margin-group {
     position: static;
     margin-bottom: var(--s3);
-  }
-
-  .dot {
-    display: none;
   }
 }
 

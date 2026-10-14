@@ -10,19 +10,22 @@ const storageWith = (value: unknown): KeyValueStorage => ({
 
 // Sprint 3 e2e: an unchecked citation entry crashed Chat's CitationWarnings (`c.cited.length`),
 // and since the bad save was never overwritten, every reload crashed until site data was cleared.
-test("citation entries without quote, cited and status are dropped on load", () => {
+test("citation entries without quote and status are dropped on load; older paragraph checks keep no pages", () => {
   const { messages } = loadState(
     storageWith({
       reference: "One.",
       notes: "",
       messages: [
         { role: "user", content: "q" },
-        { role: "assistant", content: "x [¶1]", citations: [{ nope: 1 }, { quote: "One", cited: [1], status: "ok" }] },
+        { role: "assistant", content: "x [¶1]", citations: [{ nope: 1 }, { quote: "One", cited: [1], status: "ok" }, { quote: "Two", pages: ["3", 4], status: "quote_not_on_page" }] },
       ],
     }),
     KEY,
   );
-  expect(messages[1].citations).toEqual([{ quote: "One", cited: [1], status: "ok" }]);
+  expect(messages[1].citations).toEqual([
+    { quote: "One", pages: [], status: "ok" },
+    { quote: "Two", pages: ["3"], status: "quote_not_on_page" },
+  ]);
 });
 
 test("bad citation fields and page labels are dropped, so rendering never sees them", () => {
@@ -47,7 +50,7 @@ test("bad citation fields and page labels are dropped, so rendering never sees t
     KEY,
   );
   expect(messages.slice(1)).toEqual([
-    { role: "assistant", content: "x", citations: [], pages: { 1: "p. 1" } },
+    { role: "assistant", content: "x", citations: [{ quote: "a", pages: [], status: "ok" }], pages: { 1: "p. 1" } },
     { role: "user", content: "q2" },
     { role: "assistant", content: "y" },
     { role: "user", content: "q3" },
@@ -65,28 +68,24 @@ test("dropping a malformed message drops its partner too, so roles keep alternat
   expect(messages).toEqual([user("Q2"), ai("A2"), user("Q4"), ai("A4")]);
 });
 
-test("malformed reactions are dropped, and threads keep their shape (opening reaction, then pairs)", () => {
-  const user = (content: string) => ({ role: "user", content });
-  const ai = (content: string) => ({ role: "assistant", content });
-  const reaction = (fields: object) => ({ id: "r", excerpt: "E", kind: "question", messages: [ai("A")], ...fields });
-  const { reactions } = loadState(
+test("saved daemons: malformed cards are dropped; a malformed state starts fresh with the notes seen", () => {
+  const card = (fields: object) => ({ id: "c", daemon: "author", text: "T", anchor: "A", ...fields });
+  const { daemons } = loadState(
     storageWith({
       reference: "One.",
       notes: "",
       messages: [],
-      reactions: [
-        null,
-        "text",
-        reaction({ id: 3 }),
-        reaction({ excerpt: undefined }),
-        reaction({ kind: "rant" }),
-        reaction({ messages: "x" }),
-        reaction({ messages: [] }), // no opening reaction
-        reaction({ messages: [user("Q"), ai("A")] }), // opens with the reader: not a reaction
-        reaction({ id: "kept", extra: 1, messages: [ai("A"), user("Q1"), { role: "assistant" }, user("Q2"), ai("A2"), user("Q3")] }),
-      ],
+      daemons: {
+        cards: [null, card({ id: 3 }), card({ daemon: "narrator" }), card({ text: undefined }), card({ id: "kept", extra: 1 })],
+        pool: [card({ id: "p" })],
+        seen: ["a line"],
+        linesSinceCard: 4,
+      },
     }),
     KEY,
   );
-  expect(reactions).toEqual([{ id: "kept", excerpt: "E", kind: "question", messages: [ai("A"), user("Q2"), ai("A2")] }]);
+  expect(daemons).toEqual({ cards: [card({ id: "kept" })], pool: [card({ id: "p" })], seen: ["a line"], linesSinceCard: 4 });
+
+  const broken = loadState(storageWith({ reference: "", notes: "Old line.", messages: [], daemons: { cards: "x" } }), KEY);
+  expect(broken.daemons).toEqual({ cards: [], pool: [], seen: ["old line"], linesSinceCard: 0 });
 });

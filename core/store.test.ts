@@ -4,11 +4,13 @@ import {
   bookKey,
   deleteBook,
   emptyState,
+  loadDaemonRunsToday,
   loadLibrary,
   loadState,
   loadRepliesToday,
   loadUi,
   localDay,
+  recordDaemonRun,
   recordReply,
   renameBook,
   saveLibrary,
@@ -46,18 +48,12 @@ const state: AppState = {
     { role: "user", content: "Why?" },
     { role: "assistant", content: "Because [¶1].", pages: { 1: "p. 1" }, citations: [] },
   ],
-  reactions: [
-    {
-      id: "r1",
-      excerpt: "My note",
-      kind: "pushback",
-      messages: [
-        { role: "assistant", content: "But [¶2] says “Two.”", pages: { 2: "p. 1" }, citations: [] },
-        { role: "user", content: "Fair." },
-        { role: "assistant", content: "So what changes?" },
-      ],
-    },
-  ],
+  daemons: {
+    cards: [{ id: "c1", daemon: "author", text: "Look at [p. 1].", anchor: "My note" }],
+    pool: [{ id: "c2", daemon: "devils-advocate", text: "Is it?", anchor: "My note" }],
+    seen: ["my note"],
+    linesSinceCard: 0,
+  },
 };
 
 test("save then load round-trips the state", () => {
@@ -86,22 +82,26 @@ test("malformed messages are dropped and unknown fields stripped", () => {
     reference: "R",
     notes: "N",
     messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }],
-    reactions: [],
+    daemons: { cards: [], pool: [], seen: ["n"], linesSinceCard: 0 },
   });
 });
 
-test("an old save without reactions loads with none", () => {
-  const { storage } = memoryStorage({ [KEY]: JSON.stringify({ reference: "R", notes: "N", messages: [] }) });
-  expect(loadState(storage, KEY).reactions).toEqual([]);
+test("a save from before daemons (D37): its reactions are dropped and its notes count as seen", () => {
+  const old = { reference: "R", notes: "First line.\n\nSecond line.", messages: [], reactions: [{ id: "r1", excerpt: "N", kind: "question", messages: [] }] };
+  const { storage, data } = memoryStorage({ [KEY]: JSON.stringify(old) });
+  const loaded = loadState(storage, KEY);
+  expect(loaded.daemons).toEqual({ cards: [], pool: [], seen: ["first line", "second line"], linesSinceCard: 0 });
+  saveState(storage, KEY, loaded);
+  expect(JSON.parse(data[KEY])).not.toHaveProperty("reactions");
 });
 
-test("a reaction still streaming is not saved; a reply still streaming drops only that pair", () => {
-  const { storage } = memoryStorage();
-  const [thread] = state.reactions;
-  const streamingReply = { ...thread, messages: [...thread.messages, { role: "user" as const, content: "And?" }, { role: "assistant" as const, content: "Ha", isStreaming: true }] };
-  const streamingOpening = { id: "r2", excerpt: "N", kind: "question" as const, messages: [{ role: "assistant" as const, content: "Wh", isStreaming: true }] };
-  saveState(storage, KEY, { ...state, reactions: [streamingReply, streamingOpening] });
-  expect(loadState(storage, KEY).reactions).toEqual([thread]);
+test("daemon runs are counted per day under their own key, apart from chat replies", () => {
+  const { storage, data } = memoryStorage();
+  expect(recordDaemonRun(storage, "2026-10-13")).toBe(1);
+  expect(recordDaemonRun(storage, "2026-10-13")).toBe(2);
+  expect(loadDaemonRunsToday(storage, "2026-10-14")).toBe(0);
+  expect(loadRepliesToday(storage, "2026-10-13")).toBe(0);
+  expect(Object.keys(data)).toEqual(["tertulia-margins:daemon-usage"]);
 });
 
 test("a reply still streaming is not saved, nor its question", () => {

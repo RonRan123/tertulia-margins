@@ -63,14 +63,15 @@ function pagesBetween(book: BookPage[], from: string, to: string): number[] {
   });
 }
 
-// Compare text, not typography: case, curly quotes, _italics_ and *markdown* markers, spacing, trailing punctuation.
+// Compare text, not typography: case, curly quotes, _italics_ and *markdown* markers, trailing
+// punctuation, and all whitespace, since PDF text often breaks words with stray spaces ("c aprice").
 function normalize(text: string): string {
   return text
     .toLowerCase()
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[_*]/g, "")
-    .replace(/\s+/g, " ")
     .trim()
-    .replace(/[.,;:!?]+$/, "");
+    .replace(/[.,;:!?]+$/, "")
+    .replace(/\s+/g, "");
 }

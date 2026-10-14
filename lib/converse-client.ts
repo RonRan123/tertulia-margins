@@ -1,21 +1,20 @@
-// Browser-only: the one client for POST /api/converse. Chat, Define/Quiz, margin reactions and
-// thread replies all stream through streamMessage, so the NDJSON parsing lives in one place.
+// Browser-only: the one client for POST /api/converse. Chat (and Define/Quiz) stream through
+// streamMessage; a daemon run goes through runDaemons. The NDJSON parsing lives in one place.
 import type { ConverseEvent, ConverseRequest } from "@/core/converse.ts";
 import { citedPages, parsePassage } from "@/core/passage.ts";
-import type { ReactionKind } from "@/core/reactions.ts";
+import type { DaemonId, Nugget } from "@/core/daemons.ts";
 import { LIMITS } from "@/core/limits.ts";
-import { loadRepliesToday, localDay, recordReply, type ChatMessage } from "@/core/store.ts";
+import { loadDaemonRunsToday, loadRepliesToday, localDay, recordDaemonRun, recordReply, type ChatMessage } from "@/core/store.ts";
 
 export type MessagePatch = (message: ChatMessage) => ChatMessage;
 
 // Streams one reply into one assistant message: `update` applies each change to that message (the
-// caller targets it, e.g. the last chat message or the last message of thread `id`). A "kind" event
-// (reactions) goes to onKind. The message always ends with isStreaming false and its page labels,
-// or with an error code; this never throws.
+// caller targets it, e.g. the last chat message). The message always ends with isStreaming false
+// and its page labels, or with an error code; this never throws.
 export async function streamMessage(
   body: ConverseRequest,
   update: (patch: MessagePatch) => void,
-  options: { onKind?: (kind: ReactionKind) => void; signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal } = {},
 ): Promise<void> {
   const paragraphs = parsePassage(body.passage); // as sent, for the finished reply's page labels
   // D35: every AI reply passes here, so the daily count lives here too. The page also pauses the
@@ -28,7 +27,6 @@ export async function streamMessage(
   recordReply(window.localStorage, day);
   try {
     const requestError = await streamReply(body, options.signal, (event) => {
-      if (event.type === "kind") options.onKind?.(event.kind);
       if (event.type === "text") update((m) => ({ ...m, content: m.content + event.text }));
       // An empty reply (e.g. a refusal) is an error, not a blank bubble.
       if (event.type === "done")
@@ -44,6 +42,29 @@ export async function streamMessage(
     update((m) => ({ ...m, error: "network_error" }));
   }
   update((m) => ({ ...m, pages: citedPages(m.content, paragraphs), isStreaming: false }));
+}
+
+// One daemon run (D37): the reviewer's pick and the nuggets, or an error code. Runs count against
+// their own daily cap (LIMITS.daemons.dailyRuns), apart from chat replies. Never throws.
+export async function runDaemons(
+  body: ConverseRequest,
+  signal: AbortSignal,
+): Promise<{ pick: DaemonId | null; nuggets: Nugget[] } | { error: string }> {
+  const day = localDay(new Date());
+  if (loadDaemonRunsToday(window.localStorage, day) >= LIMITS.daemons.dailyRuns) return { error: "daemon_limit" };
+  recordDaemonRun(window.localStorage, day);
+  let result: { pick: DaemonId | null; nuggets: Nugget[] } | undefined;
+  let error: string | undefined;
+  try {
+    const requestError = await streamReply(body, signal, (event) => {
+      if (event.type === "daemons") result = { pick: event.pick, nuggets: event.nuggets };
+      if (event.type === "error") error = event.code;
+    });
+    error ??= requestError;
+  } catch {
+    error = "network_error";
+  }
+  return result && !error ? result : { error: error ?? "empty_reply" };
 }
 
 // POST to the route and call onEvent for each NDJSON line as it arrives.

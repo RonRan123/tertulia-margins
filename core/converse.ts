@@ -6,7 +6,7 @@ import { COMMANDS, isCommandName, type Command } from "./commands.ts";
 import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type Nugget } from "./daemons.ts";
 import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
-import { findExcerpt, isReactionKind, parseRouterKind, REACTIONS, ROUTER, type ReactionKind, type ReactionRequest } from "./reactions.ts";
+import { findExcerpt } from "./blocks.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
 const MODEL = "claude-sonnet-5-5";
@@ -14,17 +14,13 @@ const MODEL = "claude-sonnet-5-5";
 export type Book = { title?: string; author?: string; edition?: string };
 export type Turn = { role: "user" | "assistant"; content: string };
 // `question` is what the reader sees in chat (e.g. "/define gravitas"); `command` says what to run.
-// `reaction` is a margin reaction (D18, D20): its first call has no history and no question; a reply
-// in its thread sends the kind it got, the thread so far as `history` (starting with the AI's
-// reaction) and the reader's reply as `question`.
 export type ConverseRequest = {
   passage: string;
-  question: string; // "" for a first reaction
+  question: string; // "" for a daemon run
   notes?: string;
   history?: Turn[];
   book?: Book;
   command?: Command;
-  reaction?: ReactionRequest;
   daemons?: DaemonsRequest; // a daemon run (D37): no question, no history
 };
 export type ConverseErrorCode = "rate_limited" | "auth_failed" | "overloaded" | "api_error";
@@ -43,12 +39,9 @@ export type ConverseRequestError =
   | "command_invalid" // not { name, selection: string }
   | "command_unknown"
   | "selection_missing" // /define needs a selected word
-  | "reaction_invalid" // not { excerpt: string, kind? }
   | "daemons_invalid" // not { excerpt: string, mustPick?: boolean }
   | "excerpt_missing"
-  | "kind_unknown"
-  | "kind_missing" // a thread reply must say its kind: the router only runs on a first reaction
-  | "request_conflict"; // more than one of a command, a reaction and a daemon run in one request
+  | "request_conflict"; // a command and a daemon run in one request
 
 export type ConverseStats = {
   model: string;
@@ -60,10 +53,9 @@ export type ConverseStats = {
   citations: CitationCheck[];
 };
 
-// The wire format of POST /api/converse: one JSON object per line (NDJSON): for a reaction a
-// "kind" event first, then a "text" event per delta, then "done" or "error".
+// The wire format of POST /api/converse: one JSON object per line (NDJSON): a "text" event per
+// delta (or one "daemons" event for a daemon run), then "done" or "error".
 export type ConverseEvent =
-  | { type: "kind"; kind: ReactionKind }
   // A daemon run's result: every nugget that survived the grounding check, and the one the reviewer
   // picked to show (null: nothing worth interrupting the reader). The rest are runners-up.
   | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[] }
@@ -71,7 +63,7 @@ export type ConverseEvent =
   | { type: "done"; stats: ConverseStats }
   | { type: "error"; code: ConverseErrorCode };
 // What converse() yields while it runs; the route forwards each one as is.
-export type ConverseChunk = Extract<ConverseEvent, { type: "kind" | "text" | "daemons" }>;
+export type ConverseChunk = Extract<ConverseEvent, { type: "text" | "daemons" }>;
 
 // prompts/*.md are Ronith's: drop the owner comment before sending.
 function readPrompt(file: string): string {
@@ -87,10 +79,9 @@ function systemPrompt(book: Book = {}): string {
 // Checks an untrusted JSON body (POST /api/converse) before any paid call is made.
 export function parseConverseRequest(body: unknown): ConverseRequest | { error: ConverseRequestError } {
   if (!isRecord(body)) return { error: "body_invalid" };
-  const { passage, question, notes, history, book, command, reaction, daemons } = body;
+  const { passage, question, notes, history, book, command, daemons } = body;
   if (!isText(passage)) return { error: "passage_missing" };
-  const isFirstReaction = reaction !== undefined && !(Array.isArray(history) && history.length > 0);
-  const isQuestionOptional = (isFirstReaction || daemons !== undefined) && (question === undefined || typeof question === "string");
+  const isQuestionOptional = daemons !== undefined && (question === undefined || typeof question === "string");
   if (!isText(question) && !isQuestionOptional) return { error: "question_missing" };
   if (parsePassage(passage).length === 0) return { error: "passage_empty" };
   if (isReferenceTooLong(passage)) return { error: "reference_too_long" };
@@ -114,18 +105,7 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isSelectionMissing = command?.name === "define" && !isText(command.selection);
   if (isSelectionMissing) return { error: "selection_missing" };
 
-  if (reaction !== undefined && command !== undefined) return { error: "request_conflict" };
-  const isReactionShaped = reaction === undefined || (isRecord(reaction) && typeof reaction.excerpt === "string");
-  if (!isReactionShaped) return { error: "reaction_invalid" };
-  if (reaction !== undefined && !isText(reaction.excerpt)) return { error: "excerpt_missing" };
-  const isKindUnknown = reaction?.kind !== undefined && !isReactionKind(reaction.kind);
-  if (isKindUnknown) return { error: "kind_unknown" };
-  const isReply = reaction !== undefined && !isFirstReaction;
-  if (isReply && reaction.kind === undefined) return { error: "kind_missing" };
-  // A thread starts with the AI's reaction: core re-sends the opening user turn itself.
-  if (isReply && (history as Turn[])[0].role !== "assistant") return { error: "history_invalid" };
-
-  if (daemons !== undefined && (command !== undefined || reaction !== undefined)) return { error: "request_conflict" };
+  if (daemons !== undefined && command !== undefined) return { error: "request_conflict" };
   const isDaemonsShaped = daemons === undefined || (isRecord(daemons) && typeof daemons.excerpt === "string" &&
     (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean"));
   if (!isDaemonsShaped) return { error: "daemons_invalid" };
@@ -138,7 +118,6 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
     history: ((history ?? []) as Turn[]).map(({ role, content }) => ({ role, content })),
     book: book === undefined ? undefined : pickBook(book as Book),
     ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
-    ...(reaction !== undefined && { reaction: pickReaction(reaction as ReactionRequest) }),
     ...(daemons !== undefined && { daemons: { excerpt: daemons.excerpt as string, mustPick: daemons.mustPick === true } }),
   };
 }
@@ -146,23 +125,17 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isText = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
 const pickBook = ({ title, author, edition }: Book): Book => ({ title, author, edition });
-const pickReaction = ({ excerpt, kind }: ReactionRequest): ReactionRequest => ({ excerpt, ...(kind !== undefined && { kind }) });
 
-// The single entry point: yields reply text as it streams, returns stats when done. A reaction
-// first yields its kind, picked by a short router call when the request doesn't name one (D20).
+// The single entry point: yields reply text as it streams (or a daemon run's one result), returns
+// stats when done.
 // Aborting `signal` (the client went away) stops the upstream request. Tests pass a fake `client`.
 export async function* converse(
   request: ConverseRequest,
   signal?: AbortSignal,
   client: Anthropic = new Anthropic(), // reads ANTHROPIC_API_KEY
 ): AsyncGenerator<ConverseChunk, ConverseStats> {
-  const start = performance.now(); // before the router: TTFT is what the reader waits for
+  const start = performance.now();
   if (request.daemons) return yield* runDaemons(client, request, request.daemons, start, signal);
-  if (request.reaction) {
-    const kind = request.reaction.kind ?? (await routeReaction(client, request, signal));
-    request = { ...request, reaction: { ...request.reaction, kind } };
-    yield { type: "kind", kind };
-  }
   const { pages, system, messages, maxTokens } = buildContext(request);
   let ttftMs: number | null = null;
   let text = "";
@@ -193,22 +166,6 @@ export async function* converse(
     usage: final.usage,
     citations: checkCitations(text, pages, request.notes),
   };
-}
-
-// Picks a reaction's kind: one short, non-streamed call with the same cached prefix as chat.
-async function routeReaction(client: Anthropic, request: ConverseRequest, signal?: AbortSignal): Promise<ReactionKind> {
-  const { system, messages } = routerContext(request);
-  const reply = await client.beta.messages.create({
-    model: MODEL,
-    max_tokens: ROUTER.maxTokens,
-    output_config: { effort: "low" },
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    system,
-    messages,
-  }, { signal });
-  const answer = reply.content.map((block) => (block.type === "text" ? block.text : "")).join("");
-  return parseRouterKind(answer);
 }
 
 // A daemon run (D37): one panel call where every daemon drafts a nugget or passes, a grounding
@@ -358,37 +315,15 @@ function jsonOf(message: Anthropic.Beta.BetaMessage): unknown {
 }
 
 // What the model sees, ordered stable to volatile (DESIGN §6.3) so a cache prefix stays valid:
-// instructions, the passage, the reader's notes (only if any), then the conversation and the question.
+// the book, the role, the reader's notes (only if any), then the conversation and the question.
 // A command's instructions go in the last user turn, not the system blocks, so that prefix is the
 // same for chat and every command. That turn is <command>prompt file</command>, <selection> (if
 // any), then the question as shown in chat. History holds only what the reader saw, so it stays plain.
-// A reaction works the same way: <reaction>prompt file</reaction> and <excerpt> open its thread.
-// On a first reaction that is the last user turn; on a reply it is re-sent before the thread
-// (which starts with the AI's reaction), and the reader's reply is the last turn.
 export function buildContext(request: ConverseRequest) {
   const { pages, system } = systemBlocks(request);
-  const { reaction } = request;
-  if (reaction) {
-    if (!reaction.kind) throw new Error("reaction_kind_missing"); // converse() routes before this
-    const prompt = REACTIONS[reaction.kind];
-    const opening = tagged("reaction", readPrompt(prompt.promptFile), reaction.excerpt);
-    const history = request.history ?? [];
-    const messages: Turn[] = history.length === 0
-      ? [{ role: "user", content: [opening, request.question.trim()].filter(Boolean).join("\n\n") }]
-      : [{ role: "user", content: opening }, ...history, { role: "user", content: request.question }];
-    return { pages, system, messages, maxTokens: prompt.maxTokens };
-  }
   const messages: Turn[] = [...(request.history ?? []), { role: "user", content: userTurn(request) }];
   const maxTokens = request.command ? COMMANDS[request.command.name].maxTokens : LIMITS.replyTokens.chat;
   return { pages, system, messages, maxTokens };
-}
-
-// The router sees the same prefix and one user turn: <router>prompt file</router>, <excerpt>.
-export function routerContext(request: ConverseRequest) {
-  const { system } = systemBlocks(request);
-  const excerpt = request.reaction?.excerpt ?? "";
-  const messages: Turn[] = [{ role: "user", content: tagged("router", readPrompt(ROUTER.promptFile), excerpt) }];
-  return { system, messages };
 }
 
 // D38: the book comes first (long documents above instructions; the prefix every call shares), split
@@ -406,10 +341,6 @@ function systemBlocks(request: ConverseRequest, rolePrompt = "system.md") {
   if (notes !== "") system.push({ type: "text", text: `<notes>\n${notes}\n</notes>` });
   return { pages, system };
 }
-
-// "<tag>\nprompt\n</tag>\n\n<excerpt>\nexcerpt\n</excerpt>"
-const tagged = (tag: string, prompt: string, excerpt: string) =>
-  `<${tag}>\n${prompt.trim()}\n</${tag}>\n\n<excerpt>\n${excerpt.trim()}\n</excerpt>`;
 
 function userTurn({ question, command }: ConverseRequest): string {
   if (!command) return question;

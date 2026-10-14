@@ -1,301 +1,158 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { ConverseRequest } from "@/core/converse.ts";
-import { labelCitations, pageCitePattern } from "@/core/passage.ts";
-import { threadHistory, type ReactionKind } from "@/core/reactions.ts";
-import type { Reaction } from "@/core/store.ts";
-import { streamMessage, type MessagePatch } from "@/lib/converse-client.ts";
-import { CitationWarnings, escapeTo } from "./Chat";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
+import type { Row } from "@/core/blocks.ts";
+import { afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { LIMITS } from "@/core/limits.ts";
+import { runDaemons } from "@/lib/converse-client.ts";
 import { CitedText } from "./CitedText";
-import { KIND_LABELS } from "./ReactButton";
 
-// The margin (D18, D20, D25): one card per reaction, each a thread the reader can reply to, set
-// beside the paragraph it answers (core/blocks layoutRows). The page owns `reactions` so it can
-// persist them. Cards stream in parallel with each other and with chat: every update targets its
-// card by id, through functional setState.
-type ReactionsProps = {
+// The margin (D37): a panel naming the daemons, with their status and a "React to notes" button,
+// then their cards beside the lines they answer. The daemons look on their own once the reader
+// pauses (LIMITS.daemons.idleMs) after writing enough of their own words, or when asked; core/daemons
+// plans what to do, and a run asks the route for every daemon's nugget and the reviewer's pick.
+type DaemonsProps = {
+  bookId: string; // a run for another book is abandoned when the book changes
+  edits: number; // the reader's own edits in this tab: each restarts the wait
   reference: string;
   notes: string;
-  setReactions: Dispatch<SetStateAction<Reaction[]>>;
+  daemons: DaemonState;
+  setDaemons: Dispatch<SetStateAction<DaemonState>>;
+  pausedReason?: string; // no reference text, or over the D32 cap: the daemons don't look
 };
+
+// How the last look ended, until the reader's next edit: nothing worth showing, the daily cap,
+// or a failed call.
+type Outcome = "quiet" | "daemon_limit" | "failed";
 
 export type MarginApi = {
-  react: (excerpt: string, kind?: ReactionKind) => void;
-  reply: (reaction: Reaction, question: string) => void;
-  remove: (id: string) => void;
-  choosing: ReadonlySet<string>; // ids waiting for the router
-  announcement: string; // for screen readers: "Pushback ready."
+  reactNow: () => void; // "React to notes"
+  dismiss: (id: string) => void;
+  status: string; // one line for the panel
+  isReading: boolean; // a run is out
+  isPaused: boolean;
+  announcement: string; // for screen readers: "The Author wrote in the margin."
 };
 
-export function useReactions({ reference, notes, setReactions }: ReactionsProps): MarginApi {
-  const [choosing, setChoosing] = useState<ReadonlySet<string>>(new Set());
+export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemons, pausedReason }: DaemonsProps): MarginApi {
+  const isPaused = pausedReason !== undefined;
+  const [isReading, setIsReading] = useState(false);
+  // The last look's outcome, kept with the edit count it followed: a newer edit hides it.
+  const [last, setLast] = useState<{ outcome?: Outcome; edits: number }>({ edits: 0 });
+  const outcome = last.edits === edits ? last.outcome : undefined;
   const [announcement, setAnnouncement] = useState("");
-  const streams = useRef(new Map<string, AbortController>()); // by reaction id: deleting stops its stream
+  const running = useRef<AbortController>(undefined);
+  // The timer fires later: it reads the latest notes, not the ones it was set with.
+  const latest = useRef({ reference, notes, daemons, edits });
+  useEffect(() => {
+    latest.current = { reference, notes, daemons, edits };
+  });
 
-  const updateThread = (id: string, change: (r: Reaction) => Reaction) =>
-    setReactions((rs) => rs.map((r) => (r.id === id ? change(r) : r)));
-  const updateLast = (id: string) => (patch: MessagePatch) =>
-    updateThread(id, (r) => ({ ...r, messages: [...r.messages.slice(0, -1), patch(r.messages[r.messages.length - 1])] }));
-  const setIsChoosing = (id: string, isChoosing: boolean) =>
-    setChoosing((ids) => {
-      const next = new Set(ids);
-      if (isChoosing) next.add(id);
-      else next.delete(id);
-      return next;
-    });
+  // A new book: abandon a run made for the last one.
+  useEffect(() => () => running.current?.abort(), [bookId]);
 
-  // Streams into the last message of thread `id`. A routed reaction learns its kind from the first event.
-  async function stream(id: string, kind: ReactionKind | undefined, body: ConverseRequest) {
+  async function look(isAsked = false) {
+    if (running.current) return;
+    const { reference, notes, daemons, edits } = latest.current;
+    const setOutcome = (outcome?: Outcome) => setLast({ outcome, edits });
+    const plan = planDaemons(notes, daemons, isAsked);
+    if (plan.kind === "wait") return;
+    if (plan.kind === "promote") {
+      setDaemons((d) => afterPromote(d, plan.card));
+      return setAnnouncement(`${DAEMONS[plan.card.daemon].name} wrote in the margin.`);
+    }
     const abort = new AbortController();
-    streams.current.set(id, abort);
-    let finalKind = kind;
-    const onKind = (picked: ReactionKind) => {
-      finalKind = picked;
-      updateThread(id, (r) => ({ ...r, kind: picked }));
-      setIsChoosing(id, false);
-    };
-    await streamMessage(body, updateLast(id), { onKind, signal: abort.signal });
-    streams.current.delete(id);
-    setIsChoosing(id, false);
-    if (!abort.signal.aborted) setAnnouncement(`${finalKind ? KIND_LABELS[finalKind].label : "Reaction"} ready.`);
+    running.current = abort;
+    setIsReading(true);
+    const result = await runDaemons({ passage: reference, notes, question: "", daemons: { excerpt: plan.excerpt, mustPick: plan.mustPick } }, abort.signal);
+    running.current = undefined;
+    setIsReading(false);
+    if (abort.signal.aborted) return;
+    if ("error" in result) return setOutcome(result.error === "daemon_limit" ? "daemon_limit" : "failed");
+    setDaemons((d) => afterRun(d, plan, result.pick, result.nuggets, () => crypto.randomUUID()));
+    setOutcome(result.pick ? undefined : "quiet");
+    if (result.pick) setAnnouncement(`${DAEMONS[result.pick].name} wrote in the margin.`);
   }
 
-  // Each React makes a new card, even on an excerpt that already has one (D20). Until the router
-  // answers, the card holds a placeholder kind and reads "Choosing…".
-  function react(excerpt: string, kind?: ReactionKind) {
-    const id = crypto.randomUUID();
-    const opening = { role: "assistant" as const, content: "", isStreaming: true };
-    setReactions((rs) => [...rs, { id, excerpt, kind: kind ?? "question", messages: [opening] }]);
-    if (!kind) setIsChoosing(id, true);
-    void stream(id, kind, { passage: reference, notes, question: "", reaction: { excerpt, ...(kind && { kind }) } });
-  }
+  // Every edit of the reader's restarts the wait; a pause long enough lets the daemons look. A failed
+  // run leaves its lines unread, so the next pause after an edit tries again (never a retry loop).
+  useEffect(() => {
+    if (isPaused || edits === 0) return;
+    const timer = setTimeout(() => void look(), LIMITS.daemons.idleMs);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- look reads `latest`; only these restart the wait
+  }, [edits, isPaused]);
 
-  function reply(reaction: Reaction, question: string) {
-    const history = threadHistory(reaction.messages);
-    const { id, excerpt, kind } = reaction;
-    updateThread(id, (r) => ({
-      ...r,
-      messages: [...r.messages, { role: "user", content: question }, { role: "assistant", content: "", isStreaming: true }],
-    }));
-    void stream(id, kind, { passage: reference, notes, question, history, reaction: { excerpt, kind } });
-  }
+  // How many new lines the daemons have to read so far (deferred, so typing stays smooth).
+  const deferredNotes = useDeferredValue(notes);
+  const waiting = useMemo(() => planDaemons(deferredNotes, daemons), [deferredNotes, daemons]);
+  const newLines = waiting.kind === "wait" ? waiting.lines : LIMITS.daemons.minLines;
+  const status = isPaused
+    ? `Paused: ${pausedReason}`
+    : isReading
+      ? "Reading your notes…"
+      : outcome === "quiet"
+        ? "Nothing to add this time."
+        : outcome === "daemon_limit"
+          ? `Today's ${LIMITS.daemons.dailyRuns} daemon runs are used up; they reset at midnight.`
+          : outcome === "failed"
+            ? "Couldn't reach the daemons; they'll try again after your next edit."
+            : newLines >= LIMITS.daemons.minLines
+              ? "They'll read when you pause."
+              : `Listening: ${newLines} of ${LIMITS.daemons.minLines} new lines.`;
 
-  function remove(id: string) {
-    streams.current.get(id)?.abort();
-    setReactions((rs) => rs.filter((r) => r.id !== id));
-  }
-
-  return { react, reply, remove, choosing, announcement };
+  const dismiss = (id: string) => setDaemons((d) => dismissCard(d, id));
+  return { reactNow: () => void look(true), dismiss, status, isReading, isPaused, announcement };
 }
 
-type MarginCellProps = {
-  items: { reaction: Reaction; start?: number; end?: number }[]; // no range: detached
-  isCurrent?: boolean; // the row's block is the one commands act on: its cards open
-  isDetached?: boolean; // the final row: "Your note changed"
-  margin: MarginApi;
-  blockReason?: string; // why replying is impossible now (no reference text, or over the D32 cap)
-  onShowExcerpt: (start: number, end: number) => void; // opens the block with the excerpt selected
-};
-
-// The margin half of one row. A block with reactions gets a dot on the margin rule (with a count
-// when there are several); hovering or clicking it opens that block's cards.
-export function MarginCell({ items, isCurrent = false, isDetached = false, margin, blockReason, onShowExcerpt }: MarginCellProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
-  const isOpen = isCurrent || isHovered || isPinned;
-  const count = items.length;
-
+// The top of the margin: who the daemons are, what they're doing, and a way to ask them now.
+export function DaemonPanel({ margin }: { margin: MarginApi }) {
   return (
-    <div className="margin-stack">
-      {count > 0 && !isDetached && (
-        <button
-          type="button"
-          className="dot"
-          aria-label={count === 1 ? "Show the reaction to this note" : `Show the ${count} reactions to this note`}
-          aria-pressed={isPinned}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          onClick={() => setIsPinned((pinned) => !pinned)}
-        >
-          {count > 1 && <span className="dot-count">{count}</span>}
-        </button>
-      )}
-      {count > 0 && (
-        <div className="cards">
-          {isDetached && <p className="detached-divider">Your note changed</p>}
-          {items.map(({ reaction, start, end }) => {
-            const hasRange = start !== undefined && end !== undefined;
-            return (
-              <Card
-                key={reaction.id}
-                reaction={reaction}
-                isActive={isOpen && !isDetached}
-                isChoosing={margin.choosing.has(reaction.id)}
-                replyTitle={blockReason}
-                onShowExcerpt={hasRange ? () => onShowExcerpt(start, end) : undefined}
-                onReply={(question) => margin.reply(reaction, question)}
-                onDelete={() => margin.remove(reaction.id)}
-              />
-            );
-          })}
-        </div>
-      )}
+    <div className="daemon-panel">
+      <ul className="daemon-list" aria-label="Daemons">
+        {DAEMON_IDS.map((id) => (
+          <li key={id} style={{ "--daemon": DAEMONS[id].colour } as CSSProperties}>
+            {DAEMONS[id].name}
+          </li>
+        ))}
+      </ul>
+      <p className="daemon-status">{margin.status}</p>
+      <button type="button" className="react-notes" disabled={margin.isPaused || margin.isReading} onClick={margin.reactNow}>
+        React to notes
+      </button>
     </div>
   );
 }
 
-type CardProps = {
-  reaction: Reaction;
-  isActive: boolean; // its block is current, or its dot is hovered or pinned: shown in full
-  isChoosing: boolean;
-  replyTitle?: string; // set when replying is impossible, saying why
-  onShowExcerpt?: () => void; // absent when the excerpt is no longer in the notes (detached)
-  onReply: (question: string) => void;
-  onDelete: () => void;
+type MarginCellProps = {
+  row: Row<DaemonCard & { excerpt: string }>;
+  margin: MarginApi;
+  onShowExcerpt: (start: number, end: number) => void; // selects the words a card answers
 };
 
-// The excerpt as the card shows it: one line, at most 60 characters, without markdown symbols
-// (the notes render them; the card shouldn't show `**ironic**`).
-function shorten(excerpt: string): string {
-  const plain = excerpt.replace(/^\s*(?:#{1,6}|>|[-*+])\s+/gm, "").replace(/\*\*|__|[*_`~]/g, "");
-  const line = plain.replace(/\s+/g, " ").trim();
-  return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line;
-}
-
-function Card({ reaction, isActive, isChoosing, replyTitle, onShowExcerpt, onReply, onDelete }: CardProps) {
-  const [isReplying, setIsReplying] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // opened by a click while its block isn't current
-  const { messages } = reaction;
-  const isStreaming = messages.at(-1)?.isStreaming === true;
-  const hasReplies = messages.length > 1;
-  const replyCount = messages.filter((m) => m.role === "user").length; // the reader's replies
-  const isDetached = onShowExcerpt === undefined;
-  const isOpeningFailed = !isStreaming && threadHistory(messages).length === 0;
-  const replyDisabledTitle = replyTitle ?? (isOpeningFailed ? "Nothing to reply to: the reaction failed" : undefined);
-  // Collapsed, a card keeps its row short: kind, excerpt, the opening clamped to 4 lines.
-  const isOpen = isActive || isExpanded || isStreaming || isChoosing || isReplying || isConfirmingDelete;
-  const failedChecks = messages.flatMap((m) => m.citations ?? []).filter((c) => c.status !== "ok").length;
-  const className = ["card", isActive && "is-active", isDetached && "is-detached", !isOpen && "is-collapsed"]
-    .filter(Boolean)
-    .join(" ");
-
-  const send = () => {
-    const question = draft.trim();
-    const isReady = question !== "" && !isStreaming && replyDisabledTitle === undefined;
-    if (!isReady) return;
-    onReply(question);
-    setDraft("");
-  };
-
+// One paragraph's cards: the daemon's name in its colour, then its remark. The name shows the
+// words it answers; × dismisses the card.
+export function MarginCell({ row, margin, onShowExcerpt }: MarginCellProps) {
   return (
-    <article className={className} aria-busy={isStreaming}>
-      <div className="card-head">
-        <span className={isChoosing ? "kind is-choosing" : "kind"}>{isChoosing ? "Choosing…" : KIND_LABELS[reaction.kind].label}</span>
-        {isConfirmingDelete ? (
-          <span className="confirm" onKeyDown={(e) => escapeTo(e, () => setIsConfirmingDelete(false))}>
-            Delete this thread?{" "}
-            <button type="button" onClick={onDelete}>
-              Delete
-            </button>{" "}
-            <button type="button" autoFocus onClick={() => setIsConfirmingDelete(false)}>
-              Keep
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="delete"
-            aria-label="Delete reaction"
-            onClick={() => (hasReplies ? setIsConfirmingDelete(true) : onDelete())}
-          >
-            ×
-          </button>
-        )}
-      </div>
-      {isDetached ? (
-        <span className="excerpt">“{shorten(reaction.excerpt)}”</span>
-      ) : (
-        <button type="button" className="excerpt" title="Show this in your notes" onClick={onShowExcerpt}>
-          “{shorten(reaction.excerpt)}”
-        </button>
-      )}
-      {!isOpen && (
-        <button type="button" className="expand" aria-expanded={false} onClick={() => setIsExpanded(true)}>
-          <span className="clamp">
-            {messages[0]?.error && !messages[0].content
-              ? `Reply failed: ${messages[0].error}`
-              : labelCitations(messages[0]?.content ?? "", messages[0]?.pages ?? {}).replace(pageCitePattern(), (cite) => cite.slice(1, -1))}
-          </span>
-          <span className="more">
-            {replyCount > 0 && `· ${replyCount} ${replyCount === 1 ? "reply" : "replies"} `}
-            {failedChecks > 0 && `· ⚠ ${failedChecks} citation ${failedChecks === 1 ? "warning" : "warnings"} `}
-            · Show all
-          </span>
-        </button>
-      )}
-      {isOpen && (
-        <>
-          {messages.map((m, i) =>
-            m.role === "user" ? (
-              <p key={i} className="reply-user">
-                {m.content}
-              </p>
-            ) : (
-              <div key={i} className={i === 0 ? "reply-ai" : "reply-ai follow-up"}>
-                <p>
-                  <CitedText text={labelCitations(m.content, m.pages ?? {})} />
-                  {m.isStreaming && (
-                    <span className="caret" aria-hidden="true">
-                      ▍
-                    </span>
-                  )}
-                </p>
-                {m.error && <p className="warning">Reply failed: {m.error}</p>}
-                <CitationWarnings citations={m.citations} />
-              </div>
-            ),
-          )}
-          {isReplying ? (
-            <textarea
-              rows={2}
-              autoFocus
-              aria-label="Reply to this reaction"
-              placeholder="Reply (Enter to send, Esc to close)"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault(); // closes the reply box only
-                  return setIsReplying(false);
-                }
-                // Enter while composing (IME) confirms the composition, not the reply.
-                const isSubmit = e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
-                if (!isSubmit) return;
-                e.preventDefault();
-                send();
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              className="link"
-              disabled={isStreaming || replyDisabledTitle !== undefined}
-              title={replyDisabledTitle}
-              onClick={() => setIsReplying(true)}
-            >
-              Reply
-            </button>
-          )}
-          {isExpanded && !isActive && !isReplying && (
-            <button type="button" className="link less" aria-expanded={true} onClick={() => setIsExpanded(false)}>
-              Show less
-            </button>
-          )}
-        </>
-      )}
-    </article>
+    <div className="cards">
+      {row.cards.map(({ card, start, end }) => {
+        const daemon = DAEMONS[card.daemon];
+        return (
+          <article key={card.id} className="card daemon-card" style={{ "--daemon": daemon.colour } as CSSProperties}>
+            <div className="card-head">
+              <button type="button" className="daemon-name" title="Show the words this answers" onClick={() => onShowExcerpt(start, end)}>
+                {daemon.name}
+              </button>
+              <button type="button" className="delete" aria-label={`Dismiss ${daemon.name}'s note`} onClick={() => margin.dismiss(card.id)}>
+                ×
+              </button>
+            </div>
+            <p className="reply-ai">
+              <CitedText text={card.text} />
+            </p>
+          </article>
+        );
+      })}
+    </div>
   );
 }

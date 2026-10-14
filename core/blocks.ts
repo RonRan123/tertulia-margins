@@ -1,8 +1,7 @@
 // Paragraphs of the notes (D20, D25): the notes are one markdown string, edited in one CodeMirror
 // editor; a block is a run of non-blank lines, separated from the next by one or more blank
-// (whitespace-only) lines. React acts on the block under the caret, and margin cards group by the
-// block their excerpt starts in. Browser-safe and pure.
-import { placeReactions } from "./reactions.ts";
+// (whitespace-only) lines. Daemons read the blocks that changed (D37), and margin cards group by
+// the block their excerpt starts in. Browser-safe and pure.
 
 // notes.slice(start, end) === text. A block never starts or ends on a line break; with CRLF notes,
 // the last line's "\r" is left in the separator.
@@ -32,37 +31,60 @@ export function blockAt(blocks: Block[], offset: number): Block | undefined {
   return blocks.find((b) => offset >= b.start && offset <= b.end);
 }
 
-// What React acts on: the trimmed selection; with a caret and no
-// selection, the whole block under it (D20). Undefined when that is empty (a caret on a blank line).
-export function commandTarget(notes: string, start: number, end: number): string | undefined {
-  const selection = notes.slice(start, end).trim();
-  if (selection !== "") return selection;
-  const isOnlyWhitespaceSelected = end > start;
-  if (isOnlyWhitespaceSelected) return undefined;
-  return blockAt(splitBlocks(notes), start)?.text.trim() || undefined;
+// ---- Anchoring (D20): a margin card stores the exact words it answers and finds them again ----
+
+// Where an excerpt is in the notes now: exact match first; then one that differs only in whitespace
+// (a rewrapped line). Undefined → the note changed.
+export function findExcerpt(notes: string, excerpt: string): { start: number; end: number } | undefined {
+  const target = excerpt.trim();
+  if (target === "") return undefined;
+  const exact = notes.indexOf(target);
+  if (exact !== -1) return { start: exact, end: exact + target.length };
+
+  const words = target.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const loose = new RegExp(words.join(String.raw`\s+`)).exec(notes);
+  return loose ? { start: loose.index, end: loose.index + loose[0].length } : undefined;
 }
 
-// One row of the margin: a block and the reactions beside it.
-export type Row<R> = Block & { reactions: { reaction: R; start: number; end: number }[] };
+// The margin's order: cards whose excerpt is still in the notes, by where it starts (ties keep
+// creation order), then the detached ones, whose words are gone.
+export function placeByExcerpt<C extends { excerpt: string }>(
+  notes: string,
+  cards: C[],
+): { placed: { card: C; start: number; end: number }[]; detached: C[] } {
+  const placed: { card: C; start: number; end: number }[] = [];
+  const detached: C[] = [];
+  for (const card of cards) {
+    const range = findExcerpt(notes, card.excerpt);
+    if (range) placed.push({ card, ...range });
+    else detached.push(card);
+  }
+  placed.sort((a, b) => a.start - b.start); // stable sort: same start keeps creation order
+  return { placed, detached };
+}
 
-// The margin's layout (D20, D25): one row per block. A reaction sits beside the row where its
-// excerpt starts, in note order; `detached` are those whose excerpt is gone ("Your note changed").
-export function layoutRows<R extends { excerpt: string }>(notes: string, reactions: R[]): { rows: Row<R>[]; detached: R[] } {
-  const rows: Row<R>[] = splitBlocks(notes).map((block) => ({ ...block, reactions: [] }));
-  const { placed, detached } = placeReactions(notes, reactions);
+// One row of the margin: a block and the cards beside it.
+export type Row<C> = Block & { cards: { card: C; start: number; end: number }[] };
+
+// The margin's layout (D20, D25): one row per block. A card sits beside the row where its excerpt
+// starts, in note order; `detached` are those whose excerpt is gone.
+export function layoutRows<C extends { excerpt: string }>(notes: string, cards: C[]): { rows: Row<C>[]; detached: C[] } {
+  const rows: Row<C>[] = splitBlocks(notes).map((block) => ({ ...block, cards: [] }));
+  const { placed, detached } = placeByExcerpt(notes, cards);
   for (const item of placed) {
     const row = rows.find((r) => item.start >= r.start && item.start < r.end);
-    if (row) row.reactions.push(item);
-    else detached.push(item.reaction);
+    if (row) row.cards.push(item);
+    else detached.push(item.card);
   }
   return { rows, detached };
 }
 
 // The margin on wide screens, like comments in Google Docs (D18): each block's stack of cards
 // wants to start at its block's top (`anchor`); one that would overlap the stack before it is
-// pushed down to just below it, `gap` apart. Stacks in note order; returns each stack's top.
-export function stackCards(stacks: { anchor: number; height: number }[], gap: number): number[] {
-  let nextFree = -Infinity;
+// pushed down to just below it, `gap` apart; none starts above `top` (below the margin's panel).
+// Stacks in note order; returns each stack's top.
+export function stackCards(stacks: { anchor: number; height: number }[], gap: number, top = -Infinity): number[] {
+  let nextFree = top;
   return stacks.map(({ anchor, height }) => {
     const top = Math.max(anchor, nextFree);
     nextFree = top + height + gap;
