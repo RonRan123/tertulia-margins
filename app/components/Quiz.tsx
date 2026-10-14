@@ -57,6 +57,7 @@ const errorText = (code: string, what: string) => ERRORS[code] ?? `${what} (${co
 
 export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked }: QuizProps) {
   const [isMaking, setIsMaking] = useState(false);
+  const [isReady, setIsReady] = useState(false); // the quiz is in: the bar finishes, then "Ready"
   const making = useRef<AbortController>(undefined);
   // The free response being graded (its question's index), and the last grading's failure.
   const [grading, setGrading] = useState<number>();
@@ -72,6 +73,7 @@ export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked
       gradingCall.current?.abort();
       gradingCall.current = undefined;
       setIsMaking(false);
+      setIsReady(false);
       setGrading(undefined);
       setGradeError(undefined);
     },
@@ -89,11 +91,20 @@ export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked
     // The book's recent questions go along so the agent doesn't repeat them (variety).
     const result = await makeQuiz({ passage: reference, notes, question: "", quiz: { ...setup, avoid: quiz.asked ?? [] } }, abort.signal);
     if (abort.signal.aborted) return; // cancelled, or the book changed: the cleanup reset the flags
+    onAsked();
+    if ("error" in result || result.verdict === "insufficient") {
+      making.current = undefined;
+      setIsMaking(false);
+      return step({ type: "refused", feedback: "error" in result ? errorText(result.error, "The quiz couldn't be written") : result.feedback });
+    }
+    // Let the bar run to the end and say "Ready" before the first question (Ronith): a quiz that
+    // appears mid-bar leaves the wait unfinished.
+    setIsReady(true);
+    await new Promise((resolve) => setTimeout(resolve, READY_MS.fill + READY_MS.ready));
+    if (abort.signal.aborted) return;
     making.current = undefined;
     setIsMaking(false);
-    onAsked();
-    if ("error" in result) return step({ type: "refused", feedback: errorText(result.error, "The quiz couldn't be written") });
-    if (result.verdict === "insufficient") return step({ type: "refused", feedback: result.feedback });
+    setIsReady(false);
     step({ type: "started", questions: result.questions });
   }
 
@@ -101,6 +112,7 @@ export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked
     making.current?.abort();
     making.current = undefined;
     setIsMaking(false);
+    setIsReady(false);
   }
 
   // Grades question `index`'s free response `text` (D44); a failure can be retried or skipped.
@@ -120,7 +132,7 @@ export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked
     step({ type: "graded", index, verdict: result.verdict, feedback: result.feedback });
   }
 
-  if (quiz.stage === "setup") return <QuizSetupForm quiz={quiz} isMaking={isMaking} onChange={(setup) => step({ type: "setup", setup })} onStart={start} onCancel={cancel} />;
+  if (quiz.stage === "setup") return <QuizSetupForm quiz={quiz} isMaking={isMaking} isReady={isReady} onChange={(setup) => step({ type: "setup", setup })} onStart={start} onCancel={cancel} />;
   if (quiz.stage === "taking") {
     const { current, questions } = quiz;
     return (
@@ -144,12 +156,14 @@ export function Quiz({ bookId, quiz, setQuiz, reference, notes, aiBlock, onAsked
 function QuizSetupForm({
   quiz,
   isMaking,
+  isReady,
   onChange,
   onStart,
   onCancel,
 }: {
   quiz: Extract<QuizState, { stage: "setup" }>;
   isMaking: boolean;
+  isReady: boolean;
   onChange: (setup: QuizSetup) => void;
   onStart: (setup: QuizSetup) => void;
   onCancel: () => void;
@@ -221,15 +235,15 @@ function QuizSetupForm({
       )}
       <div className="quiz-actions">
         <button type="submit" className="primary" disabled={isMaking}>
-          {isMaking ? "Writing your quiz…" : "Start quiz"}
+          {isReady ? "Starting…" : isMaking ? "Writing your quiz…" : "Start quiz"}
         </button>
-        {isMaking && (
+        {isMaking && !isReady && (
           <button type="button" className="quiet" onClick={onCancel}>
             Cancel
           </button>
         )}
       </div>
-      {isMaking && <QuizProgress count={setup.count} />}
+      {isMaking && <QuizProgress count={setup.count} isDone={isReady} />}
     </form>
   );
 }
@@ -238,24 +252,32 @@ function QuizSetupForm({
 // quiz of this size usually takes (measured: ~5 s plus ~3.5 s a question), easing toward 95% and
 // never claiming to be done; the stage line says what the agent is doing at that point.
 const QUIZ_MS = { base: 5_000, perQuestion: 3_500 };
+// Once the quiz is in: the bar fills to the end, then "✓ Ready" shows, then the first question.
+const READY_MS = { fill: 1_000, ready: 700 };
 
-function QuizProgress({ count }: { count: number }) {
+function QuizProgress({ count, isDone }: { count: number; isDone: boolean }) {
   const [elapsed, setElapsed] = useState(0);
+  const [isFull, setIsFull] = useState(false);
   useEffect(() => {
     const start = Date.now();
     const timer = setInterval(() => setElapsed(Date.now() - start), 200);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    if (!isDone) return;
+    const timer = setTimeout(() => setIsFull(true), READY_MS.fill);
+    return () => clearTimeout(timer);
+  }, [isDone]);
   const expected = QUIZ_MS.base + QUIZ_MS.perQuestion * count;
   const share = 0.95 * (1 - Math.exp((-2.5 * elapsed) / expected));
   const stage = share < 0.2 ? "Reading the book…" : share < 0.75 ? `Writing ${count} question${count === 1 ? "" : "s"}…` : elapsed < expected * 1.6 ? "Checking the answers…" : "Almost there: a long quiz takes a little longer…";
-  const percent = Math.round(share * 100);
+  const percent = isDone ? 100 : Math.round(share * 100);
   return (
     <div className="quiz-loading" aria-live="polite">
       <div className="quiz-bar" role="progressbar" aria-label="Writing your quiz" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <div className="quiz-bar-fill" style={{ width: `${percent}%` }} />
+        <div className={isDone ? "quiz-bar-fill done" : "quiz-bar-fill"} style={{ width: `${percent}%`, transitionDuration: isDone ? `${READY_MS.fill}ms` : undefined }} />
       </div>
-      <p className="quiz-hint">{stage}</p>
+      {isFull ? <p className="quiz-ready">✓ Ready</p> : <p className="quiz-hint">{isDone ? "Finishing up…" : stage}</p>}
     </div>
   );
 }

@@ -998,7 +998,19 @@ main[data-view="quiz"] .quiz {
   height: 100%;
   border-radius: 3px;
   background: var(--ai);
-  transition: width 0.2s linear;
+  transition: width 0.2s linear, background-color 0.3s;
+}
+
+/* The quiz is in: the bar runs to the end (duration set inline) and turns green. */
+.quiz-bar-fill.done {
+  transition-timing-function: ease-out;
+  background: var(--ok);
+}
+
+.quiz-ready {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ok);
 }
 
 .quiz-feedback {
