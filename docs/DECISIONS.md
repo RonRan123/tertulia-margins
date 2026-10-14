@@ -34,7 +34,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Open sub-question:** compare against the API's built-in citations on day 2 (`/decide` then).
 
 ## D5. Outside knowledge: passage-only for the MVP (Q2)
-- **Status:** Accepted (2026-10-08, Ronith: "the core functionality in the MVP doesn't need that")
+- **Status:** Accepted (2026-10-08, Ronith: "the core functionality in the MVP doesn't need that"); amended by D39 (one labelled daemon may bring outside knowledge; chat stays book-only)
 - **Context:** Day 0 notes wanted counterpoints (Goodreads/Reddit) and outside perspective; DESIGN.md treats the passage as the only source of truth.
 - **Alternatives:** labelled, opt-in outside knowledge in a separate uncited block (~1 h); B plus fetched Goodreads/Reddit material (4+ h, new dependencies, ToS).
 - **Why:** the MVP's core is grounded conversation steered by the reader's notes; outside knowledge adds hours and a way for unverifiable claims in without helping that core.
@@ -389,6 +389,25 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** a page is what a reader of a paper book looks for, and a click shows the exact words; the model reads page numbers from the text rather than guessing them, so D13's protection holds.
 - **Cost we accept:** a page holds several paragraphs, so a cite is checked less precisely than a `[¶n]` was; claims without a quote aren't checked at all; a book typed with paper page markers and a separate PDF links through D33's estimate when a cite has no quote.
 - **Revisit if:** cites land on the wrong page often, or replies stop citing what they quote.
+
+## D39. Daemons are for extending the reader's thinking, not checking it; a third daemon brings outside knowledge (amends D37, D5)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** trying S8.2b, Ronith found the daemons "more nit picky than insightful… making technical points that don't extend the conversation". D37 defined what a daemon is but not what the margin is for, and the drafts answered "checking the notes against the book": both jobs leaned to correction (Connect's "the passage that sets it right"), the examples were all fact-checks, every remark was pushed to quote a page, the reviewer ranked tension first, and the daemons answered only the latest ~10 lines of a 4-page test book.
+- **Alternatives:** reframe both daemons, book-only (~2 h); swap the Devil's Advocate for a generative Questioner as a default (~3 h); allow outside knowledge for all daemons (~3–4 h).
+- **Rules:**
+  - *Purpose:* a daemon's remark extends the reader's thinking: a connection they haven't made, a pattern, a reading they haven't weighed, or a question worth carrying forward. Correcting a misreading is no longer a goal in itself; it earns a remark only when the correction opens something up.
+  - *Kinds of connection (all four, Ronith):* across the book (a passage that echoes, sets up or complicates the note); to the reader's earlier notes (their own thread of thinking, not just the latest excerpt); open questions (worth carrying forward, not answered on the page); beyond the book (the third daemon).
+  - *The Author (Connect):* reframed around connections across the book and to the reader's earlier notes; the "set it right" rule goes.
+  - *The Devil's Advocate (Counter):* offers the strongest *other reading* of what the reader noticed, not a fact-check of it.
+  - *A third daemon (outside knowledge):* connects the note to other works, history and ideas. Its remarks are labelled "beyond the book" on the card. It names the work, author or idea and paraphrases; it never quotes an outside work, since such a quote can't be checked. Its remarks about this book still follow D38 and `checkCitations`. Name, colour and voice: Claude proposes in the prompt drafts, Ronith picks.
+  - *Grounding (D38, eased):* cite a page when quoting or pointing at a passage; a quote is used only when the wording is the point, so an interpretive remark needs no quote.
+  - *Reviewer:* ranks "opens a line of thought the reader will want to follow" first; a correction ranks only when it does that.
+  - *Examples:* the role prompt's examples show remarks that extend a note (connection, other reading, open question, outside link), with at most one correction.
+  - *D5:* outside knowledge is allowed for this daemon only, labelled; chat and commands stay book-only.
+  - *Prompts:* Claude drafts the changes as diffs to the daemon prompts (D19, D37); Ronith refines before merge. Tested on a full public-domain book, not the 4-page PDF.
+- **Why:** every cause of the nit-picking was in the framing, so reframing fixes it cheaply without losing the quote check; outside knowledge is the one kind of connection the book can't give, so it gets its own clearly labelled voice rather than loosening grounding for all.
+- **Cost we accept:** the third daemon's claims about other works aren't verified and may be wrong or invented; the label is the only guard. The panel call drafts three remarks, so it costs a little more and the voices may blur more. Fewer remarks carry a checkable quote.
+- **Revisit if:** the outside daemon cites works or facts that don't exist (then add a check or a search tool, S8.4); remarks turn vague without quotes; three voices blur (one call per daemon).
 
 ---
 

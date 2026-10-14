@@ -2,9 +2,9 @@
 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
-import { EditorState, Transaction } from "@codemirror/state";
-import { EditorView, keymap, placeholder } from "@codemirror/view";
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
+import { EditorState, StateEffect, StateField, Transaction } from "@codemirror/state";
+import { Decoration, EditorView, keymap, placeholder, type DecorationSet } from "@codemirror/view";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { layoutRows, stackCards, type Row } from "@/core/blocks.ts";
 import type { PageLink } from "@/core/page-links.ts";
 import { listKeys } from "@/lib/list-keys.ts";
@@ -15,11 +15,6 @@ import { linkAt, pageLinksField, setPageLinks } from "@/lib/page-link-view.ts";
 // live preview. The notes stay one string, so store, export and the AI see exactly what is typed.
 // The user's own words only (D6): the AI never writes here; daemons' cards sit in the margin
 // column beside the paragraph they answer (D37).
-
-export type NotesHandle = {
-  // Shows a range: selects it and scrolls it into view.
-  select: (start: number, end: number) => void;
-};
 
 // A margin card: anything anchored to the exact words it answers.
 type Card = { id: string; excerpt: string };
@@ -33,13 +28,34 @@ type NotesProps<C extends Card> = {
   // R4: page links computed for `notes` (they may lag a keystroke behind); a marker click opens one.
   pageLinks: { notes: string; links: PageLink[] };
   onOpenLink: (link: PageLink) => void;
-  ref?: Ref<NotesHandle>;
+  // The card the reader clicked: its words in the notes are marked in its colour (D37).
+  highlight?: { id: string; colour: string };
 };
+
+// The marked words of the clicked card. A decoration, not a selection: it shows while the editor
+// isn't focused, and follows edits around it.
+type Highlight = { from: number; to: number; colour: string };
+const setHighlight = StateEffect.define<Highlight | null>();
+const highlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(marks, tr) {
+    marks = marks.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(setHighlight)) continue;
+      const h = effect.value;
+      marks = h
+        ? Decoration.set([Decoration.mark({ class: "cm-card-highlight", attributes: { style: `--daemon: ${h.colour}` } }).range(h.from, h.to)])
+        : Decoration.none;
+    }
+    return marks;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 const EMPTY_COPY = "Write what you notice as you read. When you pause, the daemons in the margin may answer.";
 const CARD_GAP = 12; // px, var(--s3): between groups pushed together, and below the last one
 
-export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, renderMargin, pageLinks, onOpenLink, ref }: NotesProps<C>) {
+export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, renderMargin, pageLinks, onOpenLink, highlight }: NotesProps<C>) {
   const host = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
@@ -66,6 +82,7 @@ export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, re
           EditorState.tabSize.of(4),
           livePreview,
           pageLinksField,
+          highlightField,
           EditorView.domEventHandlers({
             mousedown: (event, view) => {
               const link = linkAt(view, event);
@@ -113,18 +130,27 @@ export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, re
     editor.dispatch({ effects: setPageLinks.of(pageLinks.links) });
   }, [pageLinks]);
 
-  useImperativeHandle(ref, () => ({
-    select: (start, end) => {
-      const editor = view.current;
-      if (!editor) return;
-      const length = editor.state.doc.length;
-      editor.dispatch({ selection: { anchor: Math.min(start, length), head: Math.min(end, length) }, scrollIntoView: true });
-      editor.focus();
-    },
-  }));
-
   const { rows } = layoutRows(notes, cards);
   const withCards = rows.filter((row) => row.cards.length > 0);
+
+  // Mark the clicked card's words; scroll to them only when a card is first clicked, not as the
+  // reader types around them. A dismissed card, or one whose words are gone, clears the mark.
+  const marked = highlight && withCards.flatMap((row) => row.cards).find(({ card }) => card.id === highlight.id);
+  const markKey = marked ? `${highlight.id}:${marked.start}:${marked.end}` : "";
+  const scrolledFor = useRef<string>(undefined);
+  useEffect(() => {
+    const editor = view.current;
+    if (!editor || editor.state.doc.toString() !== notes) return;
+    if (!marked) {
+      scrolledFor.current = undefined; // clicking the same card again later scrolls to it again
+      return void editor.dispatch({ effects: setHighlight.of(null) });
+    }
+    const isNewlyClicked = scrolledFor.current !== highlight.id;
+    scrolledFor.current = highlight.id;
+    const effects = [setHighlight.of({ from: marked.start, to: marked.end, colour: highlight.colour })];
+    editor.dispatch({ effects: isNewlyClicked ? [...effects, EditorView.scrollIntoView(marked.start, { y: "center" })] : effects });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- markKey stands for the card and its range
+  }, [markKey]);
   // Wide screens: each paragraph's group of cards (.margin-group, absolutely placed) starts level
   // with the line its first card answers or, if that would overlap the group above, just below it, like
   // comments in Google Docs (core stackCards). Phone (one

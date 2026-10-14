@@ -29,10 +29,10 @@ import {
   type UiState,
   type View,
 } from "@/core/store.ts";
-import { freshDaemonState, type DaemonState } from "@/core/daemons.ts";
+import { DAEMONS, freshDaemonState, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
 import { Chat } from "./components/Chat";
 import { DaemonPanel, MarginCell, useDaemons } from "./components/Margin";
-import { Notes, type NotesHandle } from "./components/Notes";
+import { Notes } from "./components/Notes";
 import { PaneDivider } from "./components/PaneDivider";
 import {
   BookIcon,
@@ -112,7 +112,6 @@ export default function Home() {
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const notesView = useRef<NotesHandle>(null);
   const referenceText = useRef<ReferenceTextHandle>(null);
   const hasReference = reference.trim() !== "";
   const isTooLong = isReferenceTooLong(reference);
@@ -337,7 +336,10 @@ export default function Home() {
 
   const isNotesEmpty = notes.trim() === "";
   const isUnreadShown = hasUnread && !showsChat(ui.view);
-  const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
+  // The card whose words are highlighted in the notes; a second click on it clears them.
+  const [activeCard, setActiveCard] = useState<{ id: string; colour: string }>();
+  const toggleCard = (card: DaemonCard) =>
+    setActiveCard((active) => (active?.id === card.id ? undefined : { id: card.id, colour: DAEMONS[card.daemon].colour }));
 
   return (
     <OpenPageContext value={citeOpener}>
@@ -457,14 +459,14 @@ export default function Home() {
                   </p>
                 )}
                 <Notes
-                  ref={notesView}
                   notes={notes}
                   cards={daemons.cards.map((card) => ({ ...card, excerpt: card.anchor }))}
                   onChange={editNotes}
                   pageLinks={pageLinks}
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
-                  renderMargin={(row) => <MarginCell row={row} margin={margin} onShowExcerpt={showExcerpt} />}
+                  highlight={activeCard}
+                  renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />
               </div>
               <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />

@@ -127,20 +127,31 @@ export function DaemonPanel({ margin }: { margin: MarginApi }) {
 type MarginCellProps = {
   row: Row<DaemonCard & { excerpt: string }>;
   margin: MarginApi;
-  onShowExcerpt: (start: number, end: number) => void; // selects the words a card answers
+  activeId?: string; // the clicked card: its words are highlighted in the notes
+  onToggle: (card: DaemonCard) => void; // a click on a card highlights its words, or clears them
 };
 
-// One paragraph's cards: the daemon's name in its colour, then its remark. The name shows the
-// words it answers; × dismisses the card.
-export function MarginCell({ row, margin, onShowExcerpt }: MarginCellProps) {
+// One paragraph's cards, written like notes pencilled in a book's margin: the daemon's name in its
+// colour, then its remark. A click on the card (or its name, from the keyboard) highlights the
+// words it answers in the notes; × dismisses it. Links and buttons inside keep their own clicks.
+export function MarginCell({ row, margin, activeId, onToggle }: MarginCellProps) {
   return (
     <div className="cards">
-      {row.cards.map(({ card, start, end }) => {
+      {row.cards.map(({ card }) => {
         const daemon = DAEMONS[card.daemon];
+        const isActive = card.id === activeId;
         return (
-          <article key={card.id} className="card daemon-card" style={{ "--daemon": daemon.colour } as CSSProperties}>
+          <article
+            key={card.id}
+            className={isActive ? "card daemon-card active" : "card daemon-card"}
+            style={{ "--daemon": daemon.colour } as CSSProperties}
+            onClick={(e) => {
+              const isOwnControl = (e.target as HTMLElement).closest("button, a");
+              if (!isOwnControl) onToggle(card);
+            }}
+          >
             <div className="card-head">
-              <button type="button" className="daemon-name" title="Show the words this answers" onClick={() => onShowExcerpt(start, end)}>
+              <button type="button" className="daemon-name" aria-pressed={isActive} title="Highlight the words this answers" onClick={() => onToggle(card)}>
                 {daemon.name}
               </button>
               <button type="button" className="delete" aria-label={`Dismiss ${daemon.name}'s note`} onClick={() => margin.dismiss(card.id)}>

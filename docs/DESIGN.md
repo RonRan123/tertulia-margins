@@ -24,7 +24,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Note-first: the reader's notes are the primary artifact and steer every reply | §1, Day 0 |
 | The AI never edits or writes into the notes; AI text is visually distinct and lives in the margin or chat | D6, D18 |
 | AI text that quotes the book or points to a passage cites its page `[p. N]`; unsupported → "not in the text"; `checkCitations` verifies quotes deterministically | D4, D38, §6.2 |
-| Passage-only knowledge for now | D5 |
+| Passage-only knowledge for now; one labelled daemon may bring outside knowledge (D39) | D5, D39 |
 | Book text and PDFs stay in the reader's browser; never committed, never shipped | D7, D9, §4 |
 | Readers locate passages by the paper book's page; `[p. N]` markers are typed by the reader | D13, D15 |
 | ~~Margin reactions (question, pushback, connection) as threads; router picks the kind~~ (replaced by daemons, D37) | D18, D20 |
@@ -54,6 +54,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | 60 AI replies per browser per day, counted in localStorage | no cap | D35 |
 | Daemons in the margin: named personas (The Author, The Devil's Advocate) react automatically with 1–2 sentence nuggets; a reviewer shows the best or none; React, router and threads removed (S8.2b) | React button, routed reactions as threads | D37 |
 | AI cites pages, `[p. N]`, only when quoting or pointing at a passage; shown as a small "p. N" link that opens the PDF with the quote highlighted; the book goes first in every call, split into `<page>` blocks; daemons get their own role prompt | `[¶n · PDF p. N]` on every claim | D38 |
+| Daemons extend the reader's thinking (connections across the book and to earlier notes, other readings, open questions); a third daemon brings outside knowledge, labelled "beyond the book" (S8.2c) | daemons that checked notes against the book | D39 |
 | Later: cites linked to the actual text (regex + AI around the cited pages), not just the page number | — | parked (PLAN.md R4+) |
 
 ## 1. Problem
@@ -151,13 +152,13 @@ On the hosted app (D34), `proxy.ts` lets a request through only with the invite 
 
 **Notes are one file with live preview (D25).** The notes are one markdown string in one CodeMirror editor (`app/components/Notes.tsx`). `lib/live-preview.ts` parses it with `@lezer/markdown` (GFM) and decorates it in place: headings, bold, italics, code, links, quotes, bullets and `[¶n]` cites render, and their symbols show only on the lines the selection touches. Decorations never change the text, and raw HTML stays text. Lists edit as in Obsidian (`lib/list-keys.ts`, D36): Enter continues an item or quote, Tab and Shift-Tab nest list items by a tab. `core/blocks.ts` still splits the notes into paragraphs (runs of non-blank lines) and anchors margin cards by their exact words (`findExcerpt`): the margin groups cards by the paragraph their excerpt starts in, and hides a card whose words are gone. The margin works like comments in a document: on wide screens each group starts level with the line its first card answers and slides down past earlier groups (`stackCards`); on phones the cards list under the notes. *(v1: Jupyter-style blocks rendered with `marked`, D18/D20; superseded.)*
 
-**Daemons (D37) replace reactions.** A daemon is a named companion in the margin with one job: a persona (name, colour, voice/tone, personality, free-text prompt) combined with one action from a fixed, app-owned table (Connect, Counter; later Ask, Evidence, …) that owns the citation rule, context and reply shape. Defaults: The Author (Connect, in the book's voice) and The Devil's Advocate (Counter). `core/daemons.ts` holds the table and the cadence, as pure functions; `app/components/Margin.tsx` (`useDaemons`) runs it.
+**Daemons (D37) replace reactions.** A daemon is a named companion in the margin with one job: a persona (name, colour, voice/tone, personality, free-text prompt) combined with one action from a fixed, app-owned table (Connect, Counter; later Ask, Evidence, …) that owns the citation rule, context and reply shape. Their purpose is to extend the reader's thinking, not check it (D39): a connection across the book or to the reader's earlier notes, a reading they haven't weighed, a question worth carrying forward, or a link beyond the book. Defaults: The Author (Connect, in the book's voice) and The Devil's Advocate (Counter: the strongest other reading); a third daemon bringing outside knowledge, labelled "beyond the book" and never quoting outside works, joins in S8.2c. `core/daemons.ts` holds the table and the cadence, as pure functions; `app/components/Margin.tsx` (`useDaemons`) runs it.
 - *When they look:* each edit the reader makes in this tab restarts a wait (`LIMITS.daemons.idleMs`, 25 s); notes loaded from storage (another tab) never start one, so two tabs don't both run. After the wait, `planDaemons` counts the reader's own new lines: a line is ~12 words, and headings, blockquotes, bare page references and mostly-quoted lines don't count; a line already read, or touched up (80% of its words the same, for lines of 6+ words), isn't new. Under 10 new lines: wait. A book the daemons haven't met marks its existing notes as read, so they never sweep the backlog.
 - *A run:* one panel call (its own system prompt, `prompts/daemon-role.md`, after the book; D38) drafts a nugget or "pass" per daemon for the paragraphs holding new lines; nuggets whose quotes fail the check are dropped; a small reviewer call without the book (`daemon-reviewer.md`) shows the best one or none. Panel and reviewer reply in JSON (structured outputs); a panel cut off at `max_tokens` counts as no nuggets. `converse()` takes `daemons: {excerpt, mustPick}` and yields one `daemons` event (`pick`, `nuggets`).
 - *The floor:* after 15 of the reader's lines with no card, the reviewer must pick; first, a saved runner-up whose words are still in the notes is shown without a call.
 - *State, per book:* `cards`, the runner-up `pool` (6), the `seen` line fingerprints and `linesSinceCard`, saved with the book. Runs count against their own daily cap (`LIMITS.daemons.dailyRuns`, 40), apart from chat's; at the cap or on an error the daemons stay quiet, and the next pause after an edit tries again.
 - *The panel:* the top of the margin names the daemons, shows their status (listening with a count of new lines, reading, nothing to add, paused, daily cap, failed) and has **React to notes**: a run now that must pick, on the new lines or, with none, the most recent ~10 lines (`planDaemons(…, isAsked)`). Cards are placed below it.
-- *A card:* the daemon's name in its colour (a click selects the words it answers), its remark with "p. N" links, × to dismiss. No replies yet (Parking lot: Elaborate and threads).
+- *A card:* marginalia, not a box (Ronith, 2026-10-14): no background or border; the daemon's name in small caps in its colour, then its remark in a smaller, softer ink with "p. N" links; × shows on hover. A click on the card (or its name) highlights the words it answers in the notes, tinted in the daemon's colour (a CodeMirror mark, so it follows edits), and gives the card a rule in that colour; a second click clears it. No replies yet (Parking lot: Elaborate and threads).
 
 ### 6.2 Grounding: how we stop invented quotes
 
@@ -169,7 +170,7 @@ This is the highest technical risk (see §9), so it gets a concrete mechanism ra
 
 Step 3 is the key idea: it turns "is the model hallucinating?" from a vibe into a number we can put in the write-up.
 
-*Objection: "Won't strict grounding make the AI useless for background, like an author's biography?"* Possibly. For the MVP we accept that cost: the AI is strictly passage-only (D5). Labelled outside knowledge is a post-MVP addition (PLAN.md Parking lot).
+*Objection: "Won't strict grounding make the AI useless for background, like an author's biography?"* Possibly. Chat and commands stay passage-only (D5). Since D39 one daemon brings outside knowledge, labelled "beyond the book" on its card; it names and paraphrases other works but never quotes them, so nothing it says about other works passes as checked.
 
 ### 6.3 Context and cost
 
@@ -237,7 +238,7 @@ Book-level memory, `/tensions`, `/expand`, model routing and the public demo mov
 Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 
 - **Q1. Storage.** *Resolved (D7): browser localStorage behind a small `store` module, plus markdown export.*
-- **Q2. Outside knowledge.** *Resolved (D5): strictly the passage for the MVP; labelled outside knowledge is added later.*
+- **Q2. Outside knowledge.** *Resolved (D5): strictly the passage for the MVP; amended by D39: one daemon brings labelled outside knowledge, chat stays book-only.*
 - **Q3. Model per command.** Confirm the §6.4 routing after measuring.
 - **Q4. Hosting.** *Resolved (D34, superseding D9): Vercel behind an invite code for invited testers, on Ronith's key with a monthly Anthropic spend limit and a 60-replies-a-day cap per browser (D35); Supabase accounts and hosted data tabled.*
 - **Q5. v3 approach.** Long-context + caching vs chunked retrieval.
@@ -271,6 +272,6 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **[p. N]:** a page cite in AI text (D38): the page of `<book_text>` a quote or passage is on, shown as a small link to the PDF. *(Before D38: `¶n`, a paragraph ID.)*
 - **Book (folder):** a sidebar entry holding one book's PDF / reference text, notes, chat and daemon cards (D22, D37).
 - **View:** what the page shows besides the sidebar: Notes + margin, Notes only, PDF only, Chat only (D22).
-- **Daemon:** a named companion in the margin with one job: a persona plus one action. It reacts to the reader's notes with a short, cited nugget and never writes into them (D37).
+- **Daemon:** a named companion in the margin with one job: a persona plus one action. It reacts to the reader's notes with a short nugget that extends their thinking (D39), cited when it quotes the book, and never writes into them (D37).
 - **Augment:** the AI suggests an expansion of a note in chat; the user writes any note text themselves.
 - **TTFT:** time to first token of a streamed reply.

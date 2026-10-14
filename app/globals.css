@@ -1,5 +1,6 @@
-/* Tokens. The reader writes in ink; the AI writes beside it in blue, on a tinted card with a
-   rule (D6: AI text is always visually distinct). One system face for both, as in Obsidian (D27).
+/* Tokens. The reader writes in ink; the AI writes beside it in its own colours: daemons as
+   marginalia in a softer ink, chat replies on a tinted card with a rule (D6: AI text is always
+   visually distinct). One system face for both, as in Obsidian (D27).
    Light by default: white, light gray, light blue (D28); dark when <html data-theme="dark">. */
 :root {
   color-scheme: light;
@@ -28,6 +29,7 @@
   --notes-w: 38rem; /* the notes' reading width when they are alone */
   --radius: 4px;
   --margin-rule: 1px solid var(--rule);
+  --margin-ink: #4b5563; /* daemon remarks: softer than the reader's ink */
 }
 
 :root[data-theme="dark"] {
@@ -44,6 +46,7 @@
   --quote: #c4ae84;
   --warn: #f2a47a;
   --focus: #7fb0ff;
+  --margin-ink: #b4bac4;
 }
 
 *,
@@ -643,30 +646,45 @@ button.pill[aria-pressed="true"] {
   white-space: nowrap;
 }
 
-/* A daemon's card (D37): its name in its colour, then the remark. --daemon is set per card. */
+/* A daemon's card (D37): marginalia, not a box. No background or border, like a note pencilled
+   in a book's margin: the daemon's name in small caps in its colour, then the remark in smaller,
+   softer text, so it stays distinct from the reader's ink (D6). The clicked card gets a rule in its
+   colour; its words are highlighted in the notes. --daemon is set per card. */
 .card {
-  padding: var(--s2) var(--s3);
-  background: var(--ai-wash);
-  border-left: 2px solid var(--daemon, var(--ai));
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font: 0.9375rem/1.5 var(--font-ui);
-  color: var(--ai-ink);
+  --daemon-ink: var(--daemon, var(--ai)); /* its name; set here, where --daemon is */
+  padding: 0 0 0 var(--s2);
+  border-left: 2px solid transparent;
+  font: 0.875rem/1.5 var(--font-ui);
+  color: var(--margin-ink);
   overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .card {
+  --daemon-ink: color-mix(in srgb, var(--daemon, var(--ai)) 60%, var(--ink)); /* the daemon colours are dark; lift them */
+}
+
+.card.active {
+  border-left-color: var(--daemon, var(--ai));
+  color: var(--ink);
 }
 
 .card-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: var(--s2);
 }
 
 .card .daemon-name {
   padding: 0;
-  font: 600 0.8rem/1.4 var(--font-ui);
-  color: var(--daemon, var(--ai));
+  font: 600 0.7rem/1.4 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--daemon-ink);
   background: none;
   border: 0;
+  cursor: pointer;
 }
 
 .card .daemon-name:hover {
@@ -674,18 +692,41 @@ button.pill[aria-pressed="true"] {
   text-underline-offset: 2px;
 }
 
+/* × shows on hover or focus; always on touch screens, which have no hover. */
 .card .delete {
   border: 0;
   background: none;
   padding: 0 var(--s1);
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1;
   color: var(--ink-soft);
+  opacity: 0;
+}
+
+.card:hover .delete,
+.card:focus-within .delete {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .card .delete {
+    opacity: 1;
+  }
 }
 
 .card p {
-  margin: var(--s1) 0 0;
+  margin: 2px 0 0;
   white-space: pre-wrap;
+}
+
+/* The clicked card's words in the notes, tinted in its daemon's colour. */
+.notes-editor .cm-card-highlight {
+  background: color-mix(in srgb, var(--daemon) 22%, transparent);
+  border-radius: 2px;
+}
+
+:root[data-theme="dark"] .notes-editor .cm-card-highlight {
+  background: color-mix(in srgb, var(--daemon) 45%, transparent);
 }
 
 .margin-cell > .empty {
