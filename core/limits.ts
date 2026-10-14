@@ -4,7 +4,7 @@
 // Console workspace (D34, H1).
 export const LIMITS = {
   // What a request may send; over any of these the route refuses before a paid call.
-  referenceTokens: 25_000, // the book text, estimated as characters ÷ 4: 2–3 chapters, ~5¢ a turn (D32)
+  referenceTokens: 50_000, // the book text, estimated as characters ÷ 4: ~50 dense pages (more for lighter ones), ~10¢ a turn (D32)
   notesChars: 50_000, // ~25 pages of notes (D34)
   questionChars: 4_000, // one chat message or thread reply (D34)
   historyTurns: 40, // messages of earlier chat or thread sent with each call (D34)

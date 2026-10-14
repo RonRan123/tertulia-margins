@@ -75,15 +75,17 @@ test("the floor: a runner-up still in the notes is shown for free; otherwise the
   expect(planDaemons(`${notes}\n\n${mine(10, "new")}`, gone)).toMatchObject({ kind: "run", mustPick: true });
 });
 
-test("the reader asks: a run now that must pick, on the new lines, else on the most recent ones", () => {
+test("the reader asks: a run now, on all the notes, that must pick", () => {
   const notes = `${mine(4, "old")}\n\n${mine(12, "later")}`;
   const state = freshDaemonState(notes);
   expect(planDaemons(notes, state)).toEqual({ kind: "wait", lines: 0 });
-  // Nothing new: the last paragraphs holding about 10 of the reader's lines.
-  expect(planDaemons(notes, state, true)).toEqual({ kind: "run", excerpt: mine(12, "later"), paragraphs: [mine(12, "later")], lines: 0, mustPick: true });
-  // Three new lines: just those, though under the automatic threshold.
+  // Nothing new: still every paragraph.
+  expect(planDaemons(notes, state, true)).toEqual({ kind: "run", excerpt: notes, paragraphs: [mine(4, "old"), mine(12, "later")], lines: 0, mustPick: true });
+  // Three new lines, under the automatic threshold: every paragraph, the new lines counted.
   const more = `${notes}\n\n${mine(3, "new")}`;
   expect(planDaemons(more, state)).toEqual({ kind: "wait", lines: 3 });
-  expect(planDaemons(more, state, true)).toMatchObject({ kind: "run", paragraphs: [mine(3, "new")], lines: 3, mustPick: true });
+  expect(planDaemons(more, state, true)).toMatchObject({ kind: "run", excerpt: more, lines: 3, mustPick: true });
+  // No words of the reader's own (empty, or only a copied quote): nothing to react to.
   expect(planDaemons("", freshDaemonState(""), true)).toEqual({ kind: "wait", lines: 0 });
+  expect(planDaemons("> “A quote from the book, copied.”", freshDaemonState(""), true)).toEqual({ kind: "wait", lines: 0 });
 });

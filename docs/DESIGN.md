@@ -47,7 +47,7 @@ v2 is an overhaul driven by Ronith's review of similar tools and HCI research ([
 | Light theme by default (white, gray, light blue); dark behind a toggle | palette from the system setting | D28 |
 | PDF view: pdfjs viewer with a floating toolbar (zoom, page, download, search) | browser's built-in viewer (D23) | D29 |
 | Top bar of icon + label toggles, ChatPDF-style | text switcher (D26) | D30 |
-| Reference text capped at 25K tokens; PDF page picker | whole reference text every call | D32 |
+| Reference text capped at 50K tokens (~50 pages; 25K until 2026-10-14); PDF page picker | whole reference text every call | D32 |
 | Page references in the notes linked to the PDF (exact, word overlap, page), as a computed layer | page numbers as plain text | D33 |
 | A book: title, reference text, one notes file, chat, margin threads, PDF | — | D31 |
 | Hosted for invited testers: Vercel deploy behind an invite code (accounts and Supabase tabled) | BYO-key demo (D9) | D34 |
@@ -157,7 +157,7 @@ On the hosted app (D34), `proxy.ts` lets a request through only with the invite 
 - *A run:* one panel call (its own system prompt, `prompts/daemon-role.md`, after the book; D38) drafts a nugget or "pass" per daemon for the paragraphs holding new lines; nuggets whose quotes fail the check are dropped; a small reviewer call without the book (`daemon-reviewer.md`) shows the best one or none. Panel and reviewer reply in JSON (structured outputs); a panel cut off at `max_tokens` counts as no nuggets. `converse()` takes `daemons: {excerpt, mustPick}` and yields one `daemons` event (`pick`, `nuggets`).
 - *The floor:* after 15 of the reader's lines with no card, the reviewer must pick; first, a saved runner-up whose words are still in the notes is shown without a call.
 - *State, per book:* `cards`, the runner-up `pool` (6), the `seen` line fingerprints and `linesSinceCard`, saved with the book. Runs count against their own daily cap (`LIMITS.daemons.dailyRuns`, 40), apart from chat's; at the cap or on an error the daemons stay quiet, and the next pause after an edit tries again.
-- *The panel:* the top of the margin names the daemons, shows their status (listening with a count of new lines, reading, nothing to add, paused, daily cap, failed) and has **React to notes**: a run now that must pick, on the new lines or, with none, the most recent ~10 lines (`planDaemons(…, isAsked)`). Cards are placed below it.
+- *The panel:* the top of the margin names the daemons, shows their status (listening with a count of new lines, reading, nothing to add, paused, daily cap, failed) and has **React to notes**: a run now that must pick, on all the notes (`planDaemons(…, isAsked)`; Ronith, 2026-10-14). Cards are placed below it.
 - *A card:* marginalia, not a box (Ronith, 2026-10-14): no background or border; the daemon's name in small caps in its colour, then its remark in a smaller, softer ink with "p. N" links; × shows on hover. A click on the card (or its name) highlights the words it answers in the notes, tinted in the daemon's colour (a CodeMirror mark, so it follows edits), and gives the card a rule in that colour; a second click clears it. No replies yet (Parking lot: Elaborate and threads).
 
 ### 6.2 Grounding: how we stop invented quotes
@@ -247,7 +247,7 @@ Each becomes an entry in [DECISIONS.md](DECISIONS.md) when answered.
 - **Q8. PDF by URL (R3).** Fetching from the browser fails on most sites (CORS); a server route that fetches it works but is an open proxy on the public demo (D9). Options: browser fetch with a clear error, a size-capped route, or upload only.
 - **Q9. Book data model (R2).** *Resolved (D31): one notes file per book; v1's state becomes "My first book".*
 - **Q10. Page mismatch (R3+).** *Resolved (D33): both: page links match the cited text and learn a per-book offset from exact hits.*
-- **Q12. Sending parts of a book.** D32 caps the reference text at 25K tokens; Ronith wants to explore structured XML and sending only the relevant parts per call (relates to Q5).
+- **Q12. Sending parts of a book.** D32 caps the reference text at 50K tokens; Ronith wants to explore structured XML and sending only the relevant parts per call (relates to Q5).
 - **Q11. v2 time box.** How many hours the overhaul gets before Sprint 7 (D21).
 
 ---

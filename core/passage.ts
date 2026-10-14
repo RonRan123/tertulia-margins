@@ -139,8 +139,8 @@ export function citedPage(cite: string): number | undefined {
 }
 
 // ---- The reference-text cap (D32) ----
-// Every AI call sends the whole reference text, so its size is capped: ~25K tokens is 2–3
-// chapters and ~5¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
+// Every AI call sends the whole reference text, so its size is capped: ~50K tokens is ~50 dense
+// pages and ~10¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
 export const REFERENCE_TOKEN_LIMIT = LIMITS.referenceTokens; // set in core/limits.ts
 export const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 export const isReferenceTooLong = (reference: string) => estimateTokens(reference) > REFERENCE_TOKEN_LIMIT;

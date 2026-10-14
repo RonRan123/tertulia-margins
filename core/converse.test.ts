@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMANDS } from "./commands.ts";
+import { LIMITS } from "./limits.ts";
 import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, reviewerTurn, type ConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
@@ -155,7 +156,7 @@ test("chat streams its text, then the citations are checked against the pages", 
 });
 
 test("a reference text over the D32 cap is refused before any call", () => {
-  const passage = "[p. 1] " + "word ".repeat(25_000);
+  const passage = "[p. 1] " + "word ".repeat(LIMITS.referenceTokens); // 5 characters a word: over the cap
   expect(parseConverseRequest({ passage, question: "Why?" })).toEqual({ error: "reference_too_long" });
 });
 

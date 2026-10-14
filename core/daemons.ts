@@ -39,8 +39,7 @@ export const freshDaemonState = (notes: string): DaemonState => ({ cards: [], po
 // whose words are still in the notes is shown without a call. Otherwise a run, once enough of the
 // reader's own lines are new; it reads every paragraph holding one, whole, for context. `wait`
 // says how many new lines there are so far, for the margin's status.
-// `isAsked`: the reader pressed "React to notes", so run now and show something: on the new lines
-// if there are any, else on the most recent ~minLines lines of the notes.
+// `isAsked`: the reader pressed "React to notes", so run now, on all the notes, and show something.
 export type DaemonPlan =
   | { kind: "wait"; lines: number }
   | { kind: "promote"; card: DaemonCard }
@@ -58,30 +57,16 @@ export function planDaemons(notes: string, state: DaemonState, isAsked = false):
     lines += newLines;
   }
   if (isAsked) {
-    const recent = lines > 0 ? paragraphs : recentParagraphs(blocks.map((b) => b.text));
-    if (recent.length === 0) return { kind: "wait", lines: 0 };
-    return { kind: "run", excerpt: recent.join("\n\n"), paragraphs: recent, lines, mustPick: true };
+    const all = blocks.map((b) => b.text);
+    const hasOwnWords = all.some((text) => ownLines(text) > 0);
+    if (!hasOwnWords) return { kind: "wait", lines: 0 };
+    return { kind: "run", excerpt: all.join("\n\n"), paragraphs: all, lines, mustPick: true };
   }
   const isFloorDue = state.linesSinceCard + lines >= LIMITS.daemons.floorLines;
   const runnerUp = isFloorDue ? state.pool.find((c) => findExcerpt(notes, c.anchor)) : undefined;
   if (runnerUp) return { kind: "promote", card: runnerUp };
   if (lines < LIMITS.daemons.minLines) return { kind: "wait", lines };
   return { kind: "run", excerpt: paragraphs.join("\n\n"), paragraphs, lines, mustPick: isFloorDue };
-}
-
-// The last paragraphs of the notes holding about minLines of the reader's own lines (fewer if the
-// notes are shorter), in note order.
-function recentParagraphs(paragraphs: string[]): string[] {
-  const recent: string[] = [];
-  let lines = 0;
-  for (const text of [...paragraphs].reverse()) {
-    if (lines >= LIMITS.daemons.minLines) break;
-    const own = ownLines(text);
-    if (own === 0) continue;
-    recent.unshift(text);
-    lines += own;
-  }
-  return recent;
 }
 
 // A run's result folded in: its paragraphs are seen; the pick becomes a card; the rest join the pool.
