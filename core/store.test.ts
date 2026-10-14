@@ -1,14 +1,17 @@
 import { expect, test } from "vitest";
+import { freshQuiz } from "./quiz.ts";
 import {
   addBook,
   bookKey,
   deleteBook,
   emptyState,
+  loadDaemonRunsToday,
   loadLibrary,
   loadState,
   loadRepliesToday,
   loadUi,
   localDay,
+  recordDaemonRun,
   recordReply,
   renameBook,
   saveLibrary,
@@ -46,18 +49,19 @@ const state: AppState = {
     { role: "user", content: "Why?" },
     { role: "assistant", content: "Because [¶1].", pages: { 1: "p. 1" }, citations: [] },
   ],
-  reactions: [
-    {
-      id: "r1",
-      excerpt: "My note",
-      kind: "pushback",
-      messages: [
-        { role: "assistant", content: "But [¶2] says “Two.”", pages: { 2: "p. 1" }, citations: [] },
-        { role: "user", content: "Fair." },
-        { role: "assistant", content: "So what changes?" },
-      ],
-    },
-  ],
+  daemons: {
+    cards: [{ id: "c1", daemon: "author", text: "Look at [p. 1].", anchor: "My note" }],
+    pool: [{ id: "c2", daemon: "devils-advocate", text: "Is it?", anchor: "My note" }],
+    seen: ["my note"],
+    linesSinceCard: 0,
+  },
+  quiz: {
+    stage: "taking",
+    setup: { topics: ["book-concepts"], count: 1, difficulty: "easy", styles: ["true-false"] },
+    questions: [{ topic: "book-concepts", kind: "true-false", question: "One comes first.", choices: [{ text: "True", why: "It does [p. 1]." }, { text: "False", why: "It does." }], answer: 0 }],
+    answers: [null],
+    current: 0,
+  },
 };
 
 test("save then load round-trips the state", () => {
@@ -86,22 +90,27 @@ test("malformed messages are dropped and unknown fields stripped", () => {
     reference: "R",
     notes: "N",
     messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }],
-    reactions: [],
+    daemons: { cards: [], pool: [], seen: ["n"], linesSinceCard: 0 },
+    quiz: freshQuiz(), // none saved (or a malformed one): a fresh setup
   });
 });
 
-test("an old save without reactions loads with none", () => {
-  const { storage } = memoryStorage({ [KEY]: JSON.stringify({ reference: "R", notes: "N", messages: [] }) });
-  expect(loadState(storage, KEY).reactions).toEqual([]);
+test("a save from before daemons (D37): its reactions are dropped and its notes count as seen", () => {
+  const old = { reference: "R", notes: "First line.\n\nSecond line.", messages: [], reactions: [{ id: "r1", excerpt: "N", kind: "question", messages: [] }] };
+  const { storage, data } = memoryStorage({ [KEY]: JSON.stringify(old) });
+  const loaded = loadState(storage, KEY);
+  expect(loaded.daemons).toEqual({ cards: [], pool: [], seen: ["first line", "second line"], linesSinceCard: 0 });
+  saveState(storage, KEY, loaded);
+  expect(JSON.parse(data[KEY])).not.toHaveProperty("reactions");
 });
 
-test("a reaction still streaming is not saved; a reply still streaming drops only that pair", () => {
-  const { storage } = memoryStorage();
-  const [thread] = state.reactions;
-  const streamingReply = { ...thread, messages: [...thread.messages, { role: "user" as const, content: "And?" }, { role: "assistant" as const, content: "Ha", isStreaming: true }] };
-  const streamingOpening = { id: "r2", excerpt: "N", kind: "question" as const, messages: [{ role: "assistant" as const, content: "Wh", isStreaming: true }] };
-  saveState(storage, KEY, { ...state, reactions: [streamingReply, streamingOpening] });
-  expect(loadState(storage, KEY).reactions).toEqual([thread]);
+test("daemon runs are counted per day under their own key, apart from chat replies", () => {
+  const { storage, data } = memoryStorage();
+  expect(recordDaemonRun(storage, "2026-10-13")).toBe(1);
+  expect(recordDaemonRun(storage, "2026-10-13")).toBe(2);
+  expect(loadDaemonRunsToday(storage, "2026-10-14")).toBe(0);
+  expect(loadRepliesToday(storage, "2026-10-13")).toBe(0);
+  expect(Object.keys(data)).toEqual(["tertulia-margins:daemon-usage"]);
 });
 
 test("a reply still streaming is not saved, nor its question", () => {
@@ -121,19 +130,29 @@ test("storage that throws never crashes: load is empty, save reports save_failed
 
 test("layout round-trips under its own key and leaves the notes' key alone", () => {
   const { storage, data } = memoryStorage();
-  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
-  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark" });
+  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
+  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
   expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
 });
 
-test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme", () => {
-  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light" };
+test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme, 60% notes", () => {
+  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6 };
   expect(loadUi(memoryStorage().storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
   expect(loadUi(throwing)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"chat","isSidebarOpen":false,"theme":"purple"}' }).storage)).toEqual({ ...fallback, view: "chat", isSidebarOpen: false });
-  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light" })).not.toThrow();
+  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light", notesShare: 0.6 })).not.toThrow();
+});
+
+test("the divider's saved width is clamped to its range; a non-number falls back to 60%", () => {
+  const load = (notesShare: unknown) => loadUi(memoryStorage({ "tertulia-margins:ui": JSON.stringify({ notesShare }) }).storage).notesShare;
+  expect(load(0.42)).toBe(0.42);
+  expect(load(0.123456 + 0.4)).toBe(0.523);
+  expect(load(0.1)).toBe(0.35);
+  expect(load(0.99)).toBe(0.75);
+  expect(load("wide")).toBe(0.6);
+  expect(load(null)).toBe(0.6);
 });
 
 // ---- Books (D31) ----

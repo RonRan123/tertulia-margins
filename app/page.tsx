@@ -1,15 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { commandTarget } from "@/core/blocks.ts";
-import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink } from "@/core/page-links.ts";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink, type PageRef } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
 import { LIMITS } from "@/core/limits.ts";
-import type { ReactionKind } from "@/core/reactions.ts";
 import {
   addBook,
   bookKey,
+  defaultUi,
   deleteBook,
   LIBRARY_KEY,
   loadLibrary,
@@ -26,19 +25,23 @@ import {
   type Library,
   type ChatMessage,
   type KeyValueStorage,
-  type Reaction,
   type StoreError,
   type UiState,
   type View,
 } from "@/core/store.ts";
+import { DAEMONS, freshDaemonState, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { freshQuiz, type QuizState } from "@/core/quiz.ts";
 import { Chat } from "./components/Chat";
-import { MarginCell, useReactions } from "./components/Margin";
-import { Notes, type NotesHandle } from "./components/Notes";
+import { DaemonPanel, MarginCell, useDaemons } from "./components/Margin";
+import { Quiz } from "./components/Quiz";
+import { Notes } from "./components/Notes";
+import { PaneDivider } from "./components/PaneDivider";
 import {
   BookIcon,
   ChatIcon,
   FileTextIcon,
   MarginIcon,
+  QuizIcon,
   MaximizeIcon,
   MinimizeIcon,
   MoonIcon,
@@ -48,7 +51,6 @@ import {
 } from "./components/icons";
 import { OpenPageContext } from "./components/CitedText";
 import { PdfPane, type PdfPaneHandle } from "./components/PdfPane";
-import { ReactButton } from "./components/ReactButton";
 import type { ReferenceTextHandle } from "./components/ReferenceText";
 import { Sidebar } from "./components/Sidebar";
 
@@ -67,15 +69,16 @@ const STATUS_MS = 5000;
 // globals.css's phone breakpoint: one pane at a time, the sidebar over the page.
 const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
 
-// The view (D22, D26) is two choices: what sits beside the notes (margin, PDF or chat), and
+// The view (D22, D26) is two choices: what sits beside the notes (margin, quiz, PDF or chat), and
 // whether it shows alone. Margin "alone" means the notes alone.
-type Side = "margin" | "pdf" | "chat";
+type Side = "margin" | "quiz" | "pdf" | "chat";
 const SIDES: { side: Side; label: string; icon: ReactNode }[] = [
   { side: "margin", label: "Margin", icon: <MarginIcon /> },
+  { side: "quiz", label: "Quiz", icon: <QuizIcon /> },
   { side: "pdf", label: "PDF", icon: <FileTextIcon /> },
   { side: "chat", label: "Chat", icon: <ChatIcon /> },
 ];
-const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : "margin");
+const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWith("chat") ? "chat" : view.endsWith("quiz") ? "quiz" : "margin");
 const isAlone = (view: View) => !view.startsWith("notes+");
 const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
@@ -96,7 +99,11 @@ export default function Home() {
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [daemons, setDaemons] = useState<DaemonState>(() => freshDaemonState(""));
+  const [quiz, setQuiz] = useState<QuizState>(freshQuiz); // the current quiz (D42), saved with the book
+  // Counts the reader's own edits in this tab: the daemons wait for a pause after one (D37). Notes
+  // loaded from storage (another tab, another book) don't count, so two tabs never both run.
+  const [edits, setEdits] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [saveError, setSaveError] = useState<StoreError>();
   const [isChangedElsewhere, setIsChangedElsewhere] = useState(false);
@@ -106,17 +113,15 @@ export default function Home() {
   const [pdfText, setPdfText] = useState<string>(); // the open book's whole PDF text, for page links
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
-  const [ui, setUi] = useState<UiState>({ view: "notes+margin", isSidebarOpen: true, theme: "light" });
+  const [ui, setUi] = useState<UiState>(defaultUi);
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const notesView = useRef<NotesHandle>(null);
-  const margin = useReactions({ reference, notes, setReactions });
   const referenceText = useRef<ReferenceTextHandle>(null);
   const hasReference = reference.trim() !== "";
   const isTooLong = isReferenceTooLong(reference);
-  // Why the AI can't be asked right now (React, chat, thread replies), or undefined. D32: over the
-  // cap, every call would send too much text.
+  // Why chat can't be asked right now, or undefined. D32: over the cap, every call would send too
+  // much text. The daemons pause for the same reasons, except the chat replies' daily cap (D37).
   const [repliesToday, setRepliesToday] = useState(0); // D35: read from storage after loading
   const isOverDailyLimit = repliesToday >= LIMITS.dailyReplies;
   const aiBlock = !hasReference
@@ -126,7 +131,15 @@ export default function Home() {
       : isTooLong
       ? `The reference text is ~${Math.round(estimateTokens(reference) / 1000)}K tokens, over the ${REFERENCE_TOKEN_LIMIT / 1000}K limit, so the AI is paused. Choose fewer PDF pages or trim it.`
       : undefined;
-  const reactTitle = aiBlock;
+  const margin = useDaemons({
+    bookId: library.currentId,
+    edits,
+    reference,
+    notes,
+    daemons,
+    setDaemons,
+    pausedReason: !hasReference ? "add reference text first." : isTooLong ? "the reference text is over the limit." : undefined,
+  });
 
   // A status message clears itself after a few seconds, or on the next notes edit.
   const showStatus = (message: string) => {
@@ -141,6 +154,7 @@ export default function Home() {
   const editNotes = (value: string) => {
     clearStatus();
     setNotes(value);
+    setEdits((n) => n + 1);
   };
 
   // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
@@ -154,24 +168,6 @@ export default function Home() {
     setSidebarOpen(true);
     requestAnimationFrame(() => referenceText.current?.open());
   };
-  // React (D18, D20) acts on the selection in the block being edited, or on the whole block last
-  // edited or focused. `kind` absent: the router picks.
-  function react(kind?: ReactionKind) {
-    clearStatus();
-    if (aiBlock) return showStatus(aiBlock); // Cmd/Ctrl+Enter skips the disabled button
-    const target = notesView.current?.target();
-    const excerpt = target && commandTarget(notes, target.start, target.end);
-    if (!target || !excerpt) return showStatus("Click a note, or select some text in one, then React.");
-    // Select exactly what is sent, so the reader sees it.
-    if (target.isEditing) {
-      const { start, end } = target;
-      const from = end > start ? notes.indexOf(excerpt, start) : notes.lastIndexOf(excerpt, start);
-      const isAroundCaret = from !== -1 && from + excerpt.length >= start;
-      if (isAroundCaret) notesView.current?.select(from, from + excerpt.length);
-    }
-    margin.react(excerpt, kind);
-  }
-
   // The page is prerendered empty, so saved state is loaded after hydration, not during render.
   // Another tab writing our key reloads its state here, unless this tab has unsaved changes:
   // then this tab's next save wins, and a notice says so.
@@ -181,7 +177,8 @@ export default function Home() {
       setReference(state.reference);
       setNotes(state.notes);
       setMessages(state.messages);
-      setReactions(state.reactions);
+      setDaemons(state.daemons);
+      setQuiz(state.quiz);
     };
     // Another tab's library change updates the list; this tab keeps its open book while it exists.
     const onStorage = (e: StorageEvent) => {
@@ -224,12 +221,12 @@ export default function Home() {
     if (!isLoaded) return;
     const last = stored.current;
     const isUnchanged =
-      last?.reference === reference && last.notes === notes && last.messages === messages && last.reactions === reactions;
+      last?.reference === reference && last.notes === notes && last.messages === messages && last.daemons === daemons && last.quiz === quiz;
     if (isUnchanged) {
       pendingSave.current = undefined;
       return;
     }
-    const state = { reference, notes, messages, reactions };
+    const state = { reference, notes, messages, daemons, quiz };
     const key = currentKey.current; // the book these edits belong to, even if another opens before saving
     const save = () => {
       pendingSave.current = undefined;
@@ -239,7 +236,7 @@ export default function Home() {
     pendingSave.current = save;
     const timer = setTimeout(save, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [isLoaded, reference, notes, messages, reactions]);
+  }, [isLoaded, reference, notes, messages, daemons, quiz]);
 
   useEffect(() => {
     if (isLoaded) saveUi(browserStorage, ui);
@@ -247,11 +244,11 @@ export default function Home() {
 
   // ---- Daily AI replies (D35) ----
   // lib/converse-client counts each reply as it starts; a streaming change is the cue to re-read it.
-  const isStreaming = messages.at(-1)?.isStreaming === true || reactions.some((r) => r.messages.at(-1)?.isStreaming === true);
+  const isStreaming = messages.at(-1)?.isStreaming === true;
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- re-reading storage is the point
     if (isLoaded) setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())));
-  }, [isLoaded, isStreaming, messages.length, reactions.length]);
+  }, [isLoaded, isStreaming, messages.length]);
 
   // ---- Books (D31) ----
   // Switching is blocked while a reply streams (isStreaming, above): it would land in the newly opened book.
@@ -268,7 +265,8 @@ export default function Home() {
     setReference(stored.current.reference);
     setNotes(stored.current.notes);
     setMessages(stored.current.messages);
-    setReactions(stored.current.reactions);
+    setDaemons(stored.current.daemons);
+    setQuiz(stored.current.quiz);
     setIsChangedElsewhere(false);
     clearStatus();
   }
@@ -330,6 +328,13 @@ export default function Home() {
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
+  // A page cite in AI text (D38): linked like the notes' references, together with the other cites
+  // of that text so their exact hits teach the page offset.
+  const citeOpener = {
+    hasPdf: pdfParas.length > 0,
+    openCite: (refs: PageRef[], index: number) => openLink(linkPageRefs(refs, pdfParas)[index]),
+    openPage,
+  };
 
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
   useEffect(() => {
@@ -338,11 +343,18 @@ export default function Home() {
 
   const isNotesEmpty = notes.trim() === "";
   const isUnreadShown = hasUnread && !showsChat(ui.view);
-  const showExcerpt = (start: number, end: number) => notesView.current?.select(start, end);
+  // The card whose words are highlighted in the notes; a second click on it clears them.
+  const [activeCard, setActiveCard] = useState<{ id: string; colour: string }>();
+  const toggleCard = (card: DaemonCard) =>
+    setActiveCard((active) => (active?.id === card.id ? undefined : { id: card.id, colour: DAEMONS[card.daemon].colour }));
 
   return (
-    <OpenPageContext value={openPage}>
-      <main data-view={ui.view} data-sidebar-open={ui.isSidebarOpen || undefined}>
+    <OpenPageContext value={citeOpener}>
+      <main
+        data-view={ui.view}
+        data-sidebar-open={ui.isSidebarOpen || undefined}
+        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
+      >
         <header className="app-header">
           <span className="brand">tertulia</span>
           <button
@@ -411,10 +423,6 @@ export default function Home() {
           >
             {ui.theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
-          {/* mousedown is cancelled inside, so the selection in the notes stays put. */}
-          <div className="react-slot">
-            <ReactButton title={reactTitle} onReact={react} />
-          </div>
         </header>
         {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
         <div className="app-body">
@@ -458,34 +466,29 @@ export default function Home() {
                   </p>
                 )}
                 <Notes
-                  ref={notesView}
                   notes={notes}
-                  reactions={reactions}
+                  cards={daemons.cards.map((card) => ({ ...card, excerpt: card.anchor }))}
                   onChange={editNotes}
-                  onReactShortcut={() => react()}
                   pageLinks={pageLinks}
                   onOpenLink={openLink}
-                  renderMargin={(row, isCurrent) => (
-                    <MarginCell
-                      items={row.reactions}
-                      isCurrent={isCurrent}
-                      margin={margin}
-                      blockReason={aiBlock}
-                      onShowExcerpt={showExcerpt}
-                    />
-                  )}
-                  renderDetached={(detached) => (
-                    <MarginCell
-                      items={detached.map((reaction) => ({ reaction }))}
-                      isDetached
-                      margin={margin}
-                      blockReason={aiBlock}
-                      onShowExcerpt={showExcerpt}
-                    />
-                  )}
+                  marginHeader={<DaemonPanel margin={margin} />}
+                  highlight={activeCard}
+                  renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />
               </div>
+              <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />
               <section className="side-pane" aria-label="Beside the notes">
+                <div className="quiz-pane">
+                  <Quiz
+                    bookId={library.currentId}
+                    quiz={quiz}
+                    setQuiz={setQuiz}
+                    reference={reference}
+                    notes={notes}
+                    aiBlock={aiBlock}
+                    onAsked={() => setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())))}
+                  />
+                </div>
                 <div className="pdf-pane">
                   <PdfPane
                     ref={pdfPane}

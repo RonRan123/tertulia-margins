@@ -1,7 +1,8 @@
 import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMANDS } from "./commands.ts";
-import { buildContext, converse, errorCode, parseConverseRequest, routerContext, type ConverseRequest } from "./converse.ts";
+import { LIMITS } from "./limits.ts";
+import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, quizTurn, reviewerTurn, type ConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
 const errorOf = (body: unknown) => {
@@ -55,15 +56,17 @@ test("oversized notes, question or history are refused before any paid call (D34
   expect(errorOf({ ...valid, notes: "x".repeat(50_000), question: "x".repeat(4_000), history: Array(40).fill(turn) })).toBeUndefined();
 });
 
-test("context is ordered stable to volatile: system prompt, passage, notes, history, question", () => {
+test("context is ordered stable to volatile: book, system prompt, notes, history, question (D38)", () => {
   const history = [{ role: "user" as const, content: "Q1" }, { role: "assistant" as const, content: "A1" }];
-  const { system, messages, paragraphs } = buildContext({ ...valid, notes: "  My note  \n", history });
+  const { system, messages, pages } = buildContext({ ...valid, notes: "  My note  \n", history });
   expect(system).toHaveLength(3);
-  expect(system[0].text).toContain("<grounding_rules>");
-  expect(system[1].text).toBe("<passage>\n[¶1] One.\n\n[¶2] Two.\n</passage>");
+  expect(system[0].text).toBe("<book_text>\nOne.\n\nTwo.\n</book_text>");
+  expect(system[1].text).toContain("<grounding_rules>");
   expect(system[2].text).toBe("<notes>\nMy note\n</notes>");
   expect(messages).toEqual([...history, { role: "user", content: "Why?" }]);
-  expect(paragraphs).toEqual(["One.", "Two."]);
+  expect(pages).toEqual([{ text: "One.\n\nTwo." }]);
+  const paged = buildContext({ ...valid, passage: "[p. 7] One.\n\n[PDF p. 8]\nTwo." });
+  expect(paged.system[0].text).toBe('<book_text>\n<page n="7">\nOne.\n</page>\n\n<page n="8">\nTwo.\n</page>\n</book_text>');
 });
 
 test("blank or missing notes add no notes block", () => {
@@ -82,7 +85,7 @@ test("command must be a known name with a string selection; /define needs a sele
   expect(errorOf({ ...valid, command: { name: "expand", selection: "x" } })).toBe("command_unknown");
   expect(errorOf({ ...valid, command: { name: "toString", selection: "x" } })).toBe("command_unknown");
   expect(errorOf({ ...valid, command: { name: "define", selection: " " } })).toBe("selection_missing");
-  expect(errorOf({ ...valid, command: { name: "quiz", selection: "" } })).toBeUndefined();
+  expect(errorOf({ ...valid, command: { name: "quiz", selection: "" } })).toBe("command_unknown"); // now the Quiz view (D42)
   const body = { ...valid, command: { name: "define", selection: "levity", extra: 1 } };
   expect(parseConverseRequest(body)).toMatchObject({ command: { name: "define", selection: "levity" } });
   expect(parseConverseRequest(body)).not.toHaveProperty("command.extra");
@@ -90,7 +93,7 @@ test("command must be a known name with a string selection; /define needs a sele
 });
 
 test("a command's prompt goes in the last user turn; system blocks and history are unchanged", () => {
-  const history = [{ role: "user" as const, content: "/quiz" }, { role: "assistant" as const, content: "A1" }];
+  const history = [{ role: "user" as const, content: "Q1" }, { role: "assistant" as const, content: "A1" }];
   const chat = buildContext({ ...valid, notes: "Mine", history });
   const define = buildContext({ ...valid, notes: "Mine", history, question: "/define levity", command: { name: "define", selection: "levity" } });
   expect(define.system).toEqual(chat.system);
@@ -101,9 +104,6 @@ test("a command's prompt goes in the last user turn; system blocks and history a
   expect(turn).not.toContain("OWNER");
   expect(define.maxTokens).toBe(COMMANDS.define.maxTokens);
   expect(chat.maxTokens).toBe(16000);
-
-  const quiz = buildContext({ ...valid, question: "/quiz", command: { name: "quiz", selection: "" } });
-  expect(quiz.messages.at(-1)!.content).toMatch(/^<command>\nIf "quiz"[^]*<\/command>\n\n\/quiz$/);
 });
 
 test("a mid-stream overloaded error (no HTTP status) maps to overloaded", () => {
@@ -112,19 +112,14 @@ test("a mid-stream overloaded error (no HTTP status) maps to overloaded", () => 
   expect(errorCode(new Anthropic.APIError(undefined, {}, "boom", undefined, "api_error"))).toBe("api_error");
 });
 
-// Reactions (D18, D20). A fake client stands in for the API: no network in tests.
-function fakeClient(routerAnswer: string | Error, reply = "Why “the sky fell” [¶1]?") {
-  const calls = { create: [] as unknown[], stream: [] as unknown[] };
+// A fake client stands in for the API: no network in tests. It streams `reply` as one delta.
+function fakeClient(reply = "Why “the sky fell” [p. 1]?") {
+  const calls: unknown[] = [];
   const client = {
     beta: {
       messages: {
-        create: async (params: unknown) => {
-          calls.create.push(params);
-          if (routerAnswer instanceof Error) throw routerAnswer;
-          return { content: [{ type: "text", text: routerAnswer }] };
-        },
         stream: (params: unknown) => {
-          calls.stream.push(params);
+          calls.push(params);
           return {
             async *[Symbol.asyncIterator]() {
               yield { type: "content_block_delta", delta: { type: "text_delta", text: reply } };
@@ -149,94 +144,230 @@ async function run(request: ConverseRequest, client: Anthropic) {
   return { events, stats: step.value };
 }
 
-const firstReaction = { ...valid, question: "", notes: "Mine", reaction: { excerpt: "Mine" } };
-const lastTurn = (params: unknown) => (params as { messages: { content: string }[] }).messages.at(-1)!.content;
-
-test("a reaction with no kind is routed first; the kind event comes before any text", async () => {
-  const { client, calls } = fakeClient("Pushback.");
-  const { events, stats } = await run(firstReaction, client);
-  expect(events).toEqual([{ type: "kind", kind: "pushback" }, { type: "text", text: "Why “the sky fell” [¶1]?" }]);
-  expect(calls.create).toHaveLength(1);
-  expect(lastTurn(calls.stream[0])).toMatch(/^<reaction>\n[^]*Push back\./);
-  expect(stats.citations).toEqual([{ quote: "the sky fell", cited: [1], status: "quote_not_in_paragraph" }]); // checked as usual
-});
-
-test("an unparseable router answer falls back to question", async () => {
-  const { client, calls } = fakeClient("hmm");
-  const { events } = await run(firstReaction, client);
-  expect(events[0]).toEqual({ type: "kind", kind: "question" });
-  expect(lastTurn(calls.stream[0])).toMatch(/^<reaction>\n[^]*ONE probing question/);
-});
-
-test("a reaction with a kind skips the router", async () => {
-  const { client, calls } = fakeClient("pushback");
-  const { events } = await run({ ...firstReaction, reaction: { excerpt: "Mine", kind: "connection" } }, client);
-  expect(calls.create).toHaveLength(0);
-  expect(events[0]).toEqual({ type: "kind", kind: "connection" });
-});
-
-test("a router failure throws, so the route reports it as an error code", async () => {
-  const { client, calls } = fakeClient(new Anthropic.APIError(529, {}, "Overloaded", undefined, "overloaded_error"));
-  await expect(run(firstReaction, client)).rejects.toSatisfy((e) => errorCode(e) === "overloaded");
-  expect(calls.stream).toHaveLength(0);
-});
-
-test("chat and commands yield no kind event", async () => {
-  const { client, calls } = fakeClient("pushback");
-  const { events } = await run(valid, client);
-  expect(events.map((e) => e.type)).toEqual(["text"]);
-  expect(calls.create).toHaveLength(0);
-});
-
-test("the router and every reaction share chat's system blocks; their prompts ride in the user turn", () => {
-  const chat = buildContext({ ...valid, notes: "Mine" });
-  const router = routerContext(firstReaction);
-  expect(router.system).toEqual(chat.system);
-  expect(router.messages).toHaveLength(1);
-  expect(router.messages[0].content).toMatch(/^<router>\nThe reader pressed React[^]*one word[^]*<\/router>\n\n<excerpt>\nMine\n<\/excerpt>$/);
-  expect(router.messages[0].content).not.toContain("DRAFTED BY CLAUDE");
-
-  for (const kind of ["question", "pushback", "connection"] as const) {
-    const reaction = buildContext({ ...firstReaction, reaction: { excerpt: "  Mine \n", kind } });
-    expect(reaction.system).toEqual(chat.system);
-    expect(reaction.messages).toHaveLength(1);
-    const turn = reaction.messages[0].content;
-    expect(turn).toMatch(/^<reaction>\nThe reader pressed React[^]*<\/reaction>\n\n<excerpt>\nMine\n<\/excerpt>$/);
-    expect(turn).not.toContain("DRAFTED BY CLAUDE");
-    expect(reaction.maxTokens).toBe(4000);
-  }
-});
-
-test("a thread reply re-sends the opening turn, then the thread, then the reply", () => {
-  const history = [{ role: "assistant" as const, content: "R1" }, { role: "user" as const, content: "Q1" }, { role: "assistant" as const, content: "A1" }];
-  const reaction = { excerpt: "Mine", kind: "pushback" as const };
-  const opening = buildContext({ ...firstReaction, reaction }).messages[0];
-  const reply = buildContext({ ...valid, notes: "Mine", question: "But why?", history, reaction });
-  expect(reply.messages).toEqual([opening, ...history, { role: "user", content: "But why?" }]);
-});
-
-test("reaction validation: shape, excerpt, kind, replies, and no command alongside", () => {
-  const reaction = { excerpt: "Mine" };
-  const thread = [{ role: "assistant", content: "R1" }];
-  expect(parseConverseRequest({ ...valid, question: undefined, reaction })).toEqual({ ...valid, question: "", history: [], book: undefined, reaction });
-  expect(errorOf({ ...valid, question: 3, reaction })).toBe("question_missing");
-  expect(errorOf({ ...valid, reaction: "Mine" })).toBe("reaction_invalid");
-  expect(errorOf({ ...valid, reaction: null })).toBe("reaction_invalid");
-  expect(errorOf({ ...valid, reaction: { kind: "question" } })).toBe("reaction_invalid");
-  expect(errorOf({ ...valid, reaction: { excerpt: " \n" } })).toBe("excerpt_missing");
-  expect(errorOf({ ...valid, reaction: { excerpt: "Mine", kind: "rant" } })).toBe("kind_unknown");
-  expect(errorOf({ ...valid, reaction: { excerpt: "Mine", kind: "toString" } })).toBe("kind_unknown");
-  expect(errorOf({ ...valid, reaction, command: { name: "quiz", selection: "" } })).toBe("request_conflict");
-  expect(errorOf({ ...valid, history: thread, reaction })).toBe("kind_missing");
-  expect(errorOf({ ...valid, question: "", history: thread, reaction: { ...reaction, kind: "question" } })).toBe("question_missing");
-  const startsWithReader = [{ role: "user", content: "Q" }, { role: "assistant", content: "A" }];
-  expect(errorOf({ ...valid, history: startsWithReader, reaction: { ...reaction, kind: "question" } })).toBe("history_invalid");
-  const reply = { ...valid, history: thread, reaction: { excerpt: "Mine", kind: "question", extra: 1 } };
-  expect(parseConverseRequest(reply)).toMatchObject({ reaction: { excerpt: "Mine", kind: "question" } });
-  expect(parseConverseRequest(reply)).not.toHaveProperty("reaction.extra");
+test("chat streams its text, then the citations are checked against the pages", async () => {
+  const { client, calls } = fakeClient();
+  const { events, stats } = await run({ ...valid, passage: "[p. 1] The sky was blue." }, client);
+  expect(events).toEqual([{ type: "text", text: "Why “the sky fell” [p. 1]?" }]);
+  expect(calls).toHaveLength(1);
+  expect(stats.citations).toEqual([{ quote: "the sky fell", pages: ["1"], status: "quote_not_on_page" }]);
 });
 
 test("a reference text over the D32 cap is refused before any call", () => {
-  const passage = "[p. 1] " + "word ".repeat(25_000);
+  const passage = "[p. 1] " + "word ".repeat(LIMITS.referenceTokens); // 5 characters a word: over the cap
   expect(parseConverseRequest({ passage, question: "Why?" })).toEqual({ error: "reference_too_long" });
+});
+
+// ---- Daemons (D37) ----
+// A fake client for a daemon run: each create() returns the next JSON answer (panel, then reviewer).
+function daemonClient(...answers: unknown[]) {
+  const calls: unknown[] = [];
+  const client = {
+    beta: {
+      messages: {
+        create: async (params: unknown) => {
+          calls.push(params);
+          const text = JSON.stringify(answers[calls.length - 1]);
+          return { model: "claude-sonnet-5-5", stop_reason: "end_turn", usage: { input_tokens: calls.length }, content: [{ type: "text", text }] };
+        },
+      },
+    },
+  } as unknown as Anthropic;
+  return { client, calls };
+}
+const book = { passage: "[p. 1] The sky fell on Tuesday.\n\n[p. 2] Nobody minded the sky.", notes: "- Everyone panicked.\n- Tuesday matters." };
+const bookPages = [{ page: "1", text: "The sky fell on Tuesday." }, { page: "2", text: "Nobody minded the sky." }];
+const daemonRun = { ...book, question: "", daemons: { excerpt: "- Everyone panicked.\n- Tuesday matters." } };
+const draft = (daemon: string, nugget: string, anchor = "Everyone panicked") => ({ daemon, pass: false, nugget, anchor });
+const pass = (daemon: string) => ({ daemon, pass: true, nugget: "", anchor: "" });
+
+test("daemon run validation: shape, excerpt, mustPick, and nothing else alongside", () => {
+  expect(parseConverseRequest({ passage: book.passage, daemons: { excerpt: "Mine", extra: 1 } })).toEqual({
+    passage: book.passage, question: "", notes: undefined, history: [], book: undefined, daemons: { excerpt: "Mine", mustPick: false },
+  });
+  expect(parseConverseRequest({ ...valid, daemons: { excerpt: "Mine", mustPick: true } })).toMatchObject({ daemons: { mustPick: true } });
+  expect(errorOf({ ...valid, daemons: "Mine" })).toBe("daemons_invalid");
+  expect(errorOf({ ...valid, daemons: { excerpt: "Mine", mustPick: "yes" } })).toBe("daemons_invalid");
+  expect(errorOf({ ...valid, daemons: { excerpt: " " } })).toBe("excerpt_missing");
+  expect(errorOf({ ...valid, daemons: { excerpt: "Mine" }, command: { name: "define", selection: "x" } })).toBe("request_conflict");
+});
+
+test("the panel call shares chat's book and notes but has its own role; its turn holds each daemon, then the excerpt", async () => {
+  const { client, calls } = daemonClient({ drafts: [pass("author"), pass("devils-advocate")] });
+  await run(daemonRun, client);
+  const panel = calls[0] as { system: { text: string }[]; messages: { content: string }[]; output_config: { format: { type: string } } };
+  const chat = buildContext({ ...book, question: "x" }).system;
+  expect(panel.system[0]).toEqual(chat[0]); // the book: the shared prefix
+  expect(panel.system[1].text).toMatch(/^<role>\nYou voice a small panel[^]*Think the excerpt through before you answer[^]*$/);
+  expect(panel.system[2]).toEqual(chat[2]); // the notes
+  expect(panel.output_config.format.type).toBe("json_schema");
+  const turn = panel.messages[0].content;
+  expect(turn).toMatch(/^<daemons>\n<daemon id="author" name="The Author">\n<action>\nConnect [^]*<persona>\nVoice:[^]*<daemon id="devils-advocate"[^]*<action>\nOffer the strongest other reading[^]*<daemon id="scholar" name="The Scholar">\n<action>\nWiden [^]*<\/daemons>\n\n<excerpt>\n- Everyone panicked\.\n- Tuesday matters\.\n<\/excerpt>$/);
+  expect(turn + panel.system[1].text).not.toContain("DRAFTED BY CLAUDE");
+});
+
+test("grounding: passes, unknown and repeated daemons, and invented quotes are dropped; a stray anchor falls back", () => {
+  const output = {
+    drafts: [
+      draft("author", "As I wrote, “nobody minded the sky” [p. 2].", "Tuesday matters"),
+      draft("author", "A second author draft."),
+      draft("devils-advocate", "Where does “everyone ran screaming home” come from [p. 1]?"),
+      draft("narrator", "Not a daemon."),
+      pass("devils-advocate"),
+    ],
+  };
+  expect(groundedNuggets(output, bookPages, book.notes, daemonRun.daemons.excerpt)).toEqual([
+    { daemon: "author", text: "As I wrote, “nobody minded the sky” [p. 2].", anchor: "Tuesday matters" },
+  ]);
+  // Quoting the reader's own note is fine (D38); a stray anchor falls back to the excerpt's first line.
+  const stray = groundedNuggets({ drafts: [draft("devils-advocate", "You say “Everyone panicked” but did they?", "not in the notes")] }, bookPages, book.notes, " - Everyone panicked.\n- x");
+  expect(stray).toEqual([{ daemon: "devils-advocate", text: "You say “Everyone panicked” but did they?", anchor: "- Everyone panicked." }]);
+  expect(groundedNuggets(undefined, bookPages, "", "x")).toEqual([]);
+});
+
+test("all pass: no reviewer call, nothing picked", async () => {
+  const { client, calls } = daemonClient({ drafts: [pass("author"), pass("devils-advocate")] });
+  const { events, stats } = await run(daemonRun, client);
+  expect(calls).toHaveLength(1);
+  expect(events).toEqual([{ type: "daemons", pick: null, nuggets: [] }]);
+  expect(stats.reviewerUsage).toBeUndefined();
+});
+
+test("two nuggets: the reviewer sees the excerpt, both, and only the pages they cite, and picks one", async () => {
+  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone? Nobody minded [pp. 2–2].")];
+  const { client, calls } = daemonClient({ drafts }, { pick: "devils-advocate" });
+  const { events, stats } = await run(daemonRun, client);
+  expect(calls).toHaveLength(2);
+  const reviewer = calls[1] as { system: string; messages: { content: string }[]; output_config: { format: { schema: { properties: { pick: { enum: string[] } } } } } };
+  expect(reviewer.system).toMatch(/^You are the editor of a reader's margin/);
+  expect(reviewer.output_config.format.schema.properties.pick.enum).toEqual(["author", "devils-advocate", "none"]);
+  expect(reviewer.messages[0].content).toBe(reviewerTurn(events[0].type === "daemons" ? events[0].nuggets : [], bookPages, daemonRun.daemons));
+  expect(reviewer.messages[0].content).toContain('<cited>\n<page n="2">\nNobody minded the sky.\n</page>\n</cited>');
+  expect(reviewer.messages[0].content).not.toContain("The sky fell on Tuesday.");
+  expect(events).toEqual([{ type: "daemons", pick: "devils-advocate", nuggets: drafts.map((d) => ({ daemon: d.daemon, text: d.nugget, anchor: d.anchor })) }]);
+  expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
+});
+
+test("the reviewer is told which candidates draw on knowledge beyond the book (D39)", () => {
+  const nuggets = [{ daemon: "author", text: "See [p. 2].", anchor: "a" }, { daemon: "scholar", text: "Arendt names this.", anchor: "a" }] as const;
+  const turn = reviewerTurn([...nuggets], bookPages, { excerpt: "a" });
+  expect(turn).toContain('<candidate id="author" name="The Author">\n');
+  expect(turn).toContain('<candidate id="scholar" name="The Scholar" beyond_the_book="true">\nArendt names this.\n</candidate>');
+});
+
+test("the reviewer may show nothing, unless the run must pick", async () => {
+  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone?")];
+  const none = await run(daemonRun, daemonClient({ drafts }, { pick: "none" }).client);
+  expect(none.events[0]).toMatchObject({ pick: null });
+
+  const mustPick = { ...daemonRun, daemons: { ...daemonRun.daemons, mustPick: true } };
+  const { client, calls } = daemonClient({ drafts }, { pick: "author" });
+  await run(mustPick, client);
+  expect((calls[1] as { output_config: { format: { schema: { properties: { pick: { enum: string[] } } } } } }).output_config.format.schema.properties.pick.enum).toEqual(["author", "devils-advocate"]);
+
+  const single = daemonClient({ drafts: [drafts[1], pass("author")] });
+  const shown = await run(mustPick, single.client);
+  expect(single.calls).toHaveLength(1); // one nugget that must be shown: no reviewer call
+  expect(shown.events[0]).toMatchObject({ pick: "devils-advocate" });
+});
+
+// ---- Quiz (D42) ----
+const quizSetup = { topics: ["book-concepts"], count: 2, difficulty: "easy", styles: ["multiple-choice"] } as const;
+const quizRun = { ...book, question: "", quiz: { ...quizSetup, topics: [...quizSetup.topics], styles: [...quizSetup.styles] } };
+const mcDraft = (question: string, right = "On Tuesday") => ({
+  topic: "book-concepts",
+  kind: "multiple-choice",
+  question,
+  choices: [right, "On Monday", "On Friday", "On Sunday", "At night"].map((text, i) => ({ text, correct: i === 0, why: `${text} [p. 1].` })),
+});
+
+test("quiz request validation: a setup, and nothing else alongside", () => {
+  expect(parseConverseRequest({ passage: book.passage, quiz: { ...quizSetup, topics: ["book-concepts", "book-concepts"], extra: 1 } })).toMatchObject({
+    question: "",
+    quiz: { topics: ["book-concepts"], count: 2, difficulty: "easy", styles: ["multiple-choice"] },
+  });
+  expect(parseConverseRequest({ passage: book.passage, quiz: quizSetup })).not.toHaveProperty("quiz.extra");
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, count: 11 } })).toBe("quiz_invalid");
+  expect(errorOf({ ...valid, quiz: quizSetup, daemons: { excerpt: "Mine" } })).toBe("request_conflict");
+  expect(errorOf({ ...valid, quiz: quizSetup, command: { name: "define", selection: "x" } })).toBe("request_conflict");
+});
+
+test("a quiz: one call after the book with its own role; checked, shuffled questions", async () => {
+  const { client, calls } = daemonClient({ verdict: "ok", feedback: "", questions: [mcDraft("When did the sky fall?"), mcDraft("What fell?", "The sky")] });
+  const { events, stats } = await run(quizRun, client);
+  expect(calls).toHaveLength(1);
+  const call = calls[0] as { system: { text: string }[]; messages: { content: string }[]; output_config: { effort: string; format: { type: string } } };
+  expect(call.system[0]).toEqual(buildContext({ ...book, question: "x" }).system[0]); // the book first (D38)
+  expect(call.system[1].text).toMatch(/^<role>\nYou write a short quiz/);
+  expect(call.system[1].text).not.toContain("DRAFTED BY CLAUDE");
+  expect(call.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
+  expect(call.messages[0].content).toMatch(
+    /^<quiz_request>\n<topics>\n- book-concepts \("Big ideas"\): the book's themes, arguments and turning points\n<\/topics>\n<questions>2<\/questions>\n<difficulty>easy<\/difficulty>\n<style>multiple-choice \(exactly 5 choices\) \("Multiple choice"\) for every question<\/style>\n<angles>\n1\. [a-z ]+: [^\n]+\n2\. [a-z ]+: [^\n]+\n<\/angles>\n<\/quiz_request>$/,
+  );
+  const quiz = events[0];
+  expect(quiz).toMatchObject({ type: "quiz", verdict: "ok", feedback: "" });
+  if (quiz.type !== "quiz") throw new Error("no quiz");
+  expect(quiz.questions.map((q) => ("choices" in q ? q.choices[q.answer].text : ""))).toEqual(["On Tuesday", "The sky"]);
+  expect(stats).not.toHaveProperty("reviewerUsage");
+});
+
+test("too little material: the agent's feedback, no questions", async () => {
+  const feedback = "Your notes define only 1 word. Ask for 1 question.";
+  const { client, calls } = daemonClient({ verdict: "insufficient", feedback, questions: [mcDraft("Padding?")] });
+  const { events } = await run(quizRun, client);
+  expect(calls).toHaveLength(1);
+  expect(events).toEqual([{ type: "quiz", verdict: "insufficient", feedback, questions: [] }]);
+});
+
+test("questions that fail the checks are replaced by one more call, told why; still short, the quiz runs shorter", async () => {
+  const giveaway = mcDraft("Q2", "On Tuesday, after the long and ominous storm had passed");
+  const { client, calls } = daemonClient(
+    { verdict: "ok", feedback: "", questions: [mcDraft("Q1"), giveaway] },
+    { verdict: "ok", feedback: "", questions: [mcDraft("Q3")] },
+  );
+  const { events, stats } = await run(quizRun, client);
+  expect(calls).toHaveLength(2);
+  const topUp = (calls[1] as { messages: { content: string }[] }).messages[0].content;
+  expect(topUp).toContain("<questions>1</questions>");
+  expect(topUp).toContain("<already_in_the_quiz>\n- Q1\n</already_in_the_quiz>");
+  expect(topUp).toMatch(/<set_aside>\n- Q2 \(the right answer is much longer[^]*Write 1 new question on/);
+  expect(events[0]).toMatchObject({ verdict: "ok", questions: [{ question: "Q1" }, { question: "Q3" }] });
+  expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
+
+  const short = daemonClient({ verdict: "ok", feedback: "", questions: [mcDraft("Q1"), giveaway] }, { verdict: "ok", feedback: "", questions: [giveaway] });
+  const shorter = await run(quizRun, short.client);
+  expect(shorter.events[0]).toMatchObject({ verdict: "ok", questions: [{ question: "Q1" }] });
+
+  const none = daemonClient({ verdict: "ok", feedback: "", questions: [giveaway] }, { verdict: "ok", feedback: "", questions: [] });
+  const failed = await run(quizRun, none.client);
+  expect(failed.events[0]).toMatchObject({ verdict: "insufficient", feedback: expect.stringMatching(/couldn't be written/), questions: [] });
+});
+
+test("grading a free response (D44): one small call without the book; the verdict and one line", async () => {
+  const grade = { question: "When did the sky fall?", modelAnswer: "On Tuesday [p. 1].", keyPoints: ["Tuesday [p. 1]"], answer: "Tuesday, I think" };
+  expect(errorOf({ ...valid, grade: { ...grade, answer: "" } })).toBe("grade_invalid");
+  expect(errorOf({ ...valid, grade, quiz: quizSetup })).toBe("request_conflict");
+  const { client, calls } = daemonClient({ verdict: "right", feedback: "You named the day." });
+  const { events } = await run({ ...book, question: "", grade }, client);
+  const call = calls[0] as { system: string; messages: { content: string }[] };
+  expect(call.system).toMatch(/^You grade one answer/);
+  expect(call.messages[0].content).toBe(
+    "<question>\nWhen did the sky fall?\n</question>\n\n<model_answer>\nOn Tuesday [p. 1].\n</model_answer>\n\n<key_points>\n- Tuesday [p. 1]\n</key_points>\n\n<cited>\n<page n=\"1\">\nThe sky fell on Tuesday.\n</page>\n</cited>\n\n<answer>\nTuesday, I think\n</answer>",
+  );
+  expect(events).toEqual([{ type: "grade", verdict: "right", feedback: "You named the day." }]);
+  const bad = daemonClient({ verdict: "brilliant", feedback: "" });
+  expect((await run({ ...book, question: "", grade }, bad.client)).events).toEqual([]); // no usable grade: no event
+});
+
+test("several styles ticked: the agent mixes them, each at least once when it can", () => {
+  const turn = quizTurn({ topics: ["book-concepts"], count: 4, difficulty: "medium", styles: ["multiple-choice", "free-response"] }, ["motive", "cause", "comparison", "consequence"]);
+  expect(turn).toContain('<style>a mix: choose per question among multiple-choice (exactly 5 choices) ("Multiple choice"), free-response (a model answer and 1–4 key points) ("Free response"), using each at least once when there are enough questions</style>');
+});
+
+test("a quiz request may carry the book's recent questions; the turn asks not to repeat them", () => {
+  const avoid = ["When did the sky fall?"];
+  expect(parseConverseRequest({ passage: book.passage, quiz: { ...quizSetup, avoid } })).toMatchObject({ quiz: { avoid } });
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, avoid: "x" } })).toBe("quiz_invalid");
+  expect(errorOf({ ...valid, quiz: { ...quizSetup, avoid: Array.from({ length: 31 }, () => "q") } })).toBe("quiz_invalid");
+  const turn = quizTurn({ topics: ["book-concepts"], count: 1, difficulty: "easy", styles: ["true-false"], avoid }, ["motive"]);
+  expect(turn).toContain("<angles>\n1. motive: what drives a character\n</angles>\n<already_asked>\n- When did the sky fall?\n</already_asked>\n</quiz_request>");
 });

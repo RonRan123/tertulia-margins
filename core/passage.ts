@@ -1,6 +1,10 @@
-// The reference text: paragraphs (for [¶n]) and the page each one is on (D13).
-import { citationPattern } from "./citations.ts";
+// The reference text: its pages, as the AI reads and cites them (D38), and its paragraphs with the
+// page each one is on (D13; also how older replies' [¶n] cites are labelled).
 import { LIMITS } from "./limits.ts";
+
+// A run of the reference text from one page marker to the next. `page` is the marker's (first)
+// page as written ("101", "xii"); undefined for text before the first marker, or with none at all.
+export type BookPage = { page?: string; text: string };
 
 // [¶n] is 1-based: paragraphs[n - 1]. `page` is a display label like "p. 101" or "PDF pp. 81–82".
 export type Paragraph = { text: string; page?: string };
@@ -11,6 +15,27 @@ type Marker = { isPdf: boolean; page: string; lastPage?: string }; // lastPage: 
 const PAGE = String.raw`(\d+|[ivxlcdm]+)`;
 const PAGE_MARKER = String.raw`\[\s*(pdf\s*)?pp?\.?\s*${PAGE}(?:\s*[-–]\s*${PAGE})?\s*\]`;
 const pageMarkers = () => new RegExp(PAGE_MARKER, "gi");
+// The same syntax is how the AI cites a page (D38): [p. 12], [pp. 12–13], [PDF p. 3].
+export const pageCitePattern = pageMarkers;
+
+// D38: the reference text split at every page marker, markers removed; empty runs dropped. What the
+// AI is sent (<page n="…"> blocks) and what its page cites are checked against.
+export function parsePages(reference: string): BookPage[] {
+  const pages: BookPage[] = [];
+  const add = (page: string | undefined, raw: string) => {
+    const text = raw.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (text !== "") pages.push(page === undefined ? { text } : { page, text });
+  };
+  let page: string | undefined;
+  let from = 0;
+  for (const m of reference.matchAll(pageMarkers())) {
+    add(page, reference.slice(from, m.index));
+    page = m[2].toLowerCase();
+    from = m.index + m[0].length;
+  }
+  add(page, reference.slice(from));
+  return pages;
+}
 
 // Paragraphs are separated by blank lines. A [p. N] marker means "page N begins here": it labels
 // every paragraph after it until the next marker. A paragraph's range ends at its last marker that
@@ -73,6 +98,10 @@ export function pageRange(paragraphs: Paragraph[]): string | undefined {
   return first === last ? first : `${first} to ${last}`;
 }
 
+// ---- Older replies' [¶n] cites (before D38) ----
+// They are still shown with their page labels, so the paragraph cite pattern lives here.
+const paragraphCitePattern = () => /\[¶(\d+)(?:\s*[-–]\s*(\d+))?\]/g;
+
 // Page labels by paragraph number ({ 12: "p. 101" }): only what a reply's citations need.
 export type PageLabels = Record<number, string>;
 
@@ -81,7 +110,7 @@ export type PageLabels = Record<number, string>;
 // reply, not one per paragraph of the book.
 export function citedPages(reply: string, paragraphs: Paragraph[]): PageLabels {
   const pages: PageLabels = {};
-  for (const [, from, to] of reply.matchAll(citationPattern())) {
+  for (const [, from, to] of reply.matchAll(paragraphCitePattern())) {
     for (const n of [Number(from), Number(to ?? from)]) {
       const page = paragraphs[n - 1]?.page;
       if (page !== undefined) pages[n] = page;
@@ -93,7 +122,7 @@ export function citedPages(reply: string, paragraphs: Paragraph[]): PageLabels {
 // "[¶12]" → "[¶12 · p. 101]"; a range shows the pages of its first and last paragraph.
 // Citations of unlabelled or nonexistent paragraphs are left as written.
 export function labelCitations(reply: string, pages: PageLabels): string {
-  return reply.replace(citationPattern(), (citation, from: string, to?: string) => {
+  return reply.replace(paragraphCitePattern(), (citation, from: string, to?: string) => {
     const ends = [pages[Number(from)], pages[Number(to ?? from)]];
     const labels = [...new Set(ends.filter((p) => p !== undefined))];
     if (labels.length === 0) return citation;
@@ -110,8 +139,8 @@ export function citedPage(cite: string): number | undefined {
 }
 
 // ---- The reference-text cap (D32) ----
-// Every AI call sends the whole reference text, so its size is capped: ~25K tokens is 2–3
-// chapters and ~5¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
+// Every AI call sends the whole reference text, so its size is capped: ~50K tokens is ~50 dense
+// pages and ~10¢ a turn on Sonnet 5.5. Tokens are estimated as characters ÷ 4.
 export const REFERENCE_TOKEN_LIMIT = LIMITS.referenceTokens; // set in core/limits.ts
 export const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 export const isReferenceTooLong = (reference: string) => estimateTokens(reference) > REFERENCE_TOKEN_LIMIT;

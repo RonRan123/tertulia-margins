@@ -5,7 +5,6 @@ import { parsePassage } from "./passage.ts";
 
 export const COMMANDS = {
   define: { promptFile: "define.md", maxTokens: LIMITS.replyTokens.define },
-  quiz: { promptFile: "quiz.md", maxTokens: LIMITS.replyTokens.quiz },
 };
 
 export type CommandName = keyof typeof COMMANDS;
@@ -20,14 +19,10 @@ export function isDefinable(selection: string): boolean {
   return phrase !== "" && isOneLine && phrase.length <= 40 && phrase.split(/\s+/).length <= 4;
 }
 
-// What chat shows for a command: "/define melancholy", "/quiz", or "/quiz on: “first 60 chars…”".
-// The full selection travels separately, in `command.selection`.
-export function commandLabel({ name, selection }: Command): string {
-  const text = selection.trim().replace(/\s+/g, " ");
-  if (name === "define") return `/define ${text}`;
-  if (text === "") return "/quiz";
-  const isLong = text.length > 60;
-  return `/quiz on: “${isLong ? `${text.slice(0, 60)}…` : text}”`;
+// What chat shows for a command: "/define melancholy". The full selection travels separately, in
+// `command.selection`. (The /quiz command became the Quiz view, D42.)
+export function commandLabel({ selection }: Command): string {
+  return `/define ${selection.trim().replace(/\s+/g, " ")}`;
 }
 
 // How far around the selection a note cite counts as "nearby": the selection's own lines plus

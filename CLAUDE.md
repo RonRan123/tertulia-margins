@@ -23,7 +23,7 @@ Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md · v1 
 
 ## Grounding rules (product invariants)
 - The AI never edits user notes. AI text is always visually distinct.
-- Every claim about the book cites `[¶n]`; unsupported → "not in the text". `checkCitations` must stay green.
+- AI text that quotes the book or points to a passage cites its page as `[p. N]` (D38); unsupported → "not in the text". `checkCitations` must stay green.
 
 ## Commands
 - `npm run dev`: local app at http://localhost:3000

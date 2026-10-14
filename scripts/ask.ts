@@ -23,4 +23,4 @@ console.log(`--- tokens in ${stats.usage.input_tokens} / out ${stats.usage.outpu
 
 const failed = stats.citations.filter((c) => c.status !== "ok");
 console.log(`--- citations: ${stats.citations.length - failed.length}/${stats.citations.length} quotes verified`);
-for (const c of failed) console.log(`    ${c.status} [¶${c.cited.join(",")}] "${c.quote}"`);
+for (const c of failed) console.log(`    ${c.status}${c.pages.length > 0 ? ` [p. ${c.pages.join("–")}]` : ""} "${c.quote}"`);

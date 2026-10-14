@@ -28,13 +28,13 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** v3 (whole book) needs it, or pasting proves harder than the Obsidian habit.
 
 ## D4. Grounding via paragraph IDs + deterministic citation check
-- **Status:** Provisional (2026-10-08), proposed in DESIGN.md §6.2
+- **Status:** Provisional (2026-10-08), proposed in DESIGN.md §6.2; paragraph IDs replaced by page cites in D38 (the deterministic check stays)
 - **Alternatives:** prompt-only grounding; Anthropic citations API feature.
 - **Why:** a check we control makes hallucination a number, not a vibe.
 - **Open sub-question:** compare against the API's built-in citations on day 2 (`/decide` then).
 
 ## D5. Outside knowledge: passage-only for the MVP (Q2)
-- **Status:** Accepted (2026-10-08, Ronith: "the core functionality in the MVP doesn't need that")
+- **Status:** Accepted (2026-10-08, Ronith: "the core functionality in the MVP doesn't need that"); amended by D39 (one labelled daemon may bring outside knowledge; chat stays book-only)
 - **Context:** Day 0 notes wanted counterpoints (Goodreads/Reddit) and outside perspective; DESIGN.md treats the passage as the only source of truth.
 - **Alternatives:** labelled, opt-in outside knowledge in a separate uncited block (~1 h); B plus fetched Goodreads/Reddit material (4+ h, new dependencies, ToS).
 - **Why:** the MVP's core is grounded conversation steered by the reader's notes; outside knowledge adds hours and a way for unverifiable claims in without helping that core.
@@ -155,7 +155,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** the picked sentence is often wrong in real use.
 
 ## D18. Re-plan after Sprint 4: marginalia first, then blocks; export deprioritized (amends D6, D11, D16)
-- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view)
+- **Status:** Accepted (2026-10-09, Ronith: "this project is not ready… the ui is unappealing"); layout amended by D22 (the chat drawer becomes a view); marginalia superseded by D37 (daemons)
 - **Context:** after Sprint 4, the two-pane notes | chat UI feels unappealing and the chat not very useful. Ronith wants notes rendered like Obsidian and the AI to collaborate in the margin. Export is built (Sprint 4) but no longer a priority.
 - **Alternatives:** rendering by true live preview (CodeMirror 6, ~5 h) or a side-by-side preview; reactions triggered on leaving a block or after a typing pause; our own markdown renderer; blocks first, or both in one sprint.
 - **Rules:**
@@ -177,7 +177,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** reactions are off-voice badly enough to hide whether the feature works.
 
 ## D20. Sprint 5–6 shape: routed reactions, commands stay in chat, blocks split the notes text, excerpt anchors
-- **Status:** Accepted (2026-10-09, Ronith)
+- **Status:** Accepted (2026-10-09, Ronith); routed reactions and threads superseded by D37
 - **Context:** D18 left four choices open: who picks a reaction's kind, where command replies go, how blocks are stored, how reactions stay attached.
 - **Alternatives:** the reader always picks the kind from a menu; Define/Quiz replies as margin threads; blocks as an array with IDs; anchors by position.
 - **Rules:**
@@ -225,7 +225,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Revisit if:** grounded linking needs highlights (then pdfjs rendering), or a browser ignores `#page=`.
 
 ## D24. Define and Quiz leave the UI for now (amends D17)
-- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors")
+- **Status:** Accepted (2026-10-11, Ronith: "let's remove define / quiz for right now. I don't like their behaviors"); Quiz returns as its own view (D42)
 - **Context:** after R1, Define and Quiz switched the right pane to chat and Define pasted a quote into the notes; Ronith dislikes both behaviours.
 - **Alternatives:** keep them and only change where replies land (unread dot, or a margin card).
 - **Rules:** the toolbar buttons and the page/chat wiring go. `core/commands.ts` (with its tests), `prompts/define.md` and `prompts/quiz.md` stay untouched, so they can return with a better shape. Chat still asks free-form questions; React is unchanged.
@@ -310,6 +310,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** a hard ceiling on cost per turn while grounding stays whole-text, until a better way to send only the relevant parts exists.
 - **Cost we accept:** the AI sees only the chosen pages; re-picking pages as the reader moves on.
 - **Revisit if:** Ronith's exploration of structured XML and sending only parts of the book (Parking lot) lands, or prompt caching (Sprint 7) makes larger references cheap.
+- *Amended (2026-10-14, Ronith: "let's up the pdf page limit to 50 pages"):* the cap is 50K tokens (~200K characters): about 50 pages of a dense book (~1,000 tokens a page), more of a lighter one. Still counted in tokens, not pages, so the cost per turn stays bounded whatever the page density: ~10¢ a chat turn uncached, and each daemon run sends it too. Simple caching (S8.2) is the next step and cuts repeat turns.
 
 ## D33. Page links: a free, computed layer from the notes' page references to the PDF (resolves Q10)
 - **Status:** Accepted (2026-10-12, Ronith)
@@ -353,6 +354,109 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Cost we accept:** one more dependency, which brings `@codemirror/lang-html` (with its CSS and JavaScript parsers) and `@codemirror/autocomplete`: ~190 KB more minified JavaScript (measured at T2; Claude first described it as small). The notes now parse with lang-markdown's GFM language, which also reads `~sub~`, `^sup^` and `:emoji:` (shown as typed).
 - **As built:** `lib/list-keys.ts`; Obsidian's renumbering added on top (an indented ordered item restarts at 1, an outdented one continues the list above), and Backspace on a bare marker removes it outright.
 - **Revisit if:** it fights live preview's own parse or the page's load time suffers (then our own ~80 lines, now that the behaviour is pinned down).
+
+## D37. Daemons replace margin reactions: automatic short nuggets, picked by a reviewer (supersedes D18's marginalia and D20's routed reactions)
+- **Status:** Accepted (2026-10-13, Ronith)
+- **Context:** Sprint 8 planning. The React button felt like the chore D18 warned of, and reactions ran a paragraph long. Ronith's references: Maggie Appleton's daemons (LM Sketchbook), the Obsidian "AI Editors" plugin, merryvj/llm-daemons.
+- **Alternatives:** a button per daemon; one button running both daemons; a run every ~4 s pause, with each daemon drafting in its own call and a full-price reviewer (~3 calls per 10 lines); counting runs against D35's 60-reply cap; keeping old cards read-only or hidden; custom daemons in this MVP; caching later in Sprint 7.
+- **Rules:**
+  - *Definition:* a daemon is a named companion in the margin with one job. It reacts to the reader's notes in its own voice, using the book as its evidence. It never writes into the notes, and its text is always marked as its own.
+  - *Persona × action:* a daemon is a persona (name, colour, voice/tone, personality, free-text prompt) combined with one action from a fixed, app-owned list (Ask, Counter, Evidence, Connect, Define, Quiz, …). The action owns the citation rule, the context and the reply shape, so a persona can't skip `[¶n]`. Daemons are rows in a data table.
+  - *Two defaults:* **The Author** (Connect: answers the note in the book's voice, first person, labelled "in the book's voice", every claim cited, "the book doesn't say" when silent) and **The Devil's Advocate** (Counter: the strongest opposing reading, plain and short, cited when it uses the text).
+  - *Nuggets:* a reply is 1–2 sentences or 1–2 questions, the most interesting point first, cited `[¶n]` (the cite opens the PDF page), so the reader can scan and decide whether to engage.
+  - *Automatic cadence:* a run starts after an idle gap (~20–30 s) once 10+ lines of the reader's own words are new or substantially changed since the daemons last saw them. Quotes copied from the book, page markers and headings don't count; unchanged paragraphs are never re-sent.
+  - *Draft, then review:* one panel call drafts a candidate from each daemon, or "pass", in one structured reply. A small separate reviewer call (no book, only the candidates, the excerpt and the cited paragraphs) shows the single best one, or none if nothing is significant. Floor: if ~15 lines have gone by with no card, the reviewer must pick when there is a candidate. Runners-up are saved per book and fill the floor later without a call, while their text is unchanged. All numbers go in `core/limits.ts`.
+  - *Cap:* daemons get their own daily run cap (separate from D35's chat replies), starting at 40 runs per browser per day; at the cap they pause quietly and chat keeps working.
+  - *Caching (simple):* one cached base prefix (system prompt + the whole reference text) shared by chat and the daemon panel call; each call's own instructions, notes and question come after it.
+  - *Removed:* the React button and its right-click menu, the router call and the three reaction kinds, and thread replies. Saved margin cards and threads are deleted from each book on load.
+  - *Amended (2026-10-13, Ronith, after trying S8.2b: "there should be some indication or signal that the daemons exist"):* a panel at the top of the margin names the daemons (colour dot and name), shows one line of status ("Listening: 4 of 10 new lines", "Reading your notes…", "Nothing to add this time", "Paused: …", the daily cap) and has a **React to notes** button. The button runs the daemons now, on the new lines (however few) or, with none, on the most recent ~10 lines; the reviewer must pick if any daemon drafted something. It counts against the daemon cap. Automatic runs stay as they were. *Amended again (2026-10-14, Ronith: "I want the react button to process all the notes, not just the last 10 lines"):* the button sends all the notes as the excerpt; the reviewer still shows one card. A run on long notes sends them twice (as `<notes>` and as the excerpt), up to ~25K tokens on the 50K-character cap.
+  - *Later (Parking lot):* "Elaborate" and replies that open a thread on a nugget; custom daemons (a "New daemon" form); Socratic and Researcher/Recommend daemons (Recommend needs D5 reopened); other inline AI actions on a selection.
+  - *Prompts:* Claude drafts `prompts/daemon-*.md` and the reviewer prompt from the pushback and connection prompts (extends D19); Ronith refines them before merge.
+- **Why:** the reader writes and the margin quietly fills with the one point worth reading, in a voice that says who's speaking. Generating is separated from showing, so cost scales with how much the reader writes rather than how often they pause.
+- **Cost we accept:** testers' existing reactions are deleted. Automatic runs spend without a click; the daemon cap and the Anthropic monthly limit are the ceilings. The panel call blends both personas in one reply, so their voices may drift together. "Substantially changed" and "significant" are tuned by feel at first. The Author speaks in the first person as a real person, so the eval must test notes about things the book never discusses.
+- **Revisit if:** the voices blur (then one draft call per daemon); the margin feels too empty or too noisy (tune the thresholds); spend grows faster than notes do; the Author invents views (then third person: "the book argues…").
+
+## D38. AI cites pages, not paragraphs, and only when it quotes or points at a passage; daemons get their own role (amends D4, D13, D37)
+- **Status:** Accepted (2026-10-13, Ronith)
+- **Context:** reviewing S8.2a, Ronith found the `[¶n · PDF p. 2]` cites cluttered and ugly and the daemon prompts basic. He wants a plain page number the reader can click to see the cited section highlighted in the PDF, and prompts that follow current agent-prompting practice.
+- **Alternatives:** the model keeps citing `[¶n]` and the UI shows only a page link (keeps paragraph-level checks); a page cite on every claim; asking for page markers before the AI works; `(p. 12)` as the written form; daemons keep chat's `system.md` with nugget rules in the user turn.
+- **Rules:**
+  - *What the model sees:* the reference text split at its page markers into `<page n="…">` blocks inside `<book_text>`, placed first, before any instructions (long-context practice; also the prefix every call shares, for caching). Text with no markers is sent unsplit. Paragraph labels `[¶n]` are gone.
+  - *When to cite:* when AI text quotes the book or points to a specific passage, it cites the page as `[p. N]` (or `[pp. N–M]`), N being the `<page>` it came from. General remarks need no cite. Unsupported claims still say "not in the text".
+  - *Check (`checkCitations`):* every quote of three words or more is checked: with a cite in its sentence, it must be on that page (or run into the next one); without a cite, it must be in the book or in the reader's notes. Codes: `page_not_found`, `quote_not_on_page`, `quote_not_in_text`. Quotes of the reader's notes stop being false alarms.
+  - *What the reader sees:* a cite renders as a small "p. 12" link; a click opens the PDF at the matching page with the quote selected, found the same way as page references in the notes (D33: exact quote, then word overlap, then the page). Old messages with `[¶n]` render as before.
+  - *Daemon role:* a daemon run's instructions are their own system prompt (`prompts/daemon-role.md`), after the book; chat, React and commands keep `system.md` there. Daemon and reviewer prompts follow Anthropic's prompting guidance: say why, show 3–5 canonical examples, say what to do, "think it through before you answer" for JSON on reasoning tasks.
+  - *Prompts:* Ronith's `system.md`, `define.md` and `quiz.md` change only where they name `[¶n]`, as a diff for his approval.
+- **Why:** a page is what a reader of a paper book looks for, and a click shows the exact words; the model reads page numbers from the text rather than guessing them, so D13's protection holds.
+- **Cost we accept:** a page holds several paragraphs, so a cite is checked less precisely than a `[¶n]` was; claims without a quote aren't checked at all; a book typed with paper page markers and a separate PDF links through D33's estimate when a cite has no quote.
+- **Revisit if:** cites land on the wrong page often, or replies stop citing what they quote.
+
+## D39. Daemons are for extending the reader's thinking, not checking it; a third daemon brings outside knowledge (amends D37, D5)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** trying S8.2b, Ronith found the daemons "more nit picky than insightful… making technical points that don't extend the conversation". D37 defined what a daemon is but not what the margin is for, and the drafts answered "checking the notes against the book": both jobs leaned to correction (Connect's "the passage that sets it right"), the examples were all fact-checks, every remark was pushed to quote a page, the reviewer ranked tension first, and the daemons answered only the latest ~10 lines of a 4-page test book.
+- **Alternatives:** reframe both daemons, book-only (~2 h); swap the Devil's Advocate for a generative Questioner as a default (~3 h); allow outside knowledge for all daemons (~3–4 h).
+- **Rules:**
+  - *Purpose:* a daemon's remark extends the reader's thinking: a connection they haven't made, a pattern, a reading they haven't weighed, or a question worth carrying forward. Correcting a misreading is no longer a goal in itself; it earns a remark only when the correction opens something up.
+  - *Kinds of connection (all four, Ronith):* across the book (a passage that echoes, sets up or complicates the note); to the reader's earlier notes (their own thread of thinking, not just the latest excerpt); open questions (worth carrying forward, not answered on the page); beyond the book (the third daemon).
+  - *The Author (Connect):* reframed around connections across the book and to the reader's earlier notes; the "set it right" rule goes.
+  - *The Devil's Advocate (Counter):* offers the strongest *other reading* of what the reader noticed, not a fact-check of it.
+  - *A third daemon (outside knowledge):* connects the note to other works, history and ideas. Its remarks are labelled "beyond the book" on the card. It names the work, author or idea and paraphrases; it never quotes an outside work, since such a quote can't be checked. Its remarks about this book still follow D38 and `checkCitations`, which also drops any remark quoting another work (the quote is in neither the book nor the notes). It is **The Scholar** (Ronith, 2026-10-14), teal `#2f7a6b`, action **Widen** (`action-widen.md`, `daemon-scholar.md`); it never reveals what happens later in this book beyond `<book_text>`, and passes when unsure a work or fact is real.
+  - *Grounding (D38, eased):* cite a page when quoting or pointing at a passage; a quote is used only when the wording is the point, so an interpretive remark needs no quote.
+  - *What to answer (added from Ronith's poioumenon example, 2026-10-14):* the reader's own claims, hunches, questions and reactions, never reference material from any source (copied quotes, looked-up definitions, research notes, summaries); with several claims, the one with the most at stake; never "you note…" unless the notes say it. The anchor is the key phrase of the claim, which the margin highlights on click.
+  - *Reviewer:* ranks "opens a line of thought the reader will want to follow" first; a correction ranks only when it does that; sets aside remarks on reference material and remarks that put words in the reader's mouth; judges a `beyond_the_book` candidate on specificity, not on the cited pages. **React to notes** still always shows a card when any daemon drafted one (Ronith kept it, 2026-10-14).
+  - *Examples:* the role prompt's examples show remarks that extend a note (connection, other reading, open question, outside link), with at most one correction.
+  - *D5:* outside knowledge is allowed for this daemon only, labelled; chat and commands stay book-only.
+  - *Prompts:* Claude drafts the changes as diffs to the daemon prompts (D19, D37); Ronith refines before merge. Tested on a full public-domain book, not the 4-page PDF.
+- **Why:** every cause of the nit-picking was in the framing, so reframing fixes it cheaply without losing the quote check; outside knowledge is the one kind of connection the book can't give, so it gets its own clearly labelled voice rather than loosening grounding for all.
+- **Cost we accept:** the third daemon's claims about other works aren't verified and may be wrong or invented; the label is the only guard. The panel call drafts three remarks, so it costs a little more and the voices may blur more. Fewer remarks carry a checkable quote.
+- **Revisit if:** the outside daemon cites works or facts that don't exist (then add a check or a search tool, S8.4); remarks turn vague without quotes; three voices blur (one call per daemon).
+
+## D42. Quiz: a view where the reader tests themselves, written by a quiz agent (supersedes the /quiz command of D17; amends D24)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** Ronith wants self-testing built into the app, like Claude's own quiz interface: "the top of quiz is to enable users to test themselves on their understanding of content". D24 had taken the old /quiz command out of the UI.
+- **Alternatives:** keep the old command beside the new quiz; keep the quiz for this session only, or keep a history of past quizzes; multiple choice only, or true/false too; two sub-steps (agent, then view) or one.
+- **Rules:**
+  - *Where:* a **Quiz** view in the top bar between Margin and PDF; beside the notes or alone, like the others.
+  - *Setup:* topics as checkboxes (one or more): words defined in the notes, words from the book, key concepts from the book, key concepts from the notes; 1–10 questions; easy, medium or hard; a style: multiple choice (5 options, the default), true/false, or mixed (Ronith: "let the user select the style… default should be 5-option multiple choice"); **Start**.
+  - *Too little material:* checks the app can make without a call (no topic picked, no notes for a notes topic, no book text for a book topic, reference over the cap) answer at once; the quiz agent judges the rest and, when the material can't support the request, says why specifically (e.g. "your notes define 3 words: ask for 3 questions or add a topic"), and no quiz starts.
+  - *The agent:* one call, after the book (D38), with its own role prompt (`prompts/quiz-maker.md`, Claude drafts, Ronith refines) and JSON output (structured outputs): a verdict, feedback, and questions each with choices, the right one, and why each choice is right or wrong. Our code, not the model, shuffles multiple-choice options, and checks each question: the right number of choices, exactly one right, no duplicates, the right answer not conspicuously the longest, quotes passing `checkCitations`. Failing questions are replaced by one more call; if still short, the quiz runs with fewer and says so. One quiz counts as one of the day's AI replies (D35).
+  - *Taking it:* "Question 2 of 10" and the score so far ("1/10"); picking a choice locks it and shows whether it was right, why, and why the right answer is right; Next; at the end, a review of every question, the reader's answer, the right one and the explanations; New quiz. Page cites open the PDF (D38).
+  - *Saved:* the current quiz (setup, questions, answers, position) is saved with the book, so a reload or a book switch resumes it; no history of past quizzes.
+  - *Old /quiz:* the `quiz` command row and Ronith's `prompts/quiz.md` are removed (he approved); Define stays as D24 left it.
+  - *Built in one step* (Ronith).
+- **Why:** self-testing is a different act from conversation, so it gets its own view and a structured flow rather than chat; JSON lets our code own the parts the model gets wrong (answer position, giveaway lengths, invented quotes).
+- **Cost we accept:** each quiz sends the whole book (up to the 50K cap) plus a long JSON reply; explanations about words or ideas beyond a quote aren't checked; no history of past quizzes.
+- **Revisit if:** quizzes feel repetitive or off-topic, the length check rejects too many questions, or Ronith wants a history.
+- *Amended (2026-10-14, Ronith: "when I click on the same things… I often get the same or very similar questions"):* variety, two of four proposals. Each book remembers its last 30 questions (`QuizState.asked`) and sends them with the next quiz as `<already_asked>`, not to be repeated or rephrased; our code gives each question an angle at random (cause, consequence, motive, comparison, turning point, detail in context; none repeated until all are used) in `<angles>`. Not chosen: a code-rotated focus on pages not yet quizzed, a "Pages __ to __" field. A progress bar shows while the quiz is written (an estimate: the call reports no progress).
+
+## D43. Quiz topics: two groups, short names, three new topics (amends D42)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** after trying the quiz ("the best feature yet"), Ronith asked for better topic names than his first ideas and for other things to quiz on. D5 still holds: topics come from the book or the reader's notes.
+- **Alternatives:** rename and group only; rename and add about nine topics (plot, themes, craft too), at the cost of overlap.
+- **Rules:**
+  - *From the book:* **Vocabulary** (words the book uses), **Big ideas** (themes, arguments, turning points), **Characters** (who's who, motives, relationships; new), **Who said it?** (match a line to its speaker; new: the line is quoted exactly with its page, so `checkCitations` verifies it).
+  - *From my notes:* **My vocabulary** (words I've defined), **My ideas** (the claims and connections I made), **Check my reading** (new: does the book back up what I wrote? Supported, contradicted, or not settled by the text).
+  - The old ids stay (`book-terms`, `book-concepts`, `notes-terms`, `notes-concepts`) so saved quizzes load; only labels change.
+  - The length check that rejects a giveaway right answer now also needs the right answer to be 20+ characters longer than the average, so short answers like names ("Sir William Lucas" against "Jane") aren't rejected for length.
+- **Why:** each new topic tests something the first four didn't (who's who, exact words, whether a reading holds) without overlapping them; grouping by source makes the list scannable.
+- **Cost we accept:** seven checkboxes instead of four; "Big ideas" and "Characters" can overlap on a character's motive.
+- **Revisit if:** Ronith rarely picks a topic, or two topics keep producing the same questions.
+- *Amended (2026-10-14, Ronith):* **Check my reading** is removed ("that seems more like a Daemon task"; Parking lot). **My ideas** takes the reader's notes as true: the right answer is the one the notes hold, and questions never test whether the book agrees. With **Big ideas** and **My ideas** both ticked, the setup warns that where the notes and the book disagree, a question's answer depends on which topic it came from (each question shows its topic). A saved setup with Check my reading drops it.
+
+## D44. Quiz styles: fill in the blanks (dropdowns) and free response (graded by an agent) (amends D42)
+- **Status:** Accepted (2026-10-14, Ronith)
+- **Context:** Ronith wants two more styles: fill in the blank and free response, where "an agent should offer quick one line feedback on why it is right or wrong or why it is an incomplete answer missing something critical".
+- **Alternatives:** blanks typed and matched by code, by the grading agent, or both; partial credit as half a point; the grader also given the whole book; grading free of the daily cap.
+- **Rules:**
+  - *Styles:* Multiple choice (default), True / false, Fill in the blanks, Free response, Mixed (any of the four).
+  - *Fill in the blanks (Ronith: "a dropdown… 2-3 fill in the blanks per question and then explanation based on what they chose"):* one sentence with 2–3 blanks, each a dropdown of 4 options, one right; each option says why it is right or wrong. The reader fills every blank, then checks; the question is right only when every blank is. Our code checks each blank like a multiple-choice question and shuffles its options.
+  - *Free response:* the quiz agent also writes a model answer and the key points a full answer needs, with page cites. The reader writes an answer and submits it (locked, like a choice). A grading call (`prompts/quiz-grader.md`, Claude drafts) sees the question, the model answer, the key points and the pages they cite, not the whole book, and returns right, partly right or wrong with one line of feedback naming what is wrong or missing. Then the model answer and key points show.
+  - *Score:* "partly right" doesn't score (Ronith); its feedback still shows.
+  - *Daily cap:* each grading counts as one of the day's AI replies (Ronith). A grading that fails (network, the cap) can be retried or skipped; skipped counts as not right. A reload mid-grading offers to grade again.
+- **Why:** dropdown blanks keep grading instant and free while testing exact wording in context; free response tests recall without cues, so it needs judgement, and a grader grounded in the model answer and its pages stays cheap and consistent.
+- **Cost we accept:** a grader without the whole book may mark down a right answer the model answer didn't foresee; a 10-question free-response quiz uses 11 of the day's 60 replies.
+- **Revisit if:** graders mark good answers wrong (then the whole book, once cached), or the cap bites.
+- *Amended (2026-10-14, Ronith: "the mixed button looks weird… convert this to check box style… default selection be multiple choice"):* styles are checkboxes, one or more; ticking several mixes them (the agent uses each at least once when there are enough questions); "Mixed" is gone. Multiple choice is ticked by default, and difficulty defaults to Medium. A setup saved with the old single style loads as checkboxes ("mixed" ticks all four).
 
 ---
 

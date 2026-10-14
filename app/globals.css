@@ -1,5 +1,6 @@
-/* Tokens. The reader writes in ink; the AI writes beside it in blue, on a tinted card with a
-   rule (D6: AI text is always visually distinct). One system face for both, as in Obsidian (D27).
+/* Tokens. The reader writes in ink; the AI writes beside it in its own colours: daemons as
+   marginalia in a softer ink, chat replies on a tinted card with a rule (D6: AI text is always
+   visually distinct). One system face for both, as in Obsidian (D27).
    Light by default: white, light gray, light blue (D28); dark when <html data-theme="dark">. */
 :root {
   color-scheme: light;
@@ -14,6 +15,7 @@
   --pill: #e3edff; /* the selected top-bar toggle */
   --quote: #8a7650; /* book binding: passage quotes */
   --warn: #b4441a;
+  --ok: #2f7a3e; /* a right quiz answer (D42) */
   --focus: #2b6cd4;
   /* Obsidian's default stacks (D27): one system face for notes, AI and interface. */
   --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
@@ -28,6 +30,7 @@
   --notes-w: 38rem; /* the notes' reading width when they are alone */
   --radius: 4px;
   --margin-rule: 1px solid var(--rule);
+  --margin-ink: #4b5563; /* daemon remarks: softer than the reader's ink */
 }
 
 :root[data-theme="dark"] {
@@ -43,7 +46,9 @@
   --pill: #22324d;
   --quote: #c4ae84;
   --warn: #f2a47a;
+  --ok: #7fcf8f;
   --focus: #7fb0ff;
+  --margin-ink: #b4bac4;
 }
 
 *,
@@ -377,12 +382,6 @@ button.pill[aria-pressed="true"] {
   flex: none;
 }
 
-/* React needs the notes on screen. */
-main[data-view="pdf"] .react-slot,
-main[data-view="chat"] .react-slot {
-  display: none;
-}
-
 .unread {
   position: absolute;
   top: 2px;
@@ -407,7 +406,7 @@ main[data-view="chat"] .react-slot {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, var(--notes-share, 60%)) minmax(0, 1fr);
 }
 
 /* Takes the rest of the height, so the notes sheet and the margin rule reach the bottom. */
@@ -424,16 +423,71 @@ main[data-view="chat"] .react-slot {
   border-left: var(--margin-rule);
 }
 
+/* The daemon panel (D37): at the top of the margin, who the daemons are, their status, and a
+   button to ask them now. Cards are placed below it. */
+.margin-header {
+  padding: var(--s4) var(--s4) 0;
+}
+
+.daemon-panel {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font: 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.daemon-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.daemon-list li::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s1);
+  border-radius: 50%;
+  background: var(--daemon);
+}
+
+.daemon-status {
+  margin: 0;
+}
+
+.react-notes {
+  justify-self: start;
+  padding: var(--s1) var(--s3);
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ai);
+  background: var(--ai-wash);
+  border: 1px solid color-mix(in srgb, var(--ai) 30%, transparent);
+  border-radius: var(--radius);
+}
+
+.react-notes:hover:not(:disabled) {
+  background: var(--pill);
+}
+
+.react-notes:disabled {
+  opacity: 0.55;
+}
+
 .margin-group {
   position: absolute;
   top: 0;
   left: var(--s4);
   right: var(--s4);
   z-index: 2;
-}
-
-.margin-stack {
-  position: relative; /* for its dot */
 }
 
 .cards {
@@ -594,249 +648,99 @@ main[data-view="chat"] .react-slot {
   white-space: nowrap;
 }
 
-/* React split button and kind menu */
-.split {
-  position: relative;
-  display: inline-flex;
-}
-
-.split > :first-child {
-  border-radius: var(--radius) 0 0 var(--radius);
-}
-
-.split > :nth-child(2) {
-  border-radius: 0 var(--radius) var(--radius) 0;
-  border-left-color: var(--sheet);
-  padding-inline: var(--s2);
-}
-
-.menu {
-  position: absolute;
-  top: calc(100% + var(--s1));
-  left: 0;
-  z-index: 20;
-  min-width: 15rem;
-  padding: var(--s1);
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-}
-
-.menu [role="menuitem"] {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  padding: var(--s2) var(--s3);
-  background: none;
-}
-
-.menu [role="menuitem"]:hover,
-.menu [role="menuitem"]:focus {
-  background: var(--ai-wash);
-}
-
-.menu [role="menuitem"] small {
-  display: block;
-  font-weight: 400;
-  color: var(--ink-soft);
-}
-
-/* The margin's one decoration: a dot on the rule at a paragraph with reactions. The button is a
-   larger, invisible hit area around the 7px dot. */
-.dot {
-  position: absolute;
-  top: calc((1rem * 1.5 - 21px) / 2);
-  left: calc(-1 * var(--s4) - 12px);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  width: auto;
-  height: 21px;
-  padding: 0 0 0 7px;
-  background: none;
-  border: 0;
-  border-radius: 0;
-}
-
-.dot::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ai);
-  box-shadow: 0 0 0 2px var(--paper);
-}
-
-.dot:hover::before,
-.dot[aria-pressed="true"]::before {
-  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px color-mix(in srgb, var(--ai) 35%, transparent);
-}
-
-.dot-count {
-  font: 600 0.6875rem/1 var(--font-ui);
-  color: var(--ai);
-  background: var(--paper);
-  padding: 1px 2px;
-}
-
+/* A daemon's card (D37): marginalia, not a box. No background or border, like a note pencilled
+   in a book's margin: the daemon's name in small caps in its colour, then the remark in smaller,
+   softer text, so it stays distinct from the reader's ink (D6). The clicked card gets a rule in its
+   colour; its words are highlighted in the notes. --daemon is set per card. */
 .card {
-  padding: var(--s2) var(--s3);
-  background: var(--ai-wash);
-  border-left: 2px solid var(--ai);
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font: 0.9375rem/1.5 var(--font-ui);
-  color: var(--ai-ink);
+  --daemon-ink: var(--daemon, var(--ai)); /* its name; set here, where --daemon is */
+  padding: 0 0 0 var(--s2);
+  border-left: 2px solid transparent;
+  font: 0.875rem/1.5 var(--font-ui);
+  color: var(--margin-ink);
   overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
-.card.is-active {
-  border-left-width: 4px;
+:root[data-theme="dark"] .card {
+  --daemon-ink: color-mix(in srgb, var(--daemon, var(--ai)) 60%, var(--ink)); /* the daemon colours are dark; lift them */
 }
 
-.card.is-detached {
-  opacity: 0.7;
-}
-
-.card.is-detached .excerpt {
-  text-decoration: line-through;
+.card.active {
+  border-left-color: var(--daemon, var(--ai));
+  color: var(--ink);
 }
 
 .card-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: var(--s2);
 }
 
-.card .kind {
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--ai);
+.card .daemon-name {
+  padding: 0;
+  font: 600 0.7rem/1.4 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--daemon-ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
-.card .kind.is-choosing {
-  font-weight: 500;
+/* D39: a remark from outside the book says so; its claims aren't checked against the text. */
+.card .beyond-book {
+  margin-right: auto;
+  font: italic 0.75rem/1.4 var(--font-ui);
   color: var(--ink-soft);
 }
 
+.card .daemon-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* × shows on hover or focus; always on touch screens, which have no hover. */
 .card .delete {
   border: 0;
   background: none;
   padding: 0 var(--s1);
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1;
   color: var(--ink-soft);
+  opacity: 0;
 }
 
-.card .confirm {
-  font-size: 0.8125rem;
-  color: var(--ink);
+.card:hover .delete,
+.card:focus-within .delete {
+  opacity: 1;
 }
 
-.card .confirm button {
-  padding: 0 var(--s2);
-  font-size: 0.8125rem;
-}
-
-.card .excerpt {
-  display: block;
-  margin: var(--s1) 0;
-  font: italic 0.875rem/1.4 var(--font-text);
-  color: var(--ink-soft);
-  background: none;
-  border: 0;
-  padding: 0;
-  text-align: left;
+@media (hover: none) {
+  .card .delete {
+    opacity: 1;
+  }
 }
 
 .card p {
-  margin: var(--s1) 0;
+  margin: 2px 0 0;
   white-space: pre-wrap;
 }
 
-.card .follow-up,
-.card .reply-user {
-  margin-left: var(--s3);
+/* The clicked card's words in the notes, tinted in its daemon's colour. */
+.notes-editor .cm-card-highlight {
+  background: color-mix(in srgb, var(--daemon) 22%, transparent);
+  border-radius: 2px;
 }
 
-.card .reply-user {
-  font: 1rem/1.55 var(--font-text);
-  color: var(--ink);
-}
-
-.card textarea {
-  margin-top: var(--s1);
-  font: 1rem/1.5 var(--font-text);
-  resize: vertical;
-}
-
-.card .link {
-  margin-top: var(--s1);
-}
-
-.card .less {
-  margin-left: var(--s3);
-}
-
-/* Collapsed (not the current block's): the opening clamped to 4 lines, one click to open. */
-.card.is-collapsed {
-  background: color-mix(in srgb, var(--ai-wash) 60%, transparent);
-}
-
-.card .expand {
-  display: block;
-  width: 100%;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  background: none;
-  border: 0;
-}
-
-.card .clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
-  white-space: pre-wrap;
-}
-
-.card .more {
-  display: block;
-  margin-top: var(--s1);
-  font-size: 0.8125rem;
-  color: var(--ai);
-}
-
-.card .expand:hover .more {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+:root[data-theme="dark"] .notes-editor .cm-card-highlight {
+  background: color-mix(in srgb, var(--daemon) 45%, transparent);
 }
 
 .margin-cell > .empty {
   padding-top: var(--s2);
   font-size: 0.8125rem;
-}
-
-.detached-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-}
-
-.detached-divider::before,
-.detached-divider::after {
-  content: "";
-  flex: 1;
-  border-top: 1px dashed var(--ink-soft);
 }
 
 .caret {
@@ -851,12 +755,14 @@ main[data-view="chat"] .react-slot {
 }
 
 /* The area under the header. Which panes show is the view (main's data-view, D22): "notes+…"
-   views put the notes in the 3/5 column and margin, PDF or chat in the 2/5 one (the margin is the
-   rows' second column, so the panes span both); the others show one thing across both columns.
-   Hidden panes stay mounted (display: none), so streams, threads and edits carry on. */
+   views put the notes in the first column (--notes-share, set by the divider; 60% by default) and
+   margin, PDF or chat in the second (the margin is the rows' second column, so the panes span
+   both); the others show one thing across both columns. Hidden panes stay mounted
+   (display: none), so streams, threads and edits carry on. */
 .workspace {
+  position: relative; /* for the divider */
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, var(--notes-share, 60%)) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr); /* one row the height of the window: each pane scrolls inside it */
   flex: 1;
   min-height: 0;
@@ -864,6 +770,42 @@ main[data-view="chat"] .react-slot {
 
 .panes {
   grid-column: 1 / -1;
+}
+
+/* The divider (S8.1): a wide invisible grip centred on the column edge; light blue on hover,
+   focus and drag. Only when a pane sits beside the notes. */
+.pane-divider {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--notes-share, 60%);
+  z-index: 5;
+  width: 9px;
+  translate: -50%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  border-radius: 2px;
+}
+
+.pane-divider:hover::after,
+.pane-divider:focus-visible::after,
+.pane-divider:active::after {
+  background: var(--focus);
+}
+
+.pane-divider:focus-visible {
+  outline: none;
+}
+
+main[data-view^="notes+"] .pane-divider {
+  display: block;
 }
 
 .side-pane {
@@ -874,6 +816,7 @@ main[data-view="chat"] .react-slot {
   border-left: 1px solid var(--rule);
 }
 
+.quiz-pane,
 .pdf-pane,
 .chat-pane {
   display: none;
@@ -883,27 +826,487 @@ main[data-view="chat"] .react-slot {
   padding: var(--s3) var(--s4);
 }
 
+main[data-view="notes+quiz"] .panes,
 main[data-view="notes+pdf"] .panes,
 main[data-view="notes+chat"] .panes {
   grid-column: 1;
 }
 
+main[data-view$="quiz"] .side-pane,
 main[data-view$="pdf"] .side-pane,
 main[data-view$="chat"] .side-pane,
+main[data-view$="quiz"] .quiz-pane,
 main[data-view$="pdf"] .pdf-pane,
 main[data-view$="chat"] .chat-pane {
   display: flex;
 }
 
+main[data-view="quiz"] .side-pane,
 main[data-view="pdf"] .side-pane,
 main[data-view="chat"] .side-pane {
   grid-column: 1 / -1;
   border-left: 0;
 }
 
+main[data-view="quiz"] .panes,
 main[data-view="pdf"] .panes,
 main[data-view="chat"] .panes {
   display: none;
+}
+
+/* The Quiz view (D42): one scrolling column; alone, a readable width. */
+.quiz-pane {
+  overflow-y: auto;
+}
+
+main[data-view="quiz"] .quiz {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+.quiz {
+  display: grid;
+  gap: var(--s4);
+  width: 100%;
+  padding-bottom: var(--s8);
+}
+
+.quiz h2 {
+  margin: 0;
+  font: 600 1.125rem/1.4 var(--font-ui);
+  color: var(--ink);
+}
+
+.quiz fieldset {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.quiz legend,
+.quiz-legend {
+  margin-bottom: var(--s2);
+  padding: 0;
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.quiz-row label {
+  display: grid;
+  justify-items: start;
+}
+
+.quiz select {
+  padding: var(--s1) var(--s2);
+  font: inherit;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.quiz-check {
+  display: grid;
+  grid-template-columns: auto 9rem minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.quiz-topic-hint {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+/* Narrow panes: the hint goes under the label. */
+@container (max-width: 26rem) {
+  .quiz-check {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .quiz-topic-hint {
+    grid-column: 2;
+  }
+}
+
+.quiz-setup {
+  container-type: inline-size;
+}
+
+.segments {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.segment {
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+  border-left: 1px solid var(--rule);
+}
+
+.segment:first-child {
+  border-left: 0;
+}
+
+.segment.selected {
+  background: var(--pill);
+  color: var(--ai);
+  font-weight: 600;
+}
+
+.segment input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.quiz-risk {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--quote);
+  background: color-mix(in srgb, var(--quote) 10%, transparent);
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+/* Writing a quiz: a bar that eases toward 95% over the usual time (QuizProgress). */
+.quiz-loading {
+  display: grid;
+  gap: var(--s2);
+}
+
+.quiz-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+.quiz-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ai);
+  transition: width 0.2s linear, background-color 0.3s;
+}
+
+/* The quiz is in: the bar runs to the end (duration set inline) and turns green. */
+.quiz-bar-fill.done {
+  transition-timing-function: ease-out;
+  background: var(--ok);
+}
+
+.quiz-ready {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.quiz-feedback {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: var(--ink);
+}
+
+.quiz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+}
+
+.quiz-hint,
+.quiz-topic {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.quiz-progress {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  font: 600 0.875rem/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.quiz-progress .quiz-score {
+  color: var(--ink);
+}
+
+.quiz-progress button {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.quiz-choices {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-choice > button {
+  display: flex;
+  gap: var(--s3);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  text-align: left;
+  font: 1rem/1.5 var(--font-text);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+}
+
+.quiz-choice > button:not(:disabled):hover {
+  border-color: var(--ai);
+}
+
+/* After an answer the choices are disabled but stay fully readable. */
+.quiz-choice > button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.quiz-choice .letter {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.quiz-choice .text {
+  flex: 1;
+}
+
+.quiz-choice .verdict {
+  font: 600 0.75rem/1.4 var(--font-ui);
+  white-space: nowrap;
+}
+
+.quiz-choice.right > button {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.quiz-choice.right .verdict {
+  color: var(--ok);
+}
+
+.quiz-choice.wrong > button {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.quiz-choice.wrong .verdict {
+  color: var(--warn);
+}
+
+.quiz-choice.other > button {
+  color: var(--ink-soft);
+}
+
+.quiz-choice .why {
+  margin: var(--s1) 0 0 var(--s6);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.quiz-choice.right .why,
+.quiz-choice.wrong .why {
+  color: var(--ink);
+}
+
+.quiz-result {
+  margin: 0;
+  font-weight: 600;
+}
+
+.quiz-result.right {
+  color: var(--ok);
+}
+
+.quiz-result.wrong {
+  color: var(--warn);
+}
+
+/* Fill in the blanks (D44): dropdowns inline in the sentence; after Check, each blank's why. */
+.quiz-blanks {
+  line-height: 2;
+}
+
+.quiz-blanks select {
+  margin: 0 var(--s1);
+  padding: 0 var(--s1);
+  font: inherit;
+  font-weight: 500;
+  color: var(--ai);
+  background: var(--sheet);
+  border: 0;
+  border-bottom: 2px solid var(--ai);
+  border-radius: 0;
+}
+
+.quiz-blanks select:disabled {
+  opacity: 1;
+}
+
+.quiz-blanks select.right {
+  color: var(--ok);
+  border-bottom-color: var(--ok);
+}
+
+.quiz-blanks select.wrong {
+  color: var(--warn);
+  border-bottom-color: var(--warn);
+}
+
+.quiz-blank-whys {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}
+
+.quiz-blank-whys li {
+  padding-left: var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.quiz-blank-whys li.right {
+  border-left-color: var(--ok);
+}
+
+.quiz-blank-whys li.wrong {
+  border-left-color: var(--warn);
+}
+
+.quiz-blank-whys p {
+  margin: 0 0 var(--s1);
+}
+
+.quiz-blank-whys .verdict {
+  font: 600 0.75rem/1.4 var(--font-ui);
+}
+
+.quiz-blank-whys .right .verdict {
+  color: var(--ok);
+}
+
+.quiz-blank-whys .wrong .verdict {
+  color: var(--warn);
+}
+
+/* Free response (D44): the answer box, then the reader's answer, the grade and a full answer. */
+.quiz-free {
+  display: grid;
+  gap: var(--s3);
+}
+
+.quiz-free textarea {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  font: 1rem/1.5 var(--font-text);
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.quiz-your-answer {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--rule);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.quiz-grade {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.quiz-grade.right {
+  border-left-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.quiz-grade.partial {
+  border-left-color: var(--quote);
+  background: color-mix(in srgb, var(--quote) 12%, transparent);
+}
+
+.quiz-grade.wrong {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.quiz-model {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.quiz-model p {
+  margin: 0 0 var(--s1);
+}
+
+.quiz-model ul {
+  margin: 0;
+  padding-left: var(--s6);
+}
+
+.quiz-review-list {
+  display: grid;
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-item {
+  padding-left: var(--s3);
+  border-left: 2px solid var(--rule);
+}
+
+.review-item.right {
+  border-left-color: var(--ok);
+}
+
+.review-item.wrong {
+  border-left-color: var(--warn);
+}
+
+.review-item p {
+  margin: 0 0 var(--s1);
+}
+
+.review-question {
+  font-weight: 600;
+}
+
+.review-item.right .review-mark {
+  color: var(--ok);
+}
+
+.review-item.wrong .review-mark {
+  color: var(--warn);
 }
 
 /* The PDF view (D29): pdfjs needs an absolutely positioned scroll box; the toolbar floats on it. */
@@ -1084,6 +1487,29 @@ main[data-view="chat"] .panes {
   color: var(--ai);
 }
 
+/* A page cite in AI text (D38): a small, quiet "p. 12" that opens the PDF at the passage. */
+.page-cite {
+  display: inline;
+  padding: 0 0.15em;
+  font: inherit;
+  font-size: 0.8em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: none;
+  border: 0;
+}
+
+button.page-cite {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+button.page-cite:hover,
+button.page-cite:focus-visible {
+  color: var(--ai);
+}
+
 /* Chat alone keeps a readable line length. */
 main[data-view="chat"] .chat-pane {
   width: 100%;
@@ -1229,7 +1655,12 @@ dialog.reference form button {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  main[data-view^="notes+"] .pane-divider {
+    display: none;
+  }
+
   /* Beside the notes, there is no room: the chosen pane shows instead of them. */
+  main[data-view="notes+quiz"] .panes,
   main[data-view="notes+pdf"] .panes,
   main[data-view="notes+chat"] .panes {
     display: none;
@@ -1278,10 +1709,6 @@ dialog.reference form button {
   .margin-group {
     position: static;
     margin-bottom: var(--s3);
-  }
-
-  .dot {
-    display: none;
   }
 }
 

@@ -1,10 +1,11 @@
 // The only module that touches storage (D7): books (D31), each with its reference text, notes, chat
-// and margin reactions, survive a reload. Storage is injected ({ getItem, setItem, removeItem }) so
+// and daemons (D37), survive a reload. Storage is injected ({ getItem, setItem, removeItem }) so
 // the page passes localStorage and tests pass a fake.
 import type { CitationCheck } from "./citations.ts";
 import type { Turn } from "./converse.ts";
 import type { PageLabels } from "./passage.ts";
-import { isReactionKind, type ReactionKind } from "./reactions.ts";
+import { DAEMON_IDS, freshDaemonState, type DaemonCard, type DaemonState } from "./daemons.ts";
+import { freshQuiz, pickQuiz, type QuizState } from "./quiz.ts";
 
 // An assistant message keeps the page labels of the paragraphs it cites (see citedPages), so
 // editing the reference text later doesn't change old replies' labels. Only those few labels:
@@ -15,11 +16,10 @@ export type ChatMessage = Turn & {
   error?: string;
   isStreaming?: boolean;
 };
-// A margin reaction (D18, D20) is a thread anchored to the exact excerpt it reacted to.
-// `messages` starts with the AI's reaction, then (reader reply, AI answer) pairs. A reply's
-// request sends `messages` as `history` (with `reaction: { excerpt, kind }`).
-export type Reaction = { id: string; excerpt: string; kind: ReactionKind; messages: ChatMessage[] };
-export type AppState = { reference: string; notes: string; messages: ChatMessage[]; reactions: Reaction[] };
+// `daemons`: the margin's cards and what the daemons have read (D37). Margin reactions (D18, D20)
+// were replaced by daemons: a book saved with them loads without them. `quiz`: the current quiz,
+// so a reload or a book switch resumes it (D42).
+export type AppState = { reference: string; notes: string; messages: ChatMessage[]; daemons: DaemonState; quiz: QuizState };
 export type KeyValueStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -28,7 +28,7 @@ export type KeyValueStorage = {
 export type StoreError = "save_failed"; // storage full, blocked (private mode) or unavailable
 
 export const STORAGE_KEY = "tertulia-margins:v1"; // v1's single book; kept as a backup after migration
-export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], reactions: [] });
+export const emptyState = (): AppState => ({ reference: "", notes: "", messages: [], daemons: freshDaemonState(""), quiz: freshQuiz() });
 
 // ---- Books (D31) ----
 // The library lists the books and which one is open; each book's state lives under its own key,
@@ -115,18 +115,21 @@ export function loadState(storage: KeyValueStorage, key: string): AppState {
   }
   if (!isRecord(saved)) return emptyState();
   const messages = Array.isArray(saved.messages) ? pairs(saved.messages.filter(isMessage).map(pickMessage)) : [];
+  const notes = typeof saved.notes === "string" ? saved.notes : "";
   return {
     reference: typeof saved.reference === "string" ? saved.reference : "",
-    notes: typeof saved.notes === "string" ? saved.notes : "",
+    notes,
     messages: finishedMessages(messages),
-    reactions: Array.isArray(saved.reactions) ? finishedReactions(saved.reactions.filter(isReaction).map(pickReaction)) : [],
+    // No daemon state yet (a new book, or one saved before D37): what's written counts as seen.
+    daemons: pickDaemons(saved.daemons) ?? freshDaemonState(notes),
+    quiz: pickQuiz(saved.quiz) ?? freshQuiz(),
   };
 }
 
 export function saveState(storage: KeyValueStorage, key: string, state: AppState): StoreError | undefined {
-  const { reference, notes, messages, reactions } = state;
+  const { reference, notes, messages, daemons, quiz } = state;
   try {
-    const saved = { reference, notes, messages: finishedMessages(messages), reactions: finishedReactions(reactions) };
+    const saved = { reference, notes, messages: finishedMessages(messages), daemons, quiz };
     storage.setItem(key, JSON.stringify(saved));
   } catch {
     return "save_failed";
@@ -134,13 +137,19 @@ export function saveState(storage: KeyValueStorage, key: string, state: AppState
 }
 
 // Layout (D22), remembered per browser under its own key so it never touches the reader's data.
-// "notes+…" views put margin, PDF or chat beside the notes; the others fill the space alone.
-export const VIEWS = ["notes+margin", "notes+pdf", "notes+chat", "notes", "pdf", "chat"] as const;
+// "notes+…" views put margin, quiz (D42), PDF or chat beside the notes; the others fill the space alone.
+export const VIEWS = ["notes+margin", "notes+quiz", "notes+pdf", "notes+chat", "notes", "quiz", "pdf", "chat"] as const;
 export type View = (typeof VIEWS)[number];
 export type Theme = "light" | "dark"; // D28: light unless the reader switches
-export type UiState = { view: View; isSidebarOpen: boolean; theme: Theme };
+// notesShare: the notes' fraction of the width beside the sidebar when a pane sits beside them
+// (the draggable divider); the rest goes to the margin, PDF or chat.
+export type UiState = { view: View; isSidebarOpen: boolean; theme: Theme; notesShare: number };
 export const UI_KEY = "tertulia-margins:ui";
-const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true, theme: "light" };
+export const NOTES_SHARE = { min: 0.35, max: 0.75, step: 0.02 };
+export const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6 };
+// Rounded to 0.1%, so arrow-key steps don't pile up float noise.
+export const clampNotesShare = (share: number) =>
+  Math.round(Math.min(NOTES_SHARE.max, Math.max(NOTES_SHARE.min, share)) * 1000) / 1000;
 
 export function loadUi(storage: KeyValueStorage): UiState {
   let saved: unknown;
@@ -155,6 +164,7 @@ export function loadUi(storage: KeyValueStorage): UiState {
     view: isKnownView ? (saved.view as View) : defaultUi.view,
     isSidebarOpen: typeof saved.isSidebarOpen === "boolean" ? saved.isSidebarOpen : defaultUi.isSidebarOpen,
     theme: saved.theme === "dark" ? "dark" : "light",
+    notesShare: Number.isFinite(saved.notesShare) ? clampNotesShare(saved.notesShare as number) : defaultUi.notesShare,
   };
 }
 
@@ -173,23 +183,31 @@ export const USAGE_KEY = "tertulia-margins:usage";
 export const localDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-export function loadRepliesToday(storage: KeyValueStorage, day: string): number {
+export const loadRepliesToday = (storage: KeyValueStorage, day: string) => countToday(storage, USAGE_KEY, "replies", day);
+// Counts one more reply today; returns the new count.
+export const recordReply = (storage: KeyValueStorage, day: string) => addToday(storage, USAGE_KEY, "replies", day);
+
+// Daemon runs (D37) are counted the same way, under their own key, against their own daily cap.
+export const DAEMON_USAGE_KEY = "tertulia-margins:daemon-usage";
+export const loadDaemonRunsToday = (storage: KeyValueStorage, day: string) => countToday(storage, DAEMON_USAGE_KEY, "runs", day);
+export const recordDaemonRun = (storage: KeyValueStorage, day: string) => addToday(storage, DAEMON_USAGE_KEY, "runs", day);
+
+function countToday(storage: KeyValueStorage, key: string, field: string, day: string): number {
   try {
-    const saved: unknown = JSON.parse(storage.getItem(USAGE_KEY) ?? "null");
-    const isToday = isRecord(saved) && saved.day === day && Number.isInteger(saved.replies);
-    return isToday ? Math.max(0, saved.replies as number) : 0;
+    const saved: unknown = JSON.parse(storage.getItem(key) ?? "null");
+    const isToday = isRecord(saved) && saved.day === day && Number.isInteger(saved[field]);
+    return isToday ? Math.max(0, saved[field] as number) : 0;
   } catch {
     return 0;
   }
 }
 
-// Counts one more reply today; returns the new count.
-export function recordReply(storage: KeyValueStorage, day: string): number {
-  const replies = loadRepliesToday(storage, day) + 1;
+function addToday(storage: KeyValueStorage, key: string, field: string, day: string): number {
+  const count = countToday(storage, key, field, day) + 1;
   try {
-    storage.setItem(USAGE_KEY, JSON.stringify({ day, replies }));
+    storage.setItem(key, JSON.stringify({ day, [field]: count }));
   } catch {}
-  return replies;
+  return count;
 }
 
 // A reply still streaming is not saved, nor the question that prompted it: after a reload it would
@@ -200,28 +218,25 @@ function finishedMessages(messages: ChatMessage[]): ChatMessage[] {
   return isLastStreaming ? messages.slice(0, -2) : messages;
 }
 
-// The same rule per thread: an AI answer still streaming isn't saved, nor the reader's reply that
-// prompted it; a reaction still streaming its opening message isn't saved at all.
-function finishedReactions(reactions: Reaction[]): Reaction[] {
-  return reactions
-    .map((r) => {
-      const last = r.messages.at(-1);
-      const isLastStreaming = last?.role === "assistant" && last.isStreaming === true;
-      return isLastStreaming ? { ...r, messages: r.messages.slice(0, r.messages.length === 1 ? 0 : -2) } : r;
-    })
-    .filter((r) => r.messages.length > 0);
+// A saved daemon state, or undefined if it's missing or malformed (then the page starts fresh).
+// Malformed cards are dropped one by one.
+function pickDaemons(saved: unknown): DaemonState | undefined {
+  if (!isRecord(saved)) return undefined;
+  const { cards, pool, seen, linesSinceCard } = saved;
+  const isSeenValid = Array.isArray(seen) && seen.every((x) => typeof x === "string");
+  const isValid = Array.isArray(cards) && Array.isArray(pool) && isSeenValid && Number.isInteger(linesSinceCard);
+  if (!isValid) return undefined;
+  return {
+    cards: cards.filter(isDaemonCard).map(pickDaemonCard),
+    pool: pool.filter(isDaemonCard).map(pickDaemonCard),
+    seen: seen as string[],
+    linesSinceCard: Math.max(0, linesSinceCard as number),
+  };
 }
 
-const isReaction = (r: unknown): r is Reaction =>
-  isRecord(r) && typeof r.id === "string" && typeof r.excerpt === "string" && isReactionKind(r.kind) && Array.isArray(r.messages);
-
-// Like chat: malformed messages are dropped, then the thread keeps its shape (the opening
-// reaction, then pairs). A thread with no valid opening reaction is dropped.
-function pickReaction({ id, excerpt, kind, messages }: Reaction): Reaction {
-  const kept = messages.filter(isMessage).map(pickMessage);
-  const isOpeningValid = kept[0]?.role === "assistant";
-  return { id, excerpt, kind, messages: isOpeningValid ? [kept[0], ...pairs(kept.slice(1))] : [] };
-}
+const isDaemonCard = (c: unknown): c is DaemonCard =>
+  isRecord(c) && typeof c.id === "string" && DAEMON_IDS.includes(c.daemon as DaemonCard["daemon"]) && typeof c.text === "string" && typeof c.anchor === "string";
+const pickDaemonCard = ({ id, daemon, text, anchor }: DaemonCard): DaemonCard => ({ id, daemon, text, anchor });
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isMessage = (m: unknown): m is ChatMessage =>
@@ -234,18 +249,20 @@ function pickMessage({ role, content, pages, citations, error, isStreaming }: Ch
     role,
     content,
     ...(isRecord(pages) && { pages: pickPages(pages) }),
-    ...(Array.isArray(citations) && { citations: citations.filter(isCitation) }),
+    ...(Array.isArray(citations) && { citations: citations.filter(isCitation).map(pickCitation) }),
     ...(typeof error === "string" && { error }),
     ...(isStreaming === true && { isStreaming }),
   };
 }
 
-const isCitation = (c: unknown): c is CitationCheck =>
-  isRecord(c) &&
-  typeof c.quote === "string" &&
-  typeof c.status === "string" &&
-  Array.isArray(c.cited) &&
-  c.cited.every((n) => typeof n === "number");
+// Page cites since D38 (`pages`); a check saved before then (`cited` paragraph numbers) keeps its
+// quote and status, with no pages.
+const isCitation = (c: unknown): c is CitationCheck => isRecord(c) && typeof c.quote === "string" && typeof c.status === "string";
+const pickCitation = ({ quote, status, pages }: CitationCheck): CitationCheck => ({
+  quote,
+  status,
+  pages: Array.isArray(pages) ? pages.filter((p) => typeof p === "string") : [],
+});
 
 const pickPages = (pages: Record<string, unknown>): PageLabels =>
   Object.fromEntries(Object.entries(pages).filter((e): e is [string, string] => /^\d+$/.test(e[0]) && typeof e[1] === "string"));
