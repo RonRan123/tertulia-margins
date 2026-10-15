@@ -1,15 +1,19 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
-import { findPageRefs, type PageRef } from "@/core/page-links.ts";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { findPageRefs, pageLabel, type PageLink, type PageRef } from "@/core/page-links.ts";
 import { citedPage } from "@/core/passage.ts";
+import { LINK_METHODS } from "@/lib/page-link-view.ts";
 
-// AI text with its page cites as small links (D38): "[p. 12]" shows as "p. 12", and a click opens
-// the PDF there with the quote before it selected, matched the way the notes' page references are
-// (D33). Older replies' labelled paragraph cites ("[¶2 · p. 1]") still open their page as given.
+// AI text with its page cites as pills (D38, D45): "[p. 12]" shows as "↗ p. 12", coloured by how
+// it matched the PDF, the way the notes' page references are (D33). The cites are matched once per
+// text, together, so their exact hits teach the page offset; a click opens the PDF there with the
+// passage selected. Without a PDF they are gray and don't open. Older replies' labelled paragraph
+// cites ("[¶2 · p. 1]") still open their page as given.
 export type CiteOpener = {
   hasPdf: boolean;
-  openCite: (refs: PageRef[], index: number) => void; // refs: every cite in that piece of text
+  linkCites: (refs: PageRef[]) => PageLink[]; // refs: every cite in that piece of text
+  openLink: (link: PageLink) => void;
   openPage: (page: number) => void;
 };
 export const OpenPageContext = createContext<CiteOpener | undefined>(undefined);
@@ -31,24 +35,32 @@ export function CitedText({ text }: { text: string }) {
 }
 
 function PageCites({ text, opener }: { text: string; opener: CiteOpener }) {
-  const refs = findPageRefs(text);
+  const { hasPdf, linkCites } = opener;
+  const links = useMemo(() => {
+    const refs = findPageRefs(text);
+    return hasPdf ? linkCites(refs) : refs.map((ref): PageLink => ({ ...ref, pdfPage: ref.page, method: "page" }));
+  }, [text, hasPdf, linkCites]);
   const parts: ReactNode[] = [];
   let from = 0;
-  refs.forEach((ref, index) => {
-    parts.push(text.slice(from, ref.start));
-    const written = text.slice(ref.start, ref.end);
-    const isBracketed = written.startsWith("[");
-    const label = isBracketed ? written.slice(1, -1).replace(/^PDF\s+/i, "") : written;
+  links.forEach((link, index) => {
+    parts.push(text.slice(from, link.start));
+    const label = `↗ ${pageLabel(text.slice(link.start, link.end))}`;
     parts.push(
-      opener.hasPdf ? (
-        <button key={index} type="button" className={isBracketed ? "page-cite" : "cite-link"} title="Show this passage in the PDF" onClick={() => opener.openCite(refs, index)}>
+      hasPdf ? (
+        <button
+          key={index}
+          type="button"
+          className={`cite-pill is-${link.method}`}
+          title={`${LINK_METHODS[link.method]}: PDF page ${link.pdfPage}. Click to open.`}
+          onClick={() => opener.openLink(link)}
+        >
           {label}
         </button>
       ) : (
-        <span key={index} className={isBracketed ? "page-cite" : undefined}>{label}</span>
+        <span key={index} className="cite-pill is-page">{label}</span>
       ),
     );
-    from = ref.end;
+    from = link.end;
   });
   parts.push(text.slice(from));
   return parts;

@@ -1,77 +1,106 @@
-// The page-link layer in the notes editor (R4, D33): each page reference gets a style and a small
-// marker after it (● exact quote, ◐ word overlap, ○ page only). Decorations only: the notes' text
-// never changes. The page sends fresh links with `setPageLinks`; between sends, the marks follow
-// edits. Clicking the reference or its marker opens it (see `linkAt` and Notes).
-import { StateEffect, StateField } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
-import type { LinkMethod, PageLink } from "@/core/page-links.ts";
+// The page-link layer in the notes editor (R4, D33, D45): each page reference shows as a pill,
+// "↗ p. 42", coloured by how it was matched (exact quote, word overlap, page only). On a line the
+// selection touches the reference shows as written, so it can be edited, like live preview's
+// markup. Decorations only: the notes' text never changes. The page sends fresh links with
+// `setPageLinks`; between sends, the spans follow edits. Clicking a pill opens it (see `linkAt`).
+import { Prec, StateEffect, StateField, type Range } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { pageLabel, type LinkMethod, type PageLink } from "@/core/page-links.ts";
 
 export const setPageLinks = StateEffect.define<PageLink[]>();
 
-const MARKERS: Record<LinkMethod, { symbol: string; label: string }> = {
-  exact: { symbol: "●", label: "Quote found" },
-  overlap: { symbol: "◐", label: "Closest paragraph by shared words" },
-  page: { symbol: "○", label: "Estimated page" },
+export const LINK_METHODS: Record<LinkMethod, string> = {
+  exact: "Quote found",
+  overlap: "Closest paragraph by shared words",
+  page: "Estimated page",
 };
 
-class LinkMarker extends WidgetType {
+class Pill extends WidgetType {
   constructor(
     readonly index: number,
     readonly link: PageLink,
+    readonly label: string,
   ) {
     super();
   }
   toDOM() {
-    const { symbol, label } = MARKERS[this.link.method];
-    const marker = document.createElement("button");
-    marker.type = "button";
-    marker.className = `md-pagelink is-${this.link.method}`;
-    marker.dataset.link = String(this.index);
-    marker.textContent = symbol;
-    marker.title = `${label}: PDF page ${this.link.pdfPage}. Click to open.`;
-    marker.setAttribute("aria-label", `Open PDF page ${this.link.pdfPage} (${label.toLowerCase()})`);
-    return marker;
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = `cite-pill is-${this.link.method}`;
+    pill.dataset.link = String(this.index);
+    pill.textContent = `↗ ${this.label}`;
+    pill.title = `${LINK_METHODS[this.link.method]}: PDF page ${this.link.pdfPage}. Click to open.`;
+    return pill;
   }
-  eq(other: LinkMarker) {
-    return other.index === this.index && other.link.method === this.link.method && other.link.pdfPage === this.link.pdfPage;
+  eq(other: Pill) {
+    return other.index === this.index && other.label === this.label && other.link.method === this.link.method && other.link.pdfPage === this.link.pdfPage;
   }
   ignoreEvent() {
     return false; // let the editor's mousedown handler see clicks
   }
 }
 
-function decorate(links: PageLink[], docLength: number): DecorationSet {
-  const ranges = links
-    .filter((l) => l.end <= docLength)
-    .flatMap((link, index) => [
-      Decoration.mark({ class: `md-pageref is-${link.method}`, attributes: { "data-link": String(index) } }).range(link.start, link.end),
-      Decoration.widget({ widget: new LinkMarker(index, link), side: 1 }).range(link.end),
-    ]);
-  return Decoration.set(ranges, true);
+// Each reference's span, carrying its link; mapped through edits until fresh links arrive.
+type Spans = { links: PageLink[]; spans: DecorationSet };
+const span = (link: PageLink, index: number) => Decoration.mark({ link, index }).range(link.start, link.end);
+
+// Off the lines the selection touches (all of them while the editor isn't focused), a pill
+// replaces the reference; on them, the reference is underlined as written.
+function decorate(view: EditorView): DecorationSet {
+  const { state } = view;
+  const isEdited = (from: number, to: number) =>
+    view.hasFocus && state.selection.ranges.some((r) => state.doc.lineAt(r.from).from <= to && state.doc.lineAt(r.to).to >= from);
+  const ranges: Range<Decoration>[] = [];
+  const cursor = state.field(pageLinksField).spans.iter();
+  for (; cursor.value; cursor.next()) {
+    const { from, to } = cursor;
+    const { link, index } = cursor.value.spec as { link: PageLink; index: number };
+    const attributes = { "data-link": String(index) };
+    ranges.push(
+      isEdited(from, to)
+        ? Decoration.mark({ class: `md-pageref is-${link.method}`, attributes }).range(from, to)
+        : Decoration.replace({ widget: new Pill(index, link, pageLabel(state.sliceDoc(from, to))) }).range(from, to),
+    );
+  }
+  return Decoration.set(ranges);
 }
 
-export const pageLinksField = StateField.define<{ links: PageLink[]; decorations: DecorationSet }>({
-  create: () => ({ links: [], decorations: Decoration.none }),
+// Above live preview, so a pill wins over its hiding of "[p. 3]"'s brackets.
+const pills = Prec.high(
+  ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = decorate(view);
+      }
+      update(update: ViewUpdate) {
+        const isNewLinks = update.startState.field(pageLinksField) !== update.state.field(pageLinksField);
+        if (isNewLinks || update.docChanged || update.selectionSet || update.focusChanged) this.decorations = decorate(update.view);
+      }
+    },
+    { decorations: (plugin) => plugin.decorations },
+  ),
+);
+
+export const pageLinksField = StateField.define<Spans>({
+  create: () => ({ links: [], spans: Decoration.none }),
   update(value, tr) {
     for (const effect of tr.effects) {
-      if (effect.is(setPageLinks)) return { links: effect.value, decorations: decorate(effect.value, tr.state.doc.length) };
+      if (!effect.is(setPageLinks)) continue;
+      const links = effect.value.filter((l) => l.end <= tr.state.doc.length);
+      return { links, spans: Decoration.set(links.map(span)) };
     }
-    return tr.docChanged ? { ...value, decorations: value.decorations.map(tr.changes) } : value;
+    return tr.docChanged ? { ...value, spans: value.spans.map(tr.changes) } : value;
   },
-  provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+  provide: () => pills,
 });
 
-// The link a click opens, like a link in Obsidian's live preview: a marker always; the reference
-// text itself unless it sits on a line being edited (there a click places the caret, so the
-// reference can be changed), where ⌘/Ctrl-click still opens it.
+// The link a click opens, like a link in Obsidian's live preview: a pill always; the reference as
+// written (on a line being edited, where a click places the caret) only with ⌘/Ctrl-click.
 export function linkAt(view: EditorView, event: MouseEvent): PageLink | undefined {
-  const target = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(".md-pagelink, .md-pageref[data-link]");
+  const target = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(".cite-pill[data-link], .md-pageref[data-link]");
   if (!target) return undefined;
   const link = view.state.field(pageLinksField).links[Number(target.dataset.link)];
-  const isMarker = target.classList.contains("md-pagelink");
-  const line = view.state.doc.lineAt(view.posAtDOM(target));
-  const head = view.state.selection.main.head;
-  const isLineBeingEdited = view.hasFocus && head >= line.from && head <= line.to;
-  const isOpen = isMarker || !isLineBeingEdited || event.metaKey || event.ctrlKey;
-  return isOpen ? link : undefined;
+  const isPill = target.classList.contains("cite-pill");
+  return isPill || event.metaKey || event.ctrlKey ? link : undefined;
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { findPageRefs, linkPageRefs, pdfParagraphs } from "./page-links.ts";
+import { findPageRefs, linkPageRefs, pageLabel, pdfParagraphs } from "./page-links.ts";
 
 const refsIn = (notes: string) => findPageRefs(notes).map((r) => ({ text: notes.slice(r.start, r.end), page: r.page, isPdfPage: r.isPdfPage }));
 
@@ -90,4 +90,11 @@ test("a paragraph the import joined across a page break is split at the marker, 
 test("straight quotes pair in order; a short quote before a long one doesn't swallow the text between", () => {
   const text = 'Her "large fortune" echoes the opening line\'s "a single man in possession of a good fortune" [p. 1].';
   expect(findPageRefs(text)[0].quote).toBe("a single man in possession of a good fortune");
+});
+
+test("a reference's pill label reads the same whatever form it was written in (D45)", () => {
+  const notes = "[p. 42] p. 42 page 42 pg. 42 “three words here” (42) “three words here” — 42 [pp. 10-11] pages 10–11 [PDF p. 7] PDF p. 7";
+  expect(findPageRefs(notes).map((r) => pageLabel(notes.slice(r.start, r.end)))).toEqual([
+    "p. 42", "p. 42", "p. 42", "p. 42", "p. 42", "p. 42", "pp. 10–11", "pp. 10–11", "PDF p. 7", "PDF p. 7",
+  ]);
 });
