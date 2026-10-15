@@ -44,11 +44,10 @@ import {
   QuizIcon,
   MaximizeIcon,
   MinimizeIcon,
-  MoonIcon,
   PanelLeftIcon,
-  SunIcon,
   UploadIcon,
 } from "./components/icons";
+import { SettingsMenu } from "./components/Settings";
 import { OpenPageContext } from "./components/CitedText";
 import { PdfPane, type PdfPaneHandle } from "./components/PdfPane";
 import type { ReferenceTextHandle } from "./components/ReferenceText";
@@ -317,12 +316,14 @@ export default function Home() {
 
   // ---- Page links (R4, D33) ----
   // A layer over the notes, recomputed as they change (deferred, so typing stays smooth); never
-  // written into them. Free methods only: exact quote, word overlap, page.
+  // written into them. Free methods only: exact quote, word overlap, page. With page links off in
+  // settings (D47) the notes' references stay plain text; AI cites (citeOpener) stay clickable.
   const linkedNotes = useDeferredValue(notes);
   const pdfParas = useMemo(() => (pdfText ? pdfParagraphs(pdfText) : []), [pdfText]);
+  const isLinking = ui.pageLinks && pdfParas.length > 0;
   const pageLinks = useMemo(
-    () => ({ notes: linkedNotes, links: pdfParas.length > 0 ? linkPageRefs(findPageRefs(linkedNotes), pdfParas) : [] }),
-    [linkedNotes, pdfParas],
+    () => ({ notes: linkedNotes, links: isLinking ? linkPageRefs(findPageRefs(linkedNotes), pdfParas) : [] }),
+    [linkedNotes, pdfParas, isLinking],
   );
   const openLink = (link: PageLink) => {
     showPdf();
@@ -414,15 +415,7 @@ export default function Home() {
               {isAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           </div>
-          <button
-            type="button"
-            className="quiet icon"
-            aria-label={ui.theme === "dark" ? "Light theme" : "Dark theme"}
-            title={ui.theme === "dark" ? "Light theme" : "Dark theme"}
-            onClick={() => setUi((u) => ({ ...u, theme: u.theme === "dark" ? "light" : "dark" }))}
-          >
-            {ui.theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
+          <SettingsMenu ui={ui} onChange={(patch) => setUi((u) => ({ ...u, ...patch }))} />
         </header>
         {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
         <div className="app-body">
@@ -470,6 +463,7 @@ export default function Home() {
                   cards={daemons.cards.map((card) => ({ ...card, excerpt: card.anchor }))}
                   onChange={editNotes}
                   pageLinks={pageLinks}
+                  // S9.2 merge: gate quote autocomplete on the setting, quoteSource={ui.autocomplete ? (pdfText ?? reference) : undefined}
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
                   highlight={activeCard}
