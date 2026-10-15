@@ -34,8 +34,9 @@
   /* Cite pills (D45), by match: exact quote, shared words, page only. */
   --cite-exact: #1f5bbf;
   --cite-exact-bg: #dce8ff;
-  --cite-overlap: #4a7fd0;
-  --cite-overlap-bg: #eef4ff;
+  --cite-overlap: #1f5bbf;
+  --cite-overlap-bg: #ffffff;
+  --cite-overlap-stripe: #c9dbff;
   --cite-page: #6b7280;
   --cite-page-bg: #f0f1f3;
   --ghost: #a3a9b3; /* quote autocomplete's suggested words (D46) */
@@ -59,8 +60,9 @@
   --margin-ink: #b4bac4;
   --cite-exact: #a9c9ff;
   --cite-exact-bg: #26406a;
-  --cite-overlap: #84a9dc;
-  --cite-overlap-bg: #1d2a40;
+  --cite-overlap: #a9c9ff;
+  --cite-overlap-bg: #1c1f25;
+  --cite-overlap-stripe: #2c4670;
   --cite-page: #9ca3af;
   --cite-page-bg: #2a2e36;
   --ghost: #6b7280;
@@ -1560,8 +1562,9 @@ main[data-view="quiz"] .quiz {
 }
 
 /* A page reference in the notes or a page cite in AI text (D38, D45): a small rounded "↗ p. 12",
-   ChatPDF-style, that opens the PDF at the passage. Blue: the quote was found; light blue: the
-   closest paragraph by shared words; gray: the page alone, or no PDF to open. */
+   ChatPDF-style, that opens the PDF at the passage. Blue: the quote was found; blue and white
+   pinstripes: the closest paragraph by shared words (a partial match); gray: the page alone, or no
+   PDF to open. */
 .cite-pill {
   display: inline-block; /* keeps a link's underline around it off the pill */
   margin: 0 0.1em;
@@ -1583,7 +1586,12 @@ main[data-view="quiz"] .quiz {
 
 .cite-pill.is-overlap {
   color: var(--cite-overlap);
-  background: var(--cite-overlap-bg);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--cite-overlap-stripe) 0 3px,
+    var(--cite-overlap-bg) 3px 6px
+  );
+  box-shadow: inset 0 0 0 1px var(--cite-overlap-stripe);
 }
 
 button.cite-pill {

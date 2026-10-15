@@ -468,6 +468,7 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Why:** the colours only mean something if they mean the same thing everywhere.
 - **Cost we accept:** each AI message with cites runs the page matching once when it renders (cheap word matching, no API call).
 - **Revisit if:** long chats render slowly, or the pills crowd dense notes.
+- *Amended (2026-10-15, Ronith: light blue "doesn't look that different from dark blue"):* a word-overlap pill is slanted blue-and-white pinstripes with a thin blue outline instead of light blue.
 
 ---
 
