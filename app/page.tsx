@@ -473,6 +473,7 @@ export default function Home() {
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
                   highlight={activeCard}
+                  quoteSource={pdfText || reference}
                   renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />
               </div>

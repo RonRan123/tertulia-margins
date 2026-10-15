@@ -31,6 +31,7 @@
   --radius: 4px;
   --margin-rule: 1px solid var(--rule);
   --margin-ink: #4b5563; /* daemon remarks: softer than the reader's ink */
+  --ghost: #a3a9b3; /* quote autocomplete's suggested words (D46) */
 }
 
 :root[data-theme="dark"] {
@@ -49,6 +50,7 @@
   --ok: #7fcf8f;
   --focus: #7fb0ff;
   --margin-ink: #b4bac4;
+  --ghost: #6b7280;
 }
 
 *,
@@ -736,6 +738,12 @@ button.pill[aria-pressed="true"] {
 
 :root[data-theme="dark"] .notes-editor .cm-card-highlight {
   background: color-mix(in srgb, var(--daemon) 45%, transparent);
+}
+
+/* Quote autocomplete (D46): the book's next words, faded after the caret until Tab takes them. */
+.notes-editor .cm-ghost {
+  color: var(--ghost);
+  pointer-events: none;
 }
 
 .margin-cell > .empty {
