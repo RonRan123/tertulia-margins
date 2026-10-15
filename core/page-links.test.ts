@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { findPageRefs, linkPageRefs, pageLabel, pdfParagraphs } from "./page-links.ts";
+import { findPageRefs, linkPageRefs, pageLabel, pdfParagraphs, pillName } from "./page-links.ts";
 
 const refsIn = (notes: string) => findPageRefs(notes).map((r) => ({ text: notes.slice(r.start, r.end), page: r.page, isPdfPage: r.isPdfPage }));
 
@@ -97,4 +97,17 @@ test("a reference's pill label reads the same whatever form it was written in (D
   expect(findPageRefs(notes).map((r) => pageLabel(notes.slice(r.start, r.end)))).toEqual([
     "p. 42", "p. 42", "p. 42", "p. 42", "p. 42", "p. 42", "pp. 10–11", "pp. 10–11", "PDF p. 7", "PDF p. 7",
   ]);
+});
+
+test("a reference never spans a line break, so it can be drawn on one line (D45)", () => {
+  const cases = ["Key ideas on this page\n1. first idea", "see p.\n42 below", "pages 10 -\n11 here", "“three words here” —\n42"];
+  for (const notes of cases) {
+    for (const ref of findPageRefs(notes)) expect(notes.slice(ref.start, ref.end)).not.toContain("\n");
+  }
+  expect(findPageRefs("pages 10 -\n11 here").map((r) => [r.start, r.end])).toEqual([[0, 8]]); // "pages 10" alone
+});
+
+test("pageLabel keeps a PDF range's PDF, and pillName names the match for screen readers", () => {
+  expect(pageLabel("[PDF pp. 3–4]")).toBe("PDF pp. 3–4");
+  expect(pillName("p. 42", "exact")).toBe("Open p. 42 in the PDF (quote found)");
 });

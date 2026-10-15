@@ -10,16 +10,22 @@ import { quoteIndex, suggestQuote, type QuoteIndex } from "@/core/quote-complete
 export const setQuoteSource = StateEffect.define<string>();
 const dismissGhost = StateEffect.define<null>();
 
-const sourceField = StateField.define<{ source: string; index?: QuoteIndex }>({
-  create: () => ({ source: "" }),
-  update(value, tr) {
-    for (const effect of tr.effects) {
-      if (!effect.is(setQuoteSource) || effect.value === value.source) continue;
-      value = { source: effect.value, index: effect.value.trim() === "" ? undefined : quoteIndex(effect.value) };
-    }
-    return value;
+const sourceField = StateField.define<string>({
+  create: () => "",
+  update(source, tr) {
+    for (const effect of tr.effects) if (effect.is(setQuoteSource)) source = effect.value;
+    return source;
   },
 });
+
+// Indexed when a suggestion is first asked for, not as the source changes: the reference text
+// changes on every keystroke while the reader edits it.
+let cached: { source: string; index: QuoteIndex } | undefined;
+function indexOf(source: string): QuoteIndex | undefined {
+  if (source.trim() === "") return undefined;
+  if (cached?.source !== source) cached = { source, index: quoteIndex(source) };
+  return cached.index;
+}
 
 class GhostWidget extends WidgetType {
   constructor(readonly text: string) {
@@ -41,13 +47,13 @@ type Ghost = { pos: number; text: string };
 
 // A ghost shows only for a focused editor with a bare caret at the end of a line or before a space.
 function ghostFor(state: EditorState, hasFocus: boolean): Ghost | undefined {
-  const { index } = state.field(sourceField);
   const caret = state.selection.main;
-  if (!index || !hasFocus || state.selection.ranges.length > 1 || !caret.empty) return undefined;
+  if (!hasFocus || state.selection.ranges.length > 1 || !caret.empty) return undefined;
   const line = state.doc.lineAt(caret.head);
   const after = line.text.slice(caret.head - line.from);
   const isAtWordEnd = after === "" || /^\s/.test(after);
-  if (!isAtWordEnd) return undefined;
+  const index = isAtWordEnd ? indexOf(state.field(sourceField)) : undefined;
+  if (!index) return undefined;
   const text = suggestQuote(index, line.text.slice(0, caret.head - line.from));
   return text ? { pos: caret.head, text } : undefined;
 }

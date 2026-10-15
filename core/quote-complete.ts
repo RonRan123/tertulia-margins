@@ -19,6 +19,7 @@ export type QuoteIndex = { text: string; normalized: string; origin: number[] };
 export function quoteIndex(source: string): QuoteIndex {
   const text = source
     .replace(pageCitePattern(), " ") // page markers never show in a suggestion
+    .replace(/[_*]/g, "") // nor _italics_ or *bold* markers, which matching ignores
     .replace(/(\p{L})-[ \t]*\n\s*(\p{Ll})/gu, "$1$2") // "charis-\nma" → "charisma"
     .replace(/(\p{L})- +(\p{Ll})/gu, "$1$2") // PDF text's "charis- ma" → "charisma"
     .replace(/\s+/g, " ")

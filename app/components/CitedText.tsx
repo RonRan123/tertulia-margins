@@ -1,9 +1,8 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { findPageRefs, pageLabel, type PageLink, type PageRef } from "@/core/page-links.ts";
+import { findPageRefs, LINK_METHODS, pageLabel, pillName, type PageLink, type PageRef } from "@/core/page-links.ts";
 import { citedPage } from "@/core/passage.ts";
-import { LINK_METHODS } from "@/lib/page-link-view.ts";
 
 // AI text with its page cites as pills (D38, D45): "[p. 12]" shows as "↗ p. 12", coloured by how
 // it matched the PDF, the way the notes' page references are (D33). The cites are matched once per
@@ -44,7 +43,8 @@ function PageCites({ text, opener }: { text: string; opener: CiteOpener }) {
   let from = 0;
   links.forEach((link, index) => {
     parts.push(text.slice(from, link.start));
-    const label = `↗ ${pageLabel(text.slice(link.start, link.end))}`;
+    const page = pageLabel(text.slice(link.start, link.end));
+    const label = `↗ ${page}`;
     parts.push(
       hasPdf ? (
         <button
@@ -52,6 +52,7 @@ function PageCites({ text, opener }: { text: string; opener: CiteOpener }) {
           type="button"
           className={`cite-pill is-${link.method}`}
           title={`${LINK_METHODS[link.method]}: PDF page ${link.pdfPage}. Click to open.`}
+          aria-label={pillName(page, link.method)}
           onClick={() => opener.openLink(link)}
         >
           {label}

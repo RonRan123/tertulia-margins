@@ -94,3 +94,25 @@ test("a match at the end of the book suggests nothing", () => {
 test("an empty book suggests nothing", () => {
   expect(suggest("It is a truth", quoteIndex(""))).toBeUndefined();
 });
+
+test("emphasis markers in the book never show in a suggestion", () => {
+  const italic = quoteIndex("It is a _truth_ universally acknowledged, that a single man");
+  expect(suggest("It is a truth", italic)).toBe(" universally acknowledged,");
+  const bold = quoteIndex("It is a **truth** universally acknowledged, that a single man");
+  expect(suggest("It is a truth", bold)).toBe(" universally acknowledged,");
+});
+
+test("a match at the very start of the book, and after opening punctuation", () => {
+  expect(suggest("(It is a truth")).toBe(" universally acknowledged,");
+});
+
+test("a word split by a page marker and a line-break hyphen still joins", () => {
+  const split = quoteIndex("the power of charis-\n[PDF p. 2]\nma is to attract others");
+  expect(suggest("the power of charisma")).toBeUndefined(); // not in OPENING
+  expect(suggest("the power of charisma", split)).toBe(" is to attract others");
+});
+
+test("a real compound split at a line break is joined (accepted limitation, D46)", () => {
+  const compound = quoteIndex("we hold these truths to be self-\nevident, that all men");
+  expect(suggest("hold these truths to", compound)).toBe(" be selfevident,");
+});

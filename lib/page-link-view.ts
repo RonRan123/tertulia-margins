@@ -5,15 +5,9 @@
 // `setPageLinks`; between sends, the spans follow edits. Clicking a pill opens it (see `linkAt`).
 import { Prec, StateEffect, StateField, type Range } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-import { pageLabel, type LinkMethod, type PageLink } from "@/core/page-links.ts";
+import { LINK_METHODS, pageLabel, pillName, type PageLink } from "@/core/page-links.ts";
 
 export const setPageLinks = StateEffect.define<PageLink[]>();
-
-export const LINK_METHODS: Record<LinkMethod, string> = {
-  exact: "Quote found",
-  overlap: "Closest paragraph by shared words",
-  page: "Estimated page",
-};
 
 class Pill extends WidgetType {
   constructor(
@@ -30,6 +24,7 @@ class Pill extends WidgetType {
     pill.dataset.link = String(this.index);
     pill.textContent = `↗ ${this.label}`;
     pill.title = `${LINK_METHODS[this.link.method]}: PDF page ${this.link.pdfPage}. Click to open.`;
+    pill.setAttribute("aria-label", pillName(this.label, this.link.method));
     return pill;
   }
   eq(other: Pill) {
@@ -56,8 +51,9 @@ function decorate(view: EditorView): DecorationSet {
     const { from, to } = cursor;
     const { link, index } = cursor.value.spec as { link: PageLink; index: number };
     const attributes = { "data-link": String(index) };
+    const isOneLine = state.doc.lineAt(from).to >= to; // a plugin may not replace a line break
     ranges.push(
-      isEdited(from, to)
+      isEdited(from, to) || !isOneLine
         ? Decoration.mark({ class: `md-pageref is-${link.method}`, attributes }).range(from, to)
         : Decoration.replace({ widget: new Pill(index, link, pageLabel(state.sliceDoc(from, to))) }).range(from, to),
     );
