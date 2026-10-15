@@ -20,6 +20,7 @@ import {
   type AppState,
   type KeyValueStorage,
   type Library,
+  type UiState,
 } from "./store.ts";
 
 const KEY = "tertulia-margins:v1";
@@ -130,19 +131,30 @@ test("storage that throws never crashes: load is empty, save reports save_failed
 
 test("layout round-trips under its own key and leaves the notes' key alone", () => {
   const { storage, data } = memoryStorage();
-  saveUi(storage, { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
-  expect(loadUi(storage)).toEqual({ view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5 });
+  const ui = { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: false, pageLinks: false } as const;
+  saveUi(storage, ui);
+  expect(loadUi(storage)).toEqual(ui);
   expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
 });
 
-test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme, 60% notes", () => {
-  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6 };
+test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme, 60% notes, settings on", () => {
+  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6, autocomplete: true, pageLinks: true };
   expect(loadUi(memoryStorage().storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
   expect(loadUi(throwing)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"chat","isSidebarOpen":false,"theme":"purple"}' }).storage)).toEqual({ ...fallback, view: "chat", isSidebarOpen: false });
-  expect(() => saveUi(throwing, { view: "chat", isSidebarOpen: true, theme: "light", notesShare: 0.6 })).not.toThrow();
+  expect(() => saveUi(throwing, fallback as UiState)).not.toThrow();
+});
+
+test("settings (D47): older saved UI without them loads both on; off persists; a malformed value is on", () => {
+  const load = (json: string) => loadUi(memoryStorage({ "tertulia-margins:ui": json }).storage);
+  const old = load('{"view":"chat","isSidebarOpen":false,"theme":"dark","notesShare":0.5}');
+  expect(old).toEqual({ view: "chat", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: true, pageLinks: true });
+  expect(load('{"autocomplete":false,"pageLinks":true}')).toMatchObject({ autocomplete: false, pageLinks: true });
+  expect(load('{"autocomplete":true,"pageLinks":false}')).toMatchObject({ autocomplete: true, pageLinks: false });
+  expect(load('{"autocomplete":"off","pageLinks":0}')).toMatchObject({ autocomplete: true, pageLinks: true });
+  expect(load('{"autocomplete":null}')).toMatchObject({ autocomplete: true, pageLinks: true });
 });
 
 test("the divider's saved width is clamped to its range; a non-number falls back to 60%", () => {

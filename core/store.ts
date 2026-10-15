@@ -143,10 +143,25 @@ export type View = (typeof VIEWS)[number];
 export type Theme = "light" | "dark"; // D28: light unless the reader switches
 // notesShare: the notes' fraction of the width beside the sidebar when a pane sits beside them
 // (the draggable divider); the rest goes to the margin, PDF or chat.
-export type UiState = { view: View; isSidebarOpen: boolean; theme: Theme; notesShare: number };
+// autocomplete, pageLinks: switches in the settings gear (D47), on unless the reader turns them off.
+export type UiState = {
+  view: View;
+  isSidebarOpen: boolean;
+  theme: Theme;
+  notesShare: number;
+  autocomplete: boolean;
+  pageLinks: boolean;
+};
 export const UI_KEY = "tertulia-margins:ui";
 export const NOTES_SHARE = { min: 0.35, max: 0.75, step: 0.02 };
-export const defaultUi: UiState = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6 };
+export const defaultUi: UiState = {
+  view: "notes+margin",
+  isSidebarOpen: true,
+  theme: "light",
+  notesShare: 0.6,
+  autocomplete: true,
+  pageLinks: true,
+};
 // Rounded to 0.1%, so arrow-key steps don't pile up float noise.
 export const clampNotesShare = (share: number) =>
   Math.round(Math.min(NOTES_SHARE.max, Math.max(NOTES_SHARE.min, share)) * 1000) / 1000;
@@ -160,11 +175,14 @@ export function loadUi(storage: KeyValueStorage): UiState {
   }
   if (!isRecord(saved)) return defaultUi;
   const isKnownView = VIEWS.includes(saved.view as View);
+  const isOn = (setting: unknown) => setting !== false; // older saved UI has no settings: on
   return {
     view: isKnownView ? (saved.view as View) : defaultUi.view,
     isSidebarOpen: typeof saved.isSidebarOpen === "boolean" ? saved.isSidebarOpen : defaultUi.isSidebarOpen,
     theme: saved.theme === "dark" ? "dark" : "light",
     notesShare: Number.isFinite(saved.notesShare) ? clampNotesShare(saved.notesShare as number) : defaultUi.notesShare,
+    autocomplete: isOn(saved.autocomplete),
+    pageLinks: isOn(saved.pageLinks),
   };
 }
 
