@@ -10,6 +10,7 @@ import type { PageLink } from "@/core/page-links.ts";
 import { listKeys } from "@/lib/list-keys.ts";
 import { livePreview, markdownLanguage } from "@/lib/live-preview.ts";
 import { linkAt, pageLinksField, setPageLinks } from "@/lib/page-link-view.ts";
+import { quoteComplete, setQuoteSource } from "@/lib/quote-complete-view.ts";
 
 // The notes (D25): one markdown file in one CodeMirror editor, rendered in place like Obsidian's
 // live preview. The notes stay one string, so store, export and the AI see exactly what is typed.
@@ -30,6 +31,9 @@ type NotesProps<C extends Card> = {
   onOpenLink: (link: PageLink) => void;
   // The card the reader clicked: its words in the notes are marked in its colour (D37).
   highlight?: { id: string; colour: string };
+  // D46: the book text quotes autocomplete from (the PDF's text, else the reference text);
+  // undefined or empty turns it off.
+  quoteSource?: string;
 };
 
 // The marked words of the clicked card. A decoration, not a selection: it shows while the editor
@@ -55,7 +59,7 @@ const highlightField = StateField.define<DecorationSet>({
 const EMPTY_COPY = "Write what you notice as you read. When you pause, the daemons in the margin may answer.";
 const CARD_GAP = 12; // px, var(--s3): between groups pushed together, and below the last one
 
-export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, renderMargin, pageLinks, onOpenLink, highlight }: NotesProps<C>) {
+export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, renderMargin, pageLinks, onOpenLink, highlight, quoteSource }: NotesProps<C>) {
   const host = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
@@ -83,6 +87,7 @@ export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, re
           livePreview,
           pageLinksField,
           highlightField,
+          quoteComplete,
           EditorView.domEventHandlers({
             mousedown: (event, view) => {
               const link = linkAt(view, event);
@@ -129,6 +134,10 @@ export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, re
     if (!editor || editor.state.doc.toString() !== pageLinks.notes) return;
     editor.dispatch({ effects: setPageLinks.of(pageLinks.links) });
   }, [pageLinks]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: setQuoteSource.of(quoteSource ?? "") });
+  }, [quoteSource]);
 
   const { rows } = layoutRows(notes, cards);
   const withCards = rows.filter((row) => row.cards.length > 0);

@@ -38,6 +38,7 @@
   --cite-overlap-bg: #eef4ff;
   --cite-page: #6b7280;
   --cite-page-bg: #f0f1f3;
+  --ghost: #a3a9b3; /* quote autocomplete's suggested words (D46) */
 }
 
 :root[data-theme="dark"] {
@@ -62,6 +63,7 @@
   --cite-overlap-bg: #1d2a40;
   --cite-page: #9ca3af;
   --cite-page-bg: #2a2e36;
+  --ghost: #6b7280;
 }
 
 *,
@@ -800,6 +802,12 @@ button.pill[aria-pressed="true"] {
 
 :root[data-theme="dark"] .notes-editor .cm-card-highlight {
   background: color-mix(in srgb, var(--daemon) 45%, transparent);
+}
+
+/* Quote autocomplete (D46): the book's next words, faded after the caret until Tab takes them. */
+.notes-editor .cm-ghost {
+  color: var(--ghost);
+  pointer-events: none;
 }
 
 .margin-cell > .empty {

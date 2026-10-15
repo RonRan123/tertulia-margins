@@ -461,10 +461,10 @@ export default function Home() {
                   cards={daemons.cards.map((card) => ({ ...card, excerpt: card.anchor }))}
                   onChange={editNotes}
                   pageLinks={pageLinks}
-                  // S9.2 merge: gate quote autocomplete on the setting, quoteSource={ui.autocomplete ? (pdfText ?? reference) : undefined}
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
                   highlight={activeCard}
+                  quoteSource={ui.autocomplete ? pdfText || reference : undefined}
                   renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />
               </div>
