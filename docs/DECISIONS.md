@@ -460,6 +460,39 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D45. Cite pills: page references and AI cites as coloured pills, ChatPDF-style (amends D33, D38)
+- **Status:** Accepted (2026-10-15, Ronith)
+- **Context:** Sprint 9. Page references in the notes were a dotted underline plus a ●/◐/○ marker (D33), and AI cites a small gray "p. 12" (D38). Ronith wants them wrapped in a bubble like ChatPDF's "↗ 2", still coloured by match strength.
+- **Alternatives:** pills in the notes only (AI cites unchanged); pills everywhere with AI cites one neutral colour (no up-front matching).
+- **Rules:** every page reference in the notes and every page cite in AI text (chat, margin cards, quiz explanations) shows as a rounded pill, "↗ p. 42": blue for an exact quote, light blue for word overlap, gray for page only. AI cites are matched when their message renders (same free matching as the notes, once per message). The ●/◐/○ markers go. On the notes line holding the caret the raw `[p. 42]` shows, as live preview does for other markup. Decorations only: the markdown never changes.
+- **Why:** the colours only mean something if they mean the same thing everywhere.
+- **Cost we accept:** each AI message with cites runs the page matching once when it renders (cheap word matching, no API call).
+- **Revisit if:** long chats render slowly, or the pills crowd dense notes.
+
+---
+
+## D46. Quote autocomplete: ghost text from the book once 4 typed words match (amends D36)
+- **Status:** Accepted (2026-10-15, Ronith)
+- **Context:** Sprint 9. Transcribing a quote from a paper book means typing it all; the book's text is already in the browser. Ronith: as he types "charisma is the power of..", show the likely next words from the book, Tab to accept and see the next ones, ignoring PDF formatting (doubled spaces, hyphens).
+- **Alternatives:** only inside quote marks or a `>` blockquote, from 3 words; anywhere from 3 words.
+- **Rules:** once the last 4+ words before the caret match the book exactly (normalized like `checkCitations`: case, curly quotes, whitespace), faded ghost text shows the next ~5 words, stopping at punctuation. The source is the PDF's whole text, else the reference text; line-break hyphens are joined and runs of spaces collapsed. If the book continues the phrase more than one way, only the words all matches share show. Tab accepts and the next words show; Esc dismisses; Tab indents a list item (D36) only when no ghost shows. Plain code in `core/`, no AI call, no new dependency. Ghost text is a decoration until accepted; accepted words are typed by the reader's keypress, so they are the reader's own (D6 holds).
+- **Why:** Ronith's own example has no quote mark, so a quotes-only trigger misses the case he described; 4 exact words almost always means quoting.
+- **Cost we accept:** it may fire on a common phrase in the reader's own writing (Esc, or the S9.3 toggle).
+- **Revisit if:** it fires on the reader's own thoughts often, or misses quotes PDF text garbles ("c aprice").
+
+---
+
+## D47. A settings gear: quote autocomplete, page links and theme (amends D26, D28)
+- **Status:** Accepted (2026-10-15, Ronith)
+- **Context:** Sprint 9. Ronith wants a gear at the top right to switch quote autocomplete (D46) and the notes' page links (D33, D45) on and off. The bar ended in a moon/sun theme button (D28).
+- **Alternatives:** the gear holds only the two feature toggles and the moon button stays.
+- **Rules:** a gear at the right end of the top bar opens a small menu with three switches: Quote autocomplete, Page links, Dark theme; the moon/sun button goes. Saved per browser with the view (`UiState`), not per book; both features on by default, light theme by default (D28). Page links off: the notes' page references show as plain text (no pills, no clicks, no matching); AI cites stay clickable pills, as they are the AI's evidence. Autocomplete off: no ghost text, Tab only indents.
+- **Why:** one quiet place for rarely changed settings keeps the bar to one icon (D26, D30).
+- **Cost we accept:** switching theme takes two clicks instead of one.
+- **Revisit if:** testers look for the theme switch and don't find it, or the menu grows past a handful of switches.
+
+---
+
 ## Template
 
 ```
