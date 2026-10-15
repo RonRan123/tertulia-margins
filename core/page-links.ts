@@ -162,3 +162,11 @@ export function linkHighlight(link: PageLink): string | undefined {
   if (!link.match) return undefined;
   return link.method === "exact" ? link.match : link.match.split(/\s+/).slice(0, 6).join(" ");
 }
+
+// What a reference shows as a pill (D45), whatever form it was written in: "[p. 42]", "page 42"
+// and “…” (42) all read "p. 42"; a range "pp. 10–11"; a PDF page keeps its "PDF".
+export function pageLabel(written: string): string {
+  const [first, last] = written.match(/\d+/g) ?? [];
+  const pages = last ? `pp. ${first}–${last}` : `p. ${first}`;
+  return /^\[?PDF\b/i.test(written) ? `PDF ${pages}` : pages;
+}

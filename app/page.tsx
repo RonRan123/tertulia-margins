@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink, type PageRef } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
@@ -328,13 +328,11 @@ export default function Home() {
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
-  // A page cite in AI text (D38): linked like the notes' references, together with the other cites
-  // of that text so their exact hits teach the page offset.
-  const citeOpener = {
-    hasPdf: pdfParas.length > 0,
-    openCite: (refs: PageRef[], index: number) => openLink(linkPageRefs(refs, pdfParas)[index]),
-    openPage,
-  };
+  // A page cite in AI text (D38, D45): linked like the notes' references, together with the other
+  // cites of that text so their exact hits teach the page offset. Stable while the PDF is, so each
+  // message links its cites once.
+  const linkCites = useCallback((refs: PageRef[]) => linkPageRefs(refs, pdfParas), [pdfParas]);
+  const citeOpener = { hasPdf: pdfParas.length > 0, linkCites, openLink, openPage };
 
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
   useEffect(() => {
