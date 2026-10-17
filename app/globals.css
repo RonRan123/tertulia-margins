@@ -210,10 +210,10 @@ main:not([data-sidebar-open]) .sidebar,
   background: var(--pill);
 }
 
-/* D49: a quiet link at the end of the book list. */
-.restore-examples {
-  align-self: flex-start;
-  margin: var(--s2) var(--s2) 0;
+/* D49: a quiet link below the settings switches. */
+button.link.restore-examples {
+  display: block;
+  margin: var(--s1) var(--s3) 6px;
   color: var(--ink-soft);
   font-size: 0.85em;
 }

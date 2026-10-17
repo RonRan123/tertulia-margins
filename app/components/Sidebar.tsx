@@ -29,12 +29,11 @@ type SidebarProps = {
   onChoosePages: () => void;
   canExport: boolean;
   onExport: () => void;
-  onRestoreExamples: () => void; // D49: put the example books back as shipped
 };
 
 const BUSY_TITLE = "Wait for the current reply to finish";
 
-export function Sidebar({ id, books, currentId, isBusy, actions, reference, onReferenceChange, referenceRef, onAddPdf, onChoosePages, canExport, onExport, onRestoreExamples }: SidebarProps) {
+export function Sidebar({ id, books, currentId, isBusy, actions, reference, onReferenceChange, referenceRef, onAddPdf, onChoosePages, canExport, onExport }: SidebarProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [renaming, setRenaming] = useState<string>(); // id of the book whose title is being edited
   const [confirmingDelete, setConfirmingDelete] = useState<string>();
@@ -156,9 +155,6 @@ export function Sidebar({ id, books, currentId, isBusy, actions, reference, onRe
           );
         })}
       </ul>
-      <button type="button" className="link restore-examples" disabled={isBusy} title={isBusy ? BUSY_TITLE : undefined} onClick={onRestoreExamples}>
-        Restore example books
-      </button>
     </nav>
   );
 }

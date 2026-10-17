@@ -517,7 +517,8 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 - **Rules:**
   - *Books:* "Example: Politics as a Vocation" (Gerth & Mills, Oxford University Press 1946, PDF from Ronith; his own notes; his Author card) and "Example: Pride and Prejudice (ch. I–VIII)" (Project Gutenberg #1342, typeset to a 48-page PDF; sample notes labelled "written for this example, not a real reader's"; three real daemon cards from one run each). Files in `public/examples/` (`<name>.json`: title, notes, cards, chat; `<name>.pdf`).
   - *Seeding:* once per browser (`tertulia-margins:examples`); the reference text comes from each PDF with the reader's own import; the notes count as already read, so the daemons answer only what the visitor adds; a first visit opens the Weber example.
-  - *Editable:* ordinary books; **Restore example books** at the foot of the sidebar puts them back as shipped (after a confirm).
+  - *Editable:* ordinary books; **Restore example books** in the settings gear (D47) puts them back as shipped (after a confirm) and moves them back to the top.
+  - *Order (Ronith, 2026-10-17):* Pride and Prejudice above Politics as a Vocation, both above the reader's own books, re-ordered on every load (`examplesFirst`) so browsers seeded earlier catch up; a first visit still opens Politics as a Vocation (real notes).
   - *CLAUDE.md's book-text rule:* these two are the exception: public-domain text and the permitted Weber translation live in the public repo and site.
 - **Why:** a visitor sees the whole loop (notes, cards in the margin, page links into the PDF) before writing a word.
 - **Cost we accept:** ~1 MB of PDFs fetched on a first visit; the Weber permission must cover the public GitHub repo as well as the site; the P&P cards are a snapshot of one run.

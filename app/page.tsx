@@ -33,7 +33,7 @@ import {
 import { DAEMONS, freshDaemonState, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
 import { freshQuiz, type QuizState } from "@/core/quiz.ts";
 import { diffLines, quizEvents } from "@/core/trace.ts";
-import { EXAMPLES, EXAMPLES_KEY, withExamples } from "@/core/examples.ts";
+import { EXAMPLES, EXAMPLES_KEY, examplesFirst, FIRST_EXAMPLE_ID, withExamples } from "@/core/examples.ts";
 import { installExamples } from "@/lib/examples.ts";
 import { flush, setTraceBook, trace } from "@/lib/trace.ts";
 import { Chat } from "./components/Chat";
@@ -219,7 +219,9 @@ export default function Home() {
     } catch {
       // storage blocked: not a first visit we can do anything with
     }
-    const opened = loadLibrary(browserStorage);
+    const loaded = loadLibrary(browserStorage);
+    const opened = examplesFirst(loaded); // D49: the examples on top, in order, even if seeded before
+    if (opened.books.some((b, i) => b !== loaded.books[i])) saveLibrary(browserStorage, opened);
     currentKey.current = bookKey(opened.currentId);
     setLibrary(opened);
     show(loadState(browserStorage, currentKey.current));
@@ -364,7 +366,7 @@ export default function Home() {
     try {
       const installed = await installExamples(browserStorage);
       const latest = loadLibrary(browserStorage);
-      const openId = isFirstVisit.current === true && !isRestore ? installed[0].id : latest.currentId;
+      const openId = isFirstVisit.current === true && !isRestore ? FIRST_EXAMPLE_ID : latest.currentId;
       const isOpenRestored = isRestore && EXAMPLES.some((e) => e.id === latest.currentId);
       openLibrary(withExamples(latest, installed, openId), isOpenRestored);
       browserStorage.setItem(EXAMPLES_KEY, "1");
@@ -376,6 +378,7 @@ export default function Home() {
     }
   }
   const restoreExamples = () => {
+    if (isStreaming) return showStatus("Wait for the current reply to finish, then restore the example books.");
     if (!window.confirm("Restore the example books as shipped? Your changes to them will be lost.")) return;
     trace({ kind: "book", action: "restore-examples", title: "examples" });
     void seedExamples(true);
@@ -520,6 +523,7 @@ export default function Home() {
               trace({ kind: "settings", change: JSON.stringify(patch) });
               setUi((u) => ({ ...u, ...patch }));
             }}
+            onRestoreExamples={restoreExamples}
           />
         </header>
         {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
@@ -536,7 +540,6 @@ export default function Home() {
             canExport={!isNotesEmpty}
             onAddPdf={addPdf}
         onChoosePages={choosePages}
-            onRestoreExamples={restoreExamples}
             onExport={() => {
               const file = exportMarkdown(notes, reference, new Date());
               download(file.filename, file.content);

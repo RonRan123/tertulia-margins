@@ -1,14 +1,15 @@
 "use client";
 
 // The settings gear (D47): a small menu of switches at the right end of the top bar. Opens on a
-// click; Escape or a click outside closes it; flipping a switch leaves it open.
+// click; Escape or a click outside closes it; flipping a switch leaves it open. Below the switches,
+// "Restore example books" (D49) puts the example books back as shipped (the page confirms first).
 import { useEffect, useRef, useState } from "react";
 import type { UiState } from "@/core/store.ts";
 import { GearIcon } from "./icons";
 
 type Settings = Pick<UiState, "autocomplete" | "pageLinks" | "theme">;
 
-export function SettingsMenu({ ui, onChange }: { ui: Settings; onChange: (patch: Partial<Settings>) => void }) {
+export function SettingsMenu({ ui, onChange, onRestoreExamples }: { ui: Settings; onChange: (patch: Partial<Settings>) => void; onRestoreExamples: () => void }) {
   const [isOpen, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const gear = useRef<HTMLButtonElement>(null);
@@ -60,6 +61,16 @@ export function SettingsMenu({ ui, onChange }: { ui: Settings; onChange: (patch:
               <input type="checkbox" role="switch" checked={isOn} onChange={toggle} />
             </label>
           ))}
+          <button
+            type="button"
+            className="link restore-examples"
+            onClick={() => {
+              setOpen(false);
+              onRestoreExamples();
+            }}
+          >
+            Restore example books
+          </button>
         </div>
       )}
     </div>
