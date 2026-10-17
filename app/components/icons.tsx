@@ -135,3 +135,13 @@ export const UploadIcon = () => (
     <path d="M12 3v12" />
   </Icon>
 );
+
+// The logo (also app/icon.svg, the favicon): two half-arrows, blue and red, reaching for each other.
+export const Logo = ({ size = 20 }: { size?: number }) => (
+  <svg className="logo" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+    <g fill="none" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M32 5V26L44 14" stroke="#2f6fd6" />
+      <path d="M32 59V38L20 50" stroke="#d8443a" />
+    </g>
+  </svg>
+);

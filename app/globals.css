@@ -183,6 +183,9 @@ main:not([data-sidebar-open]) .sidebar,
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0 var(--s2) 0 var(--s1);
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -2042,7 +2045,7 @@ dialog.reference form button {
   max-width: 34rem;
   padding: clamp(24px, 6vw, 72px);
 }
-.landing-wordmark { margin: 0 0 2rem; font-weight: 600; color: var(--ink-soft); letter-spacing: 0.02em; }
+.landing-wordmark { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 2rem; font-weight: 600; color: var(--ink-soft); letter-spacing: 0.02em; }
 .landing h1 { margin: 0 0 0.75rem; font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1.15; }
 .landing-lede { margin: 0 0 1.5rem; font-size: 1.125rem; color: var(--ink); }
 .landing-points { margin: 0 0 2rem; padding-left: 1.1rem; color: var(--ink-soft); line-height: 1.5; }

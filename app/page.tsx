@@ -45,6 +45,7 @@ import {
   BookIcon,
   ChatIcon,
   FileTextIcon,
+  Logo,
   MarginIcon,
   QuizIcon,
   MaximizeIcon,
@@ -478,7 +479,10 @@ export default function Home() {
         style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
       >
         <header className="app-header">
-          <span className="brand">tertulia</span>
+          <span className="brand">
+            <Logo />
+            tertulia
+          </span>
           <button
             type="button"
             className="quiet icon"
