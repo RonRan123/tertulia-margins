@@ -773,6 +773,49 @@ button.pill[aria-pressed="true"] {
   color: var(--ink-soft);
 }
 
+/* ***, --- and ___ off the line being edited: a thin rule across the column. */
+.md-hr {
+  display: inline-block;
+  width: 100%;
+  vertical-align: middle;
+  border-top: 1px solid var(--rule);
+}
+
+.md-task {
+  margin: 0 0.4em 0 0;
+  vertical-align: -0.1em;
+  cursor: pointer;
+}
+
+/* A checked task, as Obsidian draws it: struck through and softer. */
+.md-task-done {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+
+.md-image {
+  display: block;
+  max-width: 100%;
+  margin: var(--s2) 0;
+}
+
+.md-table {
+  border-collapse: collapse;
+  margin: var(--s2) 0;
+  cursor: text;
+}
+
+.md-table th,
+.md-table td {
+  padding: 0.25em 0.75em;
+  border: 1px solid var(--rule);
+  text-align: left;
+}
+
+.md-table th {
+  font-weight: 600;
+}
+
 /* A list item's indent and marker boxes (lib/live-preview.ts): fixed widths, so the line's
    hanging indent (.md-li, set inline) lines its wrapped lines up under the item's text. */
 .md-listbox {

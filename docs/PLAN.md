@@ -123,6 +123,8 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
   - *Done 2026-10-15:* 19 core tests; headless Chrome: ghost, Tab chains, Esc, Tab indents a list without a ghost, hyphen joined; ~0.3 ms a keystroke on a 1 MB book, index built on the first suggestion. `_`/`*` markers stripped from suggestions (review).
 ### S9.3: settings gear (D47)
 - [x] A gear at the right end of the bar with switches for Quote autocomplete, Page links and Dark theme (the moon button goes), saved in `UiState`. **Verify:** store test (old saved UI loads with both on); headless Chrome: page links off shows plain references and AI cites still open the PDF; autocomplete off shows no ghost and Tab indents; theme switches; settings survive a reload; tests, lint, build green.
+### S9.4: the rest of Obsidian's markdown in live preview (Ronith, 2026-10-15)
+- [x] Rules (`***`, `---`, `___`), setext headings, task checkboxes, images and tables render like Obsidian's live preview; raw on the caret's line (a table: anywhere in it). **Verify:** headless Chrome (`.scratch/md-preview.mjs`): each renders unfocused, shows raw under the caret, a checkbox click flips only `[ ]`→`[x]`, a table click shows it as written, notes restored byte-identical; tests, lint, build green.
 
 ## Sprint 10: traces and example books (Ronith, 2026-10-17)
 **Goal:** every reader action and agent output can be read as a timeline (the harness scorecard's first P1 gap), and visitors start with two example books instead of a blank page.
