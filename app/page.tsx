@@ -76,7 +76,7 @@ const STATUS_MS = 5000;
 const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
 
 // The view (D22, D26) is two choices: what sits beside the notes (margin, quiz, PDF or chat), and
-// whether it shows alone. Margin "alone" means the notes alone.
+// whether it shows alone. The notes go full screen from their own ⤢ ("notes"), not the bar's.
 type Side = "margin" | "quiz" | "pdf" | "chat";
 const SIDES: { side: Side; label: string; icon: ReactNode }[] = [
   { side: "margin", label: "Margin", icon: <MarginIcon /> },
@@ -88,6 +88,7 @@ const sideOf = (view: View): Side => (view.endsWith("pdf") ? "pdf" : view.endsWi
 const isAlone = (view: View) => !view.startsWith("notes+");
 const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
+const isNotesAlone = (view: View) => view === "notes";
 
 // Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
 function download(filename: string, content: string) {
@@ -179,6 +180,13 @@ export default function Home() {
     if (view !== ui.view) trace({ kind: "view", view });
     if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
     setUi((u) => ({ ...u, view }));
+  };
+  // The side to bring back when the notes leave full screen (this tab only; after a reload, the margin).
+  const lastSide = useRef<Side>("margin");
+  const toggleNotesAlone = () => {
+    if (isNotesAlone(ui.view)) return showView(viewOf(lastSide.current, false));
+    lastSide.current = sideOf(ui.view);
+    showView("notes");
   };
   const setSidebarOpen = (isSidebarOpen: boolean) => setUi((u) => ({ ...u, isSidebarOpen }));
   // The dialog lives in the sidebar, so a closed sidebar opens first (it renders nothing while hidden).
@@ -447,6 +455,10 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.dataset.theme = ui.theme;
   }, [ui.theme]);
+  const bookTitle = currentBook?.title;
+  useEffect(() => {
+    document.title = bookTitle ? `Tertulia | ${bookTitle}` : "Tertulia";
+  }, [bookTitle]);
 
   const isNotesEmpty = notes.trim() === "";
   const isUnreadShown = hasUnread && !showsChat(ui.view);
@@ -503,9 +515,9 @@ export default function Home() {
                   key={side}
                   type="button"
                   className="quiet pill"
-                  aria-pressed={sideOf(ui.view) === side}
+                  aria-pressed={!isNotesAlone(ui.view) && sideOf(ui.view) === side}
                   aria-label={hasDot ? `${label}, new reply` : label}
-                  onClick={() => showView(viewOf(side, isAlone(ui.view)))}
+                  onClick={() => showView(viewOf(side, !isNotesAlone(ui.view) && isAlone(ui.view)))}
                 >
                   {icon}
                   <span className="pill-label">{label}</span>
@@ -516,12 +528,13 @@ export default function Home() {
             <button
               type="button"
               className="quiet icon pill"
-              aria-pressed={isAlone(ui.view)}
-              title={isAlone(ui.view) ? "Show beside the notes" : sideOf(ui.view) === "margin" ? "Notes alone" : "Show alone"}
+              aria-pressed={isAlone(ui.view) && !isNotesAlone(ui.view)}
+              disabled={sideOf(ui.view) === "margin"} // the margin has nothing to show alone; the notes have their own ⤢
+              title={sideOf(ui.view) === "margin" ? "Pick Quiz, PDF or Chat to show it alone" : isAlone(ui.view) ? "Show beside the notes" : "Show alone"}
               aria-label="Show alone"
               onClick={() => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)))}
             >
-              {isAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
+              {isAlone(ui.view) && !isNotesAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           </div>
           <SettingsMenu
@@ -558,6 +571,16 @@ export default function Home() {
             {/* The view decides (CSS, from main's data-view) which of the panes and the side pane show. */}
             <div className="workspace">
               <div className="panes">
+                <button
+                  type="button"
+                  className="quiet icon notes-alone"
+                  aria-pressed={isNotesAlone(ui.view)}
+                  aria-label="Notes full screen"
+                  title={isNotesAlone(ui.view) ? "Show beside the notes" : "Notes full screen"}
+                  onClick={toggleNotesAlone}
+                >
+                  {isNotesAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
+                </button>
                 {!hasReference && (
                   <p className="empty-reference">
                     Add the chapter you&apos;re reading so the AI can check what it says.{" "}

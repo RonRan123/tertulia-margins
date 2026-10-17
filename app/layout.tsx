@@ -6,7 +6,7 @@ import "./globals.css";
 // monospace for code. Nothing is downloaded; globals.css holds the stacks.
 
 export const metadata: Metadata = {
-  title: "tertulia-margins",
+  title: "Tertulia",
   description: "A note-first AI reading partner",
 };
 

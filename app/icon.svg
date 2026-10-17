@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Two hands reaching across a stained-glass oval: a simplified take on the Creation of Adam window. -->
+  <defs>
+    <clipPath id="glass"><ellipse cx="32" cy="32" rx="25" ry="19"/></clipPath>
+  </defs>
+  <ellipse cx="32" cy="32" rx="30.5" ry="24" fill="#7f8b93" stroke="#1d2125" stroke-width="2.5"/>
+  <ellipse cx="32" cy="32" rx="25" ry="19" fill="#d9e5f2" stroke="#1d2125" stroke-width="2"/>
+  <g clip-path="url(#glass)" stroke="#1d2125" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M28 12 C29 17 25 20 24 23 M38 12 C37 18 41 21 44 26 M30 40 C31 45 29 48 30 52 M41 41 C40 45 42 48 41 52" fill="none" stroke-width="1.4"/>
+    <!-- left hand: arm, relaxed fingers drooping, index reaching -->
+    <path d="M4 24 C11 22 17 23 21 26 L29.5 30.5 C31 31.3 30.4 33.2 28.8 32.9 L24 32 L25.5 37.5 C26 39 24.2 39.8 23.4 38.4 L20.5 34.5 C18 36.5 14 37.5 10 37.5 L4 37.5 Z" fill="#b5856a" stroke-width="1.8"/>
+    <path d="M21 26 C21.5 28.5 22.5 30.5 24 32" fill="none" stroke-width="1.2"/>
+    <!-- right hand: arm, index pointing, fingers curled below -->
+    <path d="M60 27 C54 26 48 27 44 29.5 L35 31.6 C33.3 32 33.6 34.1 35.3 34 L40.5 33.6 L39.5 38.5 C39.2 40 41.1 40.6 41.7 39.2 L43.8 35.6 C46 38.5 50 39.5 54 39 L60 38.5 Z" fill="#a8775c" stroke-width="1.8"/>
+    <path d="M44 29.5 C42.8 31 41.5 32.6 40.5 33.6" fill="none" stroke-width="1.2"/>
+  </g>
+</svg>

@@ -1827,6 +1827,16 @@ main:not([data-view="notes+margin"]) .margin-cell {
   display: none;
 }
 
+/* The notes' own full-screen toggle: pinned to the pane's top right as it scrolls, taking no room. */
+.notes-alone {
+  position: sticky;
+  top: var(--s2);
+  z-index: 4;
+  align-self: flex-end;
+  flex: none;
+  margin: var(--s2) var(--s2) -2rem 0;
+}
+
 .chat {
   display: flex;
   flex-direction: column;

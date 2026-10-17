@@ -1,5 +1,7 @@
 # Brain-extension strategy (Claude, 2026-10-15)
 
+> **Updated 2026-10-16:** Ronith made daemons the core value and set a five-stage loop. That replaces this memo's "daemons as a supporting act" framing; see [reading-loop-and-daemon-harness.md](reading-loop-and-daemon-harness.md).
+
 Recommendations only; nothing is decided until it goes through `/decide`. Based on the docs, `prompts/` and `core/` as of commit 2dbe5ad.
 
 ## 1. Verdict
