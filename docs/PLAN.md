@@ -132,6 +132,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - [x] `public/examples/` (two JSON + two PDFs), `core/examples.ts`, `lib/examples.ts`, seeding once per browser, **Restore example books** in the settings gear (moved from the sidebar, Ronith); Pride and Prejudice listed first. **Verify:** built-in browser with cleared storage: a first visit opened "Example: Politics as a Vocation" with Ronith's notes, linked page pills and The Author's card; the P&P example showed the labelled sample notes, pills and two cards beside their lines.
 - *Seen while building:* on the sample note that copied `daemon-role.md`'s own Darcy example, both daemons answered with that example's remarks nearly word for word (eval case); the Devil's Advocate wrote in the first person as the book ("I separate three grounds…"), the Author's voice (eval case).
 
+### S10.3: Show/Hide reactions, shimmer (D50)
+- [x] Toggle first in the margin's panel (hidden: no cards, no timers, no runs, a run out is cancelled; remembered per browser); a new card shimmers 1–2 s (random) then fades in. A 30-minute trigger was built and dropped the same day (Ronith). **Verify:** store test (old UI loads with reactions shown; hidden persists); 193 tests, lint, build green. *Browser check pending:* the local dev server has the invite gate on.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

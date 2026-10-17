@@ -526,6 +526,20 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D50. Show/Hide reactions, and new cards that shimmer in
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** Ronith wants control over when the margin speaks: a toggle at the top of the margin, nothing running in the background when it's off, and new reactions that arrive rather than pop in.
+- **Alternatives:** the toggle only hiding cards while runs continue; no delay before a card shows; a third trigger, reading any new content after 30 minutes however little (built, then dropped by Ronith the same day: "the 10 lines quota and react notes button are good enough").
+- **Rules:**
+  - *Toggle:* **Hide reactions / Show reactions**, first in the margin's panel, remembered per browser (`UiState.reactions`, on by default). Hidden: the cards and their highlight disappear, **React to notes** goes, and the daemons do nothing: no wait timers, no runs, and a run already out is cancelled. Showing them again resumes after the next pause.
+  - *When they read:* unchanged from D37: 10 new lines of the reader's own and a 25 s pause, or **React to notes**.
+  - *Shimmer:* a new card (from a run or a saved runner-up) shows as a shimmering placeholder in its place for a random 1–2 s, then fades in; the screen-reader announcement waits for it. Cards already there on load show at once. Reduced motion: no animation, same delay.
+- **Why:** the reader decides whether the margin is live; a short wait signals that someone is responding.
+- **Cost we accept:** the delay adds 1–2 s to every new card.
+- **Revisit if:** testers miss the toggle, or short notes never get a reaction because they don't reach 10 lines.
+
+---
+
 ## Template
 
 ```

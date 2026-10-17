@@ -150,6 +150,12 @@ export default function Home() {
     daemons,
     setDaemons,
     pausedReason: !hasReference ? "add reference text first." : isTooLong ? "the reference text is over the limit." : undefined,
+    isShown: ui.reactions,
+    setShown: (reactions) => {
+      trace({ kind: "settings", change: JSON.stringify({ reactions }) });
+      if (!reactions) setActiveCard(undefined);
+      setUi((u) => ({ ...u, reactions }));
+    },
   });
 
   // A status message clears itself after a few seconds, or on the next notes edit.
@@ -569,12 +575,12 @@ export default function Home() {
                 )}
                 <Notes
                   notes={notes}
-                  cards={daemons.cards.map((card) => ({ ...card, excerpt: card.anchor }))}
+                  cards={ui.reactions ? daemons.cards.map((card) => ({ ...card, excerpt: card.anchor })) : []}
                   onChange={editNotes}
                   pageLinks={pageLinks}
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
-                  highlight={activeCard}
+                  highlight={ui.reactions ? activeCard : undefined}
                   quoteSource={ui.autocomplete ? pdfText || reference : undefined}
                   renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />

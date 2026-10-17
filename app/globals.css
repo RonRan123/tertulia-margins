@@ -576,6 +576,68 @@ button.pill[aria-pressed="true"] {
   opacity: 0.55;
 }
 
+/* D50: Show/Hide reactions, the first thing in the margin's panel. */
+.reactions-toggle {
+  justify-self: start;
+  padding: 2px var(--s2);
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.reactions-toggle:hover {
+  background: var(--paper);
+}
+
+/* D50: a new card shimmers for 1–2 s where it will appear, then fades in. */
+.daemon-card.shimmer {
+  display: grid;
+  gap: 6px;
+  padding-block: 4px;
+}
+
+.shimmer-line {
+  display: block;
+  height: 0.65em;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--sheet) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.shimmer-line.short {
+  width: 40%;
+  background-color: color-mix(in srgb, var(--daemon) 35%, var(--rule));
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--daemon) 35%, var(--rule)) 25%, var(--sheet) 50%, color-mix(in srgb, var(--daemon) 35%, var(--rule)) 75%);
+}
+
+.shimmer-line:last-child {
+  width: 75%;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.daemon-card:not(.shimmer) {
+  animation: card-in 0.35s ease-out;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-line,
+  .daemon-card:not(.shimmer) {
+    animation: none;
+  }
+}
+
 .margin-group {
   position: absolute;
   top: 0;
