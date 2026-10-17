@@ -1,10 +1,10 @@
 // Usage: npm run traces [-- <YYYY-MM-DD>]
 // Downloads the hosted app's traces (D48) from Vercel Blob and renders one markdown file per session
-// into .scratch/traces/hosted/<day>/. Needs BLOB_READ_WRITE_TOKEN in .env.local (`vercel env pull`).
+// into .scratch/traces/hosted/<day>/. Needs BLOB_READ_WRITE_TOKEN in .env.local (copied from the store; `vercel env pull` would overwrite the file).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { get, list } from "@vercel/blob";
-import { renderTrace, type TraceBatch } from "../core/trace.ts";
+import { parseTraceBatch, renderTrace, type TraceBatch } from "../core/trace.ts";
 
 const day = process.argv[2] ?? "";
 const sessions = new Map<string, TraceBatch>(); // "<day>/<browser>/<session>" → all its events
@@ -14,7 +14,11 @@ do {
   for (const { pathname } of page.blobs) {
     const result = await get(pathname, { access: "private" });
     if (!result || result.statusCode !== 200) continue;
-    const batch = JSON.parse(await new Response(result.stream).text()) as TraceBatch;
+    const batch = parseTraceBatch(JSON.parse(await new Response(result.stream).text()));
+    if (!batch) {
+      console.warn(`skipped ${pathname}: not a trace batch`);
+      continue;
+    }
     const key = pathname.split("/").slice(1, 4).join("/");
     const known = sessions.get(key);
     if (known) known.events.push(...batch.events);
