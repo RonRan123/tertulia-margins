@@ -50,7 +50,7 @@ What exists for testing daemons beyond unit tests.
 | 2 | A few saved notes run by hand, compared by eye (logs in `.scratch/`). |
 | 3 | A fixed set of 20–50 cases from real notes, runnable by one script, with outputs saved for comparison. |
 | 4 | Plus balanced cases: notes where a daemon *should* pass (quotes, definitions, research notes) as well as notes where it should speak. Includes notes past the reader's page and notes the book never discusses. |
-| 5 | Plus separate capability and regression suites. Capability cases start at a low pass rate (a hill to climb); regression cases sit near 100%; cases graduate from one to the other. New cases come from every real failure. Each task is unambiguous: two people would grade it the same way. |
+| 5 | Plus a pool of ~100 traces, ≥30 read by the expert, coded until new traces show no new failure types. Separate capability and regression suites. Capability cases start at a low pass rate (a hill to climb); regression cases sit near 100%; cases graduate from one to the other. New cases come from every real failure. Each task is unambiguous: two people would grade it the same way. |
 
 - *Sources:* Demystifying evals (start with 20–50 tasks from real failures; balanced problem sets; graduate cases); Husain.
 - *Look at:* `core/daemons.test.ts`, `.scratch/s82*.log`, PLAN S8.2 Verify lines.
@@ -79,10 +79,10 @@ LLM-as-judge for what code can't check, such as "does this extend the reader's t
 | 1 | None. |
 | 2 | An LLM judges or picks outputs, but nobody has checked it against human verdicts (our reviewer today, if uncalibrated). |
 | 3 | A judge with a written rubric and **binary** verdicts plus a one-line critique, run on the eval set. |
-| 4 | Plus calibration: Ronith labels 25–50 outputs; the judge's agreement is measured (precision and recall, not raw agreement); the judge's prompt is revised until it agrees. |
-| 5 | Plus one judge per dimension, an "unknown" option, periodic re-checks for drift, and rubric updates as criteria shift ("criteria drift" is expected). |
+| 4 | Plus calibration: Ronith labels outputs split into train (10–20%, used as the judge's examples), dev and test (40–45% each, 30–50 passes and 30–50 fails in each). True positive and true negative rates are measured, not raw agreement; the judge's prompt is tuned on dev, then checked once on test. |
+| 5 | Plus one judge per failure mode, built only for failures that survive prompt fixes (~100–200 labels each). An "unknown" option, periodic re-checks for drift, and rubric updates as criteria shift ("criteria drift" is expected). |
 
-- *Sources:* Husain (binary plus critique; batches of 25–50; precision and recall); Shankar et al. (criteria drift); Demystifying evals (calibrate model graders; "unknown"; one judge per dimension).
+- *Sources:* Husain & Shankar, [evals FAQ](https://hamel.dev/blog/posts/evals-faq/) and LLM-judge post (binary plus critique; train/dev/test; true positive and true negative rates); Shankar et al. (criteria drift); Demystifying evals (calibrate model graders; "unknown"; one judge per dimension).
 - *Look at:* `prompts/daemon-reviewer.md`, `reviewNuggets` in `core/converse.ts`.
 
 ### A4. Traces, logging and error analysis — P1

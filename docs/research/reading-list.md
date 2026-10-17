@@ -67,8 +67,12 @@ Using deictic language (pointing or showing directly) is often easier than fully
 4. - [ ] [Demystifying evals for AI agents](https://anthropic.com/engineering/demystifying-evals-for-ai-agents) (Anthropic, Jan 2026)
    Code, model and human graders; capability vs regression evals.
    - *Thoughts:*
-5. - [ ] [Your AI Product Needs Evals](https://simonwillison.net/2024/Mar/31/your-ai-product-needs-evals/) (Hamel Husain, via Simon Willison's summary, 2024)
+5. - [x] [Your AI Product Needs Evals](https://simonwillison.net/2024/Mar/31/your-ai-product-needs-evals/) (Hamel Husain, via Simon Willison's summary, 2024)
    Read traces, label failures, write a check per failure; judges only once calibrated.
+   - Read through all the links on this website to udnerstand how to create a robust eval suite from zero to hero: https://hamel.dev/notes/llm/evals/start/new-to-evals/
+
+5a. - [ ] [LLM Evals: Everything You Need to Know (FAQ)](https://hamel.dev/blog/posts/evals-faq/) (Husain & Shankar) and [LLM-as-a-judge](https://hamel.dev/blog/posts/llm-judge/)
+   Error analysis first; binary verdicts; judges validated by true positive/negative rates. Notes: [evals-faq-notes.md](evals-faq-notes.md).
    - *Thoughts:*
 
 ## Tier 2: read next (the harness's structure and prompt layout)
