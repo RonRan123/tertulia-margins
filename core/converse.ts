@@ -7,6 +7,7 @@ import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type 
 import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
 import { findExcerpt } from "./blocks.ts";
+import type { DraftTrace } from "./trace.ts";
 import { ANGLES, BLANK, BLANK_LIMITS, CHOICES_PER_QUESTION, checkQuestions, isAvoidList, isGradeRequest, isQuizSetup, pickAngles, type Angle, KEY_POINT_LIMITS, OPTIONS_PER_BLANK, QUIZ_STYLES, QUIZ_TOPICS, quizSchema, shuffleChoices, VERDICTS, type GradeRequest, type QuizQuestion, type QuizSetup, type Verdict } from "./quiz.ts";
 
 // D12: one model for the MVP, low effort for a fast first token.
@@ -66,7 +67,8 @@ export type QuizRequest = QuizSetup & { avoid?: string[] };
 export type ConverseEvent =
   // A daemon run's result: every nugget that survived the grounding check, and the one the reviewer
   // picked to show (null: nothing worth interrupting the reader). The rest are runners-up.
-  | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[] }
+  // `drafts`: every daemon's draft and what became of it (passed, dropped and why, runner-up, picked), for traces (D48).
+  | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[]; drafts: DraftTrace[] }
   // A quiz (D42): its questions, checked and shuffled, or (verdict "insufficient") why not.
   | { type: "quiz"; verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] }
   // A free response's grade (D44): right, partly right or wrong, and one line on why.
@@ -213,10 +215,11 @@ async function* runDaemons(
   }, { signal });
   // Structured output cut off by max_tokens may still parse, but it is a failed run (Sonnet 5.5 guide).
   const isCutOff = panel.stop_reason === "max_tokens";
-  const nuggets = isCutOff ? [] : groundedNuggets(jsonOf(panel), pages, request.notes ?? "", run.excerpt);
+  const { nuggets, drafts } = isCutOff ? { nuggets: [], drafts: [] } : screenDrafts(jsonOf(panel), pages, request.notes ?? "", run.excerpt);
 
   const { pick, usage: reviewerUsage } = await reviewNuggets(client, nuggets, pages, run, signal);
-  yield { type: "daemons", pick, nuggets };
+  const traced = drafts.map((d) => (d.outcome === "runner-up" && d.daemon === pick ? { ...d, outcome: "picked" as const } : d));
+  yield { type: "daemons", pick, nuggets, drafts: traced };
   const picked = nuggets.find((n) => n.daemon === pick);
   return {
     model: panel.model,
@@ -266,21 +269,41 @@ export function panelTurn(excerpt: string): string {
 // whose quote fails the check (D38: cites a missing page, isn't on its page, or is in neither the
 // book nor the notes). An anchor that isn't in the excerpt falls back to the excerpt's first line.
 export function groundedNuggets(output: unknown, pages: BookPage[], notes: string, excerpt: string): Nugget[] {
-  const drafts = isRecord(output) && Array.isArray(output.drafts) ? output.drafts : [];
+  return screenDrafts(output, pages, notes, excerpt).nuggets;
+}
+
+// The same screening, keeping every draft and what became of it, for traces (D48). A kept draft is
+// "runner-up" here; runDaemons marks the reviewer's pick.
+export function screenDrafts(output: unknown, pages: BookPage[], notes: string, excerpt: string): { nuggets: Nugget[]; drafts: DraftTrace[] } {
+  const raw = isRecord(output) && Array.isArray(output.drafts) ? output.drafts : [];
   const firstLine = excerpt.trim().split("\n")[0].trim();
   const nuggets: Nugget[] = [];
-  for (const draft of drafts) {
-    if (!isRecord(draft) || draft.pass === true || !isText(draft.nugget)) continue;
-    const daemon = draft.daemon as DaemonId;
-    const isKnown = DAEMON_IDS.includes(daemon) && !nuggets.some((n) => n.daemon === daemon);
-    if (!isKnown) continue;
-    const text = draft.nugget.trim();
-    const isInvented = checkCitations(text, pages, notes).some((c) => c.status !== "ok");
-    if (isInvented) continue;
-    const anchor = typeof draft.anchor === "string" && findExcerpt(excerpt, draft.anchor) ? draft.anchor.trim() : firstLine;
-    nuggets.push({ daemon, text, anchor });
+  const drafts: DraftTrace[] = [];
+  for (const draft of raw) {
+    if (!isRecord(draft)) continue;
+    const daemon = String(draft.daemon);
+    const text = isText(draft.nugget) ? draft.nugget.trim() : "";
+    const anchor = typeof draft.anchor === "string" ? draft.anchor.trim() : "";
+    const anchorFound = anchor !== "" && findExcerpt(excerpt, anchor) !== undefined;
+    const traced = (outcome: DraftTrace["outcome"], reason?: string) => drafts.push({ daemon, outcome, text, anchor, anchorFound, ...(reason && { reason }) });
+    if (draft.pass === true || text === "") {
+      traced("passed");
+      continue;
+    }
+    const isKnown = DAEMON_IDS.includes(daemon as DaemonId) && !nuggets.some((n) => n.daemon === daemon);
+    if (!isKnown) {
+      traced("dropped", "unknown_or_repeated_daemon");
+      continue;
+    }
+    const failed = checkCitations(text, pages, notes).find((c) => c.status !== "ok");
+    if (failed) {
+      traced("dropped", failed.status);
+      continue;
+    }
+    nuggets.push({ daemon: daemon as DaemonId, text, anchor: anchorFound ? anchor : firstLine });
+    traced("runner-up");
   }
-  return nuggets;
+  return { nuggets, drafts };
 }
 
 // The reviewer sees no book: only the excerpt, the nuggets and the pages they cite. No call

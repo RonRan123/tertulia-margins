@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "ask": "node --env-file-if-exists=.env.local scripts/ask.ts",
-    "pdf-check": "node scripts/pdf-check.ts"
+    "pdf-check": "node scripts/pdf-check.ts",
+    "traces": "node --env-file-if-exists=.env.local scripts/traces.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
@@ -19,6 +20,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.14",
     "@lezer/markdown": "^1.8.0",
+    "@vercel/blob": "^2.8.2",
     "next": "16.4.0",
     "pdfjs-dist": "^6.4.299",
     "react": "19.3.0",

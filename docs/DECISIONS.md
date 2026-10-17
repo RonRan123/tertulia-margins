@@ -494,6 +494,37 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D48. Traces: a readable timeline of every reader action and agent output
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** daemon quality was judged by eye with no record of what each run saw and said (harness scorecard A4 = 2). Ronith wants traces that are "easy for a human to read and follow along", for eval runs and for real use: notes typed, chat, quiz, and what each agent answered.
+- **Alternatives:** where live traces go: each browser only, with an export button; localhost only; a server store (chosen). Stores: Vercel Blob (chosen), Supabase Postgres, Upstash Redis.
+- **Rules:**
+  - *Events* (`core/trace.ts`): session start, book open/create/rename/delete, view and setting changes, notes edits (lines added and removed, after a 4 s pause or before a book switch), PDF added and pages opened, chat question and full reply with token counts and each quote check, daemon runs with every draft and its fate (passed, dropped and why, runner-up, shown), anchor fallback, word count and tokens for panel and reviewer, runner-ups promoted, card clicks and dismissals, quiz start, questions written, each answer, grades, score.
+  - *Never traced:* book text. Titles, page numbers, the reader's own words and AI output only.
+  - *Readable:* `renderTrace` writes markdown: one entry per event, who acted (Reader, Chat, Daemons, Quiz agent, Quiz grader), what happened, and the text involved, grouped by book.
+  - *Where:* the browser posts batches to `/api/trace` (every 5 s and when the tab hides). On localhost (`next dev`) each session goes to `.scratch/traces/<day>/<browser>-<session>.{jsonl,md}`, rendered as it grows. Hosted, with a private Vercel Blob store connected (`BLOB_READ_WRITE_TOKEN`), each batch is a blob under `traces/<day>/<browser>/<session>/`; `npm run traces` downloads and renders them into `.scratch/traces/hosted/`. With neither, the route stores nothing.
+  - *Dependency:* `@vercel/blob` (Ronith approved).
+  - *Consent and deletion:* not built; Ronith tells testers directly (2026-10-17).
+  - The daemon route's `daemons` event now carries `drafts` (every draft and its fate) so the trace can show them.
+- **Why:** the harness rubric's first P1 gap: without traces nobody can read failures, count them or tell which stage caused them (evals FAQ: error analysis first).
+- **Cost we accept:** testers' notes and the AI's replies are stored on Vercel; tracing adds a request every few seconds of activity; traces drop silently on failure.
+- **Revisit if:** traces get large, testers object, or a tester asks for their data to be deleted.
+
+## D49. Two example books for every visitor
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** a visitor's first screen was an empty book, so it was hard to see what the app does. Ronith wants examples with notes and daemon cards to appear for everyone.
+- **Alternatives:** read-only examples rebuilt on every visit; editable and restored if deleted; editable, seeded once, with a restore action (chosen). For Weber's text: notes and cards only; the German original; a free translation; the Gerth & Mills translation (chosen: Ronith has the publisher's permission for this educational, non-commercial use).
+- **Rules:**
+  - *Books:* "Example: Politics as a Vocation" (Gerth & Mills, Oxford University Press 1946, PDF from Ronith; his own notes; his Author card) and "Example: Pride and Prejudice (ch. I–VIII)" (Project Gutenberg #1342, typeset to a 48-page PDF; sample notes labelled "written for this example, not a real reader's"; three real daemon cards from one run each). Files in `public/examples/` (`<name>.json`: title, notes, cards, chat; `<name>.pdf`).
+  - *Seeding:* once per browser (`tertulia-margins:examples`); the reference text comes from each PDF with the reader's own import; the notes count as already read, so the daemons answer only what the visitor adds; a first visit opens the Weber example.
+  - *Editable:* ordinary books; **Restore example books** at the foot of the sidebar puts them back as shipped (after a confirm).
+  - *CLAUDE.md's book-text rule:* these two are the exception: public-domain text and the permitted Weber translation live in the public repo and site.
+- **Why:** a visitor sees the whole loop (notes, cards in the margin, page links into the PDF) before writing a word.
+- **Cost we accept:** ~1 MB of PDFs fetched on a first visit; the Weber permission must cover the public GitHub repo as well as the site; the P&P cards are a snapshot of one run.
+- **Revisit if:** the permission is limited to the site (then serve the Weber PDF from a store, not the repo), or Ronith's own P&P notes replace the sample notes.
+
+---
+
 ## Template
 
 ```

@@ -20,6 +20,7 @@ import {
   saveLibrary,
   saveState,
   saveUi,
+  STORAGE_KEY,
   type AppState,
   type BookError,
   type Library,
@@ -31,6 +32,10 @@ import {
 } from "@/core/store.ts";
 import { DAEMONS, freshDaemonState, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
 import { freshQuiz, type QuizState } from "@/core/quiz.ts";
+import { diffLines, quizEvents } from "@/core/trace.ts";
+import { EXAMPLES, EXAMPLES_KEY, withExamples } from "@/core/examples.ts";
+import { installExamples } from "@/lib/examples.ts";
+import { flush, setTraceBook, trace } from "@/lib/trace.ts";
 import { Chat } from "./components/Chat";
 import { DaemonPanel, MarginCell, useDaemons } from "./components/Margin";
 import { Quiz } from "./components/Quiz";
@@ -64,6 +69,8 @@ const BOOK_ERRORS: Record<BookError, string> = {
   last_book: "The last book can't be deleted.",
 };
 const SAVE_DELAY_MS = 300;
+const NOTES_TRACE_MS = 4000; // a notes edit is traced once the reader pauses this long (D48)
+const clip = (line: string) => (line.length > 500 ? line.slice(0, 500) + "…" : line);
 const STATUS_MS = 5000;
 // globals.css's phone breakpoint: one pane at a time, the sidebar over the page.
 const isPhone = () => window.matchMedia("(max-width: 48rem)").matches;
@@ -112,6 +119,11 @@ export default function Home() {
   const [pdfText, setPdfText] = useState<string>(); // the open book's whole PDF text, for page links
   const stored = useRef<AppState>(undefined); // what storage holds, as far as this tab knows
   const pendingSave = useRef<() => void>(undefined); // set while a change waits to be saved
+  const tracedNotes = useRef(""); // the notes as last traced or loaded (D48)
+  const traceNotesNow = useRef(() => {}); // traces the notes' unsent edits; set by the effect below
+  const isFirstVisit = useRef<boolean>(undefined); // nothing saved before this load: open an example book (D49)
+  const isSeeding = useRef(false);
+  const hasTracedSession = useRef(false);
   const [ui, setUi] = useState<UiState>(defaultUi);
   const [hasUnread, setHasUnread] = useState(false); // a chat reply finished; shown only while chat is hidden
   const [status, setStatus] = useState(""); // the notes toolbar's last message
@@ -158,6 +170,7 @@ export default function Home() {
 
   // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
   const showView = (view: View) => {
+    if (view !== ui.view) trace({ kind: "view", view });
     if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
     setUi((u) => ({ ...u, view }));
   };
@@ -173,6 +186,7 @@ export default function Home() {
   useEffect(() => {
     const show = (state: AppState) => {
       stored.current = state;
+      tracedNotes.current = state.notes;
       setReference(state.reference);
       setNotes(state.notes);
       setMessages(state.messages);
@@ -190,17 +204,30 @@ export default function Home() {
       show(loadState(browserStorage, currentKey.current));
     };
     // A closed or reloaded tab saves only what it changed and hasn't saved yet: never its stale copy.
-    const onPageHide = () => pendingSave.current?.();
+    const onPageHide = () => {
+      pendingSave.current?.();
+      traceNotesNow.current();
+      flush(true);
+    };
     // The daily count may have changed in another tab, or the day may have turned (D35).
     const onFocus = () => setRepliesToday(loadRepliesToday(browserStorage, localDay(new Date())));
     // A one-time sync from storage after mount: the cascading render this rule warns about is the point.
     /* eslint-disable react-hooks/set-state-in-effect */
+    try {
+      // Decided on the first run only: loading saves the library, and dev runs this effect twice.
+      isFirstVisit.current ??= browserStorage.getItem(LIBRARY_KEY) === null && browserStorage.getItem(STORAGE_KEY) === null;
+    } catch {
+      // storage blocked: not a first visit we can do anything with
+    }
     const opened = loadLibrary(browserStorage);
     currentKey.current = bookKey(opened.currentId);
     setLibrary(opened);
     show(loadState(browserStorage, currentKey.current));
     const savedUi = loadUi(browserStorage);
     setUi({ ...savedUi, isSidebarOpen: savedUi.isSidebarOpen && !isPhone() }); // on a phone it would cover the page
+    setTraceBook(opened.books.find((b) => b.id === opened.currentId)?.title);
+    if (!hasTracedSession.current) trace({ kind: "session", view: savedUi.view, books: opened.books.map((b) => b.title) });
+    hasTracedSession.current = true; // dev runs this effect twice
     onFocus();
     setIsLoaded(true);
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -241,6 +268,30 @@ export default function Home() {
     if (isLoaded) saveUi(browserStorage, ui);
   }, [isLoaded, ui]);
 
+  // ---- Traces (D48) ----
+  // The open book's title goes on every event. A notes edit is traced as the lines it added and
+  // removed, once the reader pauses (or before another book opens, or the tab closes).
+  const openTitle = library.books.find((b) => b.id === library.currentId)?.title;
+  useEffect(() => setTraceBook(openTitle), [openTitle]);
+  useEffect(() => {
+    traceNotesNow.current = () => {
+      const { added, removed } = diffLines(tracedNotes.current, notes);
+      tracedNotes.current = notes;
+      if (added.length + removed.length === 0) return;
+      trace({ kind: "notes", added: added.map(clip), removed: removed.map(clip), lines: notes.split("\n").filter((l) => l.trim() !== "").length });
+    };
+    if (edits === 0) return;
+    const timer = setTimeout(() => traceNotesNow.current(), NOTES_TRACE_MS);
+    return () => clearTimeout(timer);
+  }, [notes, edits]);
+  // Quiz answers and finishing, from the quiz state's changes within one book.
+  const tracedQuiz = useRef<{ bookId: string; quiz: QuizState }>(undefined);
+  useEffect(() => {
+    const before = tracedQuiz.current;
+    tracedQuiz.current = { bookId: library.currentId, quiz };
+    if (before?.bookId === library.currentId) for (const event of quizEvents(before.quiz, quiz)) trace(event);
+  }, [quiz, library.currentId]);
+
   // ---- Daily AI replies (D35) ----
   // lib/converse-client counts each reply as it starts; a streaming change is the cue to re-read it.
   const isStreaming = messages.at(-1)?.isStreaming === true;
@@ -254,15 +305,18 @@ export default function Home() {
   const currentBook = library.books.find((b) => b.id === library.currentId);
 
   // Saves the open book's last edits, then shows `next`'s book.
-  function openLibrary(next: Library) {
+  // `reload`: show the open book's saved state even if it's the same book (examples restored).
+  function openLibrary(next: Library, reload = false) {
     pendingSave.current?.();
+    traceNotesNow.current();
     setLibrary(next);
     setSaveError(saveLibrary(browserStorage, next));
-    if (bookKey(next.currentId) === currentKey.current) return;
+    if (bookKey(next.currentId) === currentKey.current && !reload) return;
     currentKey.current = bookKey(next.currentId);
     stored.current = loadState(browserStorage, currentKey.current);
     setReference(stored.current.reference);
     setNotes(stored.current.notes);
+    tracedNotes.current = stored.current.notes;
     setMessages(stored.current.messages);
     setDaemons(stored.current.daemons);
     setQuiz(stored.current.quiz);
@@ -271,21 +325,27 @@ export default function Home() {
   }
   // Each returns an error message, or undefined when done.
   const books = {
-    open: (id: string) => openLibrary({ ...library, currentId: id }),
+    open: (id: string) => {
+      trace({ kind: "book", action: "open", title: library.books.find((b) => b.id === id)?.title ?? id });
+      openLibrary({ ...library, currentId: id });
+    },
     create: (title: string) => {
       const next = addBook(library, crypto.randomUUID(), title);
       if (typeof next === "string") return BOOK_ERRORS[next];
+      trace({ kind: "book", action: "create", title });
       openLibrary(next);
     },
     rename: (id: string, title: string) => {
       const next = renameBook(library, id, title);
       if (typeof next === "string") return BOOK_ERRORS[next];
+      trace({ kind: "book", action: "rename", title });
       setLibrary(next);
       setSaveError(saveLibrary(browserStorage, next));
     },
     remove: (id: string) => {
       const next = deleteBook(library, id);
       if (typeof next === "string") return BOOK_ERRORS[next];
+      trace({ kind: "book", action: "delete", title: library.books.find((b) => b.id === id)?.title ?? id });
       openLibrary(next);
       pdfPane.current?.forget(id);
       try {
@@ -295,6 +355,43 @@ export default function Home() {
       }
     },
   };
+
+  // ---- Example books (D49) ----
+  // Every browser gets the examples once (a first visit opens one), and can restore them as shipped.
+  async function seedExamples(isRestore: boolean) {
+    if (isSeeding.current) return;
+    isSeeding.current = true;
+    try {
+      const installed = await installExamples(browserStorage);
+      const latest = loadLibrary(browserStorage);
+      const openId = isFirstVisit.current === true && !isRestore ? installed[0].id : latest.currentId;
+      const isOpenRestored = isRestore && EXAMPLES.some((e) => e.id === latest.currentId);
+      openLibrary(withExamples(latest, installed, openId), isOpenRestored);
+      browserStorage.setItem(EXAMPLES_KEY, "1");
+      if (isRestore) showStatus("Example books restored.");
+    } catch {
+      if (isRestore) showStatus("Couldn't load the example books. Try again later.");
+    } finally {
+      isSeeding.current = false;
+    }
+  }
+  const restoreExamples = () => {
+    if (!window.confirm("Restore the example books as shipped? Your changes to them will be lost.")) return;
+    trace({ kind: "book", action: "restore-examples", title: "examples" });
+    void seedExamples(true);
+  };
+  useEffect(() => {
+    if (!isLoaded) return;
+    let hasExamples = true;
+    try {
+      hasExamples = browserStorage.getItem(EXAMPLES_KEY) !== null;
+    } catch {
+      // storage blocked: nowhere to put them
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async: the library changes after the fetches
+    if (!hasExamples) void seedExamples(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, after loading
+  }, [isLoaded]);
 
   // ---- The PDF (D29) ----
   // Shows the PDF beside the notes, or alone if the reader is viewing something alone.
@@ -310,6 +407,7 @@ export default function Home() {
   // A cite's page: the page as given (D23); R4 matches the cited text instead. If the PDF view is
   // hidden, the viewer holds the page until it is shown and fitted (PdfViewer).
   const openPage = (page: number) => {
+    trace({ kind: "pdf", action: "opened-page", page });
     showPdf();
     pdfPane.current?.goTo(page);
   };
@@ -326,6 +424,7 @@ export default function Home() {
     [linkedNotes, pdfParas, isLinking],
   );
   const openLink = (link: PageLink) => {
+    trace({ kind: "pdf", action: "opened-page", page: link.pdfPage });
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
@@ -344,8 +443,10 @@ export default function Home() {
   const isUnreadShown = hasUnread && !showsChat(ui.view);
   // The card whose words are highlighted in the notes; a second click on it clears them.
   const [activeCard, setActiveCard] = useState<{ id: string; colour: string }>();
-  const toggleCard = (card: DaemonCard) =>
+  const toggleCard = (card: DaemonCard) => {
+    trace({ kind: "card", action: activeCard?.id === card.id ? "clear" : "highlight", daemon: card.daemon, text: card.text });
     setActiveCard((active) => (active?.id === card.id ? undefined : { id: card.id, colour: DAEMONS[card.daemon].colour }));
+  };
 
   return (
     <OpenPageContext value={citeOpener}>
@@ -413,7 +514,13 @@ export default function Home() {
               {isAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           </div>
-          <SettingsMenu ui={ui} onChange={(patch) => setUi((u) => ({ ...u, ...patch }))} />
+          <SettingsMenu
+            ui={ui}
+            onChange={(patch) => {
+              trace({ kind: "settings", change: JSON.stringify(patch) });
+              setUi((u) => ({ ...u, ...patch }));
+            }}
+          />
         </header>
         {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
         <div className="app-body">
@@ -429,6 +536,7 @@ export default function Home() {
             canExport={!isNotesEmpty}
             onAddPdf={addPdf}
         onChoosePages={choosePages}
+            onRestoreExamples={restoreExamples}
             onExport={() => {
               const file = exportMarkdown(notes, reference, new Date());
               download(file.filename, file.content);
@@ -487,7 +595,10 @@ export default function Home() {
                     bookId={library.currentId}
                     hasReference={hasReference}
                     onReference={setReference}
-                    onAdded={showPdf}
+                    onAdded={() => {
+                      trace({ kind: "pdf", action: "added" });
+                      showPdf();
+                    }}
                     onStatus={showStatus}
                     onText={setPdfText}
                   />

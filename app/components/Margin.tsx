@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { Row } from "@/core/blocks.ts";
+import { trace } from "@/lib/trace.ts";
 import { ACTIONS, afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { runDaemons } from "@/lib/converse-client.ts";
@@ -58,13 +59,14 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
     const plan = planDaemons(notes, daemons, isAsked);
     if (plan.kind === "wait") return;
     if (plan.kind === "promote") {
+      trace({ kind: "promote", daemon: plan.card.daemon, text: plan.card.text });
       setDaemons((d) => afterPromote(d, plan.card));
       return setAnnouncement(`${DAEMONS[plan.card.daemon].name} wrote in the margin.`);
     }
     const abort = new AbortController();
     running.current = abort;
     setIsReading(true);
-    const result = await runDaemons({ passage: reference, notes, question: "", daemons: { excerpt: plan.excerpt, mustPick: plan.mustPick } }, abort.signal);
+    const result = await runDaemons({ passage: reference, notes, question: "", daemons: { excerpt: plan.excerpt, mustPick: plan.mustPick } }, abort.signal, isAsked ? "asked" : "pause");
     running.current = undefined;
     setIsReading(false);
     if (abort.signal.aborted) return;
@@ -101,7 +103,11 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
               ? "They'll read when you pause."
               : `Listening: ${newLines} of ${LIMITS.daemons.minLines} new lines.`;
 
-  const dismiss = (id: string) => setDaemons((d) => dismissCard(d, id));
+  const dismiss = (id: string) => {
+    const card = latest.current.daemons.cards.find((c) => c.id === id);
+    if (card) trace({ kind: "card", action: "dismiss", daemon: card.daemon, text: card.text });
+    setDaemons((d) => dismissCard(d, id));
+  };
   return { reactNow: () => void look(true), dismiss, status, isReading, isPaused, announcement };
 }
 

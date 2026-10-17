@@ -124,6 +124,14 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S9.3: settings gear (D47)
 - [x] A gear at the right end of the bar with switches for Quote autocomplete, Page links and Dark theme (the moon button goes), saved in `UiState`. **Verify:** store test (old saved UI loads with both on); headless Chrome: page links off shows plain references and AI cites still open the PDF; autocomplete off shows no ghost and Tab indents; theme switches; settings survive a reload; tests, lint, build green.
 
+## Sprint 10: traces and example books (Ronith, 2026-10-17)
+**Goal:** every reader action and agent output can be read as a timeline (the harness scorecard's first P1 gap), and visitors start with two example books instead of a blank page.
+### S10.1: traces (D48)
+- [x] `core/trace.ts` (events, line diff, quiz events, markdown renderer), `lib/trace.ts` (browser batches), `/api/trace` + `lib/trace-store.ts` (localhost files, private Vercel Blob when hosted), `npm run traces`; the daemon route reports every draft and its fate. **Verify:** 192 tests (trace: diff, batch guard, rendering, quiz events; daemon drafts with drop reasons), lint, build green. Built-in browser on localhost: typing a note, a chat question and React to notes produced `.scratch/traces/2026-10-17/f65072a7-a568138f.md` with the note's added line, the question, the full reply, each quote check (two `quote_not_on_page`), and the daemon run's excerpt, three drafts (Author kept as runner-up at 44 words, Devil's Advocate shown at 35, Scholar passed), anchors and tokens. *Not yet verified:* the Vercel Blob path (needs a store connected; see D48).
+### S10.2: example books (D49)
+- [x] `public/examples/` (two JSON + two PDFs), `core/examples.ts`, `lib/examples.ts`, seeding once per browser, **Restore example books** in the sidebar. **Verify:** built-in browser with cleared storage: a first visit opened "Example: Politics as a Vocation" with Ronith's notes, linked page pills and The Author's card; the P&P example showed the labelled sample notes, pills and two cards beside their lines.
+- *Seen while building:* on the sample note that copied `daemon-role.md`'s own Darcy example, both daemons answered with that example's remarks nearly word for word (eval case); the Devil's Advocate wrote in the first person as the book ("I separate three grounds…"), the Author's voice (eval case).
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMANDS } from "./commands.ts";
 import { LIMITS } from "./limits.ts";
-import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, quizTurn, reviewerTurn, type ConverseRequest } from "./converse.ts";
+import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, quizTurn, reviewerTurn, screenDrafts, type ConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
 const errorOf = (body: unknown) => {
@@ -228,7 +228,10 @@ test("all pass: no reviewer call, nothing picked", async () => {
   const { client, calls } = daemonClient({ drafts: [pass("author"), pass("devils-advocate")] });
   const { events, stats } = await run(daemonRun, client);
   expect(calls).toHaveLength(1);
-  expect(events).toEqual([{ type: "daemons", pick: null, nuggets: [] }]);
+  expect(events).toEqual([{ type: "daemons", pick: null, nuggets: [], drafts: [
+    { daemon: "author", outcome: "passed", text: "", anchor: "", anchorFound: false },
+    { daemon: "devils-advocate", outcome: "passed", text: "", anchor: "", anchorFound: false },
+  ] }]);
   expect(stats.reviewerUsage).toBeUndefined();
 });
 
@@ -243,7 +246,16 @@ test("two nuggets: the reviewer sees the excerpt, both, and only the pages they 
   expect(reviewer.messages[0].content).toBe(reviewerTurn(events[0].type === "daemons" ? events[0].nuggets : [], bookPages, daemonRun.daemons));
   expect(reviewer.messages[0].content).toContain('<cited>\n<page n="2">\nNobody minded the sky.\n</page>\n</cited>');
   expect(reviewer.messages[0].content).not.toContain("The sky fell on Tuesday.");
-  expect(events).toEqual([{ type: "daemons", pick: "devils-advocate", nuggets: drafts.map((d) => ({ daemon: d.daemon, text: d.nugget, anchor: d.anchor })) }]);
+  expect(events).toEqual([{
+    type: "daemons",
+    pick: "devils-advocate",
+    nuggets: drafts.map((d) => ({ daemon: d.daemon, text: d.nugget, anchor: d.anchor })),
+    // D48: every draft and its fate, for traces; the reviewer's pick is marked.
+    drafts: [
+      { daemon: "author", outcome: "runner-up", text: drafts[0].nugget, anchor: drafts[0].anchor, anchorFound: true },
+      { daemon: "devils-advocate", outcome: "picked", text: drafts[1].nugget, anchor: drafts[1].anchor, anchorFound: true },
+    ],
+  }]);
   expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
 });
 
@@ -370,4 +382,19 @@ test("a quiz request may carry the book's recent questions; the turn asks not to
   expect(errorOf({ ...valid, quiz: { ...quizSetup, avoid: Array.from({ length: 31 }, () => "q") } })).toBe("quiz_invalid");
   const turn = quizTurn({ topics: ["book-concepts"], count: 1, difficulty: "easy", styles: ["true-false"], avoid }, ["motive"]);
   expect(turn).toContain("<angles>\n1. motive: what drives a character\n</angles>\n<already_asked>\n- When did the sky fall?\n</already_asked>\n</quiz_request>");
+});
+
+test("screenDrafts: every draft's fate, with the reason a quote was dropped and whether the anchor was found", () => {
+  const output = { drafts: [
+    pass("author"),
+    draft("devils-advocate", "It says “the sky turned green” [p. 2].", "Everyone panicked"),
+    draft("scholar", "Tuesday is a hinge.", "not in the excerpt"),
+  ] };
+  const { nuggets, drafts } = screenDrafts(output, bookPages, book.notes, daemonRun.daemons.excerpt);
+  expect(nuggets).toEqual([{ daemon: "scholar", text: "Tuesday is a hinge.", anchor: "- Everyone panicked." }]);
+  expect(drafts.map((d) => [d.daemon, d.outcome, d.reason, d.anchorFound])).toEqual([
+    ["author", "passed", undefined, false],
+    ["devils-advocate", "dropped", "quote_not_on_page", true],
+    ["scholar", "runner-up", undefined, false],
+  ]);
 });
