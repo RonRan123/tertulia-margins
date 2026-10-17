@@ -140,8 +140,8 @@ export const UploadIcon = () => (
 export const Logo = ({ size = 20 }: { size?: number }) => (
   <svg className="logo" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
     <g fill="none" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M32 5V26L44 14" stroke="#2f6fd6" />
-      <path d="M32 59V38L20 50" stroke="#d8443a" />
+      <path d="M26 5V26L38 14" stroke="#2f6fd6" />
+      <path d="M26 59V38L38 50" stroke="#d8443a" />
     </g>
   </svg>
 );
