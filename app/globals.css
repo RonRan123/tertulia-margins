@@ -1837,6 +1837,13 @@ main:not([data-view="notes+margin"]) .margin-cell {
   margin: var(--s2) var(--s2) -2rem 0;
 }
 
+/* Beside the margin, the panes span both columns: keep the toggle at the notes' edge, as in the other views. */
+@media not (max-width: 48rem) {
+  main[data-view="notes+margin"] .notes-alone {
+    margin-right: calc(100% - var(--notes-share, 60%) + var(--s2));
+  }
+}
+
 .chat {
   display: flex;
   flex-direction: column;
