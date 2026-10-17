@@ -113,6 +113,17 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S8.4: agent framework (D41 to decide)
 - [ ] One runtime for daemons: who (persona), when (trigger), what it sees (context), what it can look up (tools), where it lands (margin); `checkCitations` and evals as guardrails. Includes the LangChain question (Claude's recommendation: no; Anthropic SDK + our own code).
 
+## Sprint 9: cites and quotes in the notes (Ronith, 2026-10-15)
+**Goal:** page cites read at a glance (pills coloured by match), quotes are quick to transcribe (autocomplete from the book), and both can be switched off in a settings gear.
+### S9.1: cite pills (D45)
+- [x] Page references in the notes and page cites in AI text (chat, margin, quiz) as pills, "↗ p. 42": blue exact, light blue overlap, gray page only; ●/◐/○ markers removed; raw `[p. 42]` on the caret's line. **Verify:** headless Chrome screenshot of notes + chat with all three colours; notes byte-identical; a pill click opens the PDF at the page; tests, lint, build green.
+  - *Done 2026-10-15:* pills in notes, chat, margin and quiz (screenshots in each agent's `.scratch/`); notes byte-identical; a reference never spans a line break (a pill across one crashed CodeMirror, caught in review). A PDF page reads "↗ PDF p. 7"; notes without PDF text stay plain while AI cites show gray pills (open question for Ronith).
+### S9.2: quote autocomplete (D46)
+- [x] `core/` function: from the text before the caret and the book's text, the next ~5 words once 4+ match (shared prefix when the book continues several ways; hyphens joined, spaces collapsed). Editor layer: faded ghost text, Tab accepts, Esc dismisses, Tab still indents lists without a ghost. **Verify:** core tests (match, no match under 4 words, ambiguous continuations, hyphen and spacing cleanup, stop at punctuation); headless Chrome: type a quote's first words, Tab twice, notes hold the book's words; Tab on a list item with no ghost indents; tests, lint, build green.
+  - *Done 2026-10-15:* 19 core tests; headless Chrome: ghost, Tab chains, Esc, Tab indents a list without a ghost, hyphen joined; ~0.3 ms a keystroke on a 1 MB book, index built on the first suggestion. `_`/`*` markers stripped from suggestions (review).
+### S9.3: settings gear (D47)
+- [x] A gear at the right end of the bar with switches for Quote autocomplete, Page links and Dark theme (the moon button goes), saved in `UiState`. **Verify:** store test (old saved UI loads with both on); headless Chrome: page links off shows plain references and AI cites still open the PDF; autocomplete off shows no ghost and Tab indents; theme switches; settings survive a reload; tests, lint, build green.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

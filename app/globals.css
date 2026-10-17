@@ -31,6 +31,15 @@
   --radius: 4px;
   --margin-rule: 1px solid var(--rule);
   --margin-ink: #4b5563; /* daemon remarks: softer than the reader's ink */
+  /* Cite pills (D45), by match: exact quote, shared words, page only. */
+  --cite-exact: #1f5bbf;
+  --cite-exact-bg: #dce8ff;
+  --cite-overlap: #1f5bbf;
+  --cite-overlap-bg: #ffffff;
+  --cite-overlap-stripe: #c9dbff;
+  --cite-page: #6b7280;
+  --cite-page-bg: #f0f1f3;
+  --ghost: #a3a9b3; /* quote autocomplete's suggested words (D46) */
 }
 
 :root[data-theme="dark"] {
@@ -49,6 +58,14 @@
   --ok: #7fcf8f;
   --focus: #7fb0ff;
   --margin-ink: #b4bac4;
+  --cite-exact: #a9c9ff;
+  --cite-exact-bg: #26406a;
+  --cite-overlap: #a9c9ff;
+  --cite-overlap-bg: #1c1f25;
+  --cite-overlap-stripe: #2c4670;
+  --cite-page: #9ca3af;
+  --cite-page-bg: #2a2e36;
+  --ghost: #6b7280;
 }
 
 *,
@@ -382,6 +399,75 @@ button.pill[aria-pressed="true"] {
   flex: none;
 }
 
+/* The settings gear (D47): a small sheet of switches under the gear, anchored to the bar's right edge. */
+.settings {
+  position: relative;
+  flex: none;
+}
+
+.settings-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 15rem;
+  max-width: calc(100vw - 2 * var(--s3));
+  padding: var(--s1) 0;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 6px var(--s3);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.setting:hover {
+  background: var(--paper);
+}
+
+/* A checkbox drawn as a switch: a track with a knob that slides right when on. */
+.setting input {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink-soft) 45%, var(--sheet));
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.setting input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff; /* the knob is white in both themes */
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 0.15s;
+}
+
+.setting input:checked {
+  background: var(--ai);
+}
+
+.setting input:checked::after {
+  transform: translateX(12px);
+}
+
 .unread {
   position: absolute;
   top: 2px;
@@ -607,38 +693,20 @@ button.pill[aria-pressed="true"] {
   color: var(--ink-soft);
 }
 
-/* Page links (R4, D33): a reference is underlined in its match's colour; clicking it (off the line
-   being edited) or the marker after it opens the PDF there. ● exact quote, ◐ shared words,
-   ○ estimated page. */
+/* Page links (R4, D33, D45): off the line being edited a reference shows as a pill (.cite-pill,
+   below); on it, as written, underlined in its match's colour; ⌘/Ctrl-click opens it there. */
 .md-pageref {
-  cursor: pointer;
   text-decoration: underline dotted;
-  text-decoration-color: var(--ai);
+  text-decoration-color: var(--cite-exact);
   text-underline-offset: 3px;
 }
 
+.md-pageref.is-overlap {
+  text-decoration-color: var(--cite-overlap);
+}
+
 .md-pageref.is-page {
-  text-decoration-color: var(--ink-soft);
-}
-
-.md-pagelink {
-  display: inline;
-  margin-left: 2px;
-  padding: 0 2px;
-  font: 0.7em var(--font-ui);
-  vertical-align: 0.35em;
-  color: var(--ai);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.md-pagelink.is-page {
-  color: var(--ink-soft);
-}
-
-.md-pagelink:hover {
-  color: var(--ink);
+  text-decoration-color: var(--cite-page);
 }
 
 .md-cite {
@@ -736,6 +804,12 @@ button.pill[aria-pressed="true"] {
 
 :root[data-theme="dark"] .notes-editor .cm-card-highlight {
   background: color-mix(in srgb, var(--daemon) 45%, transparent);
+}
+
+/* Quote autocomplete (D46): the book's next words, faded after the caret until Tab takes them. */
+.notes-editor .cm-ghost {
+  color: var(--ghost);
+  pointer-events: none;
 }
 
 .margin-cell > .empty {
@@ -1487,27 +1561,51 @@ main[data-view="quiz"] .quiz {
   color: var(--ai);
 }
 
-/* A page cite in AI text (D38): a small, quiet "p. 12" that opens the PDF at the passage. */
-.page-cite {
-  display: inline;
-  padding: 0 0.15em;
-  font: inherit;
-  font-size: 0.8em;
-  color: var(--ink-soft);
+/* A page reference in the notes or a page cite in AI text (D38, D45): a small rounded "↗ p. 12",
+   ChatPDF-style, that opens the PDF at the passage. Blue: the quote was found; blue and white
+   pinstripes: the closest paragraph by shared words (a partial match); gray: the page alone, or no
+   PDF to open. */
+.cite-pill {
+  display: inline-block; /* keeps a link's underline around it off the pill */
+  margin: 0 0.1em;
+  padding: 0 0.45em;
+  font: 500 0.75em/1.6 var(--font-ui);
+  font-style: normal;
   white-space: nowrap;
-  background: none;
+  vertical-align: 0.1em;
+  color: var(--cite-page);
+  background: var(--cite-page-bg);
   border: 0;
+  border-radius: 999px;
 }
 
-button.page-cite {
+.cite-pill.is-exact {
+  color: var(--cite-exact);
+  background: var(--cite-exact-bg);
+}
+
+.cite-pill.is-overlap {
+  color: var(--cite-overlap);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--cite-overlap-stripe) 0 3px,
+    var(--cite-overlap-bg) 3px 6px
+  );
+  box-shadow: inset 0 0 0 1px var(--cite-overlap-stripe);
+}
+
+button.cite-pill {
   cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 2px;
 }
 
-button.page-cite:hover,
-button.page-cite:focus-visible {
-  color: var(--ai);
+button.cite-pill:hover,
+button.cite-pill:focus-visible {
+  filter: brightness(0.94);
+}
+
+:root[data-theme="dark"] button.cite-pill:hover,
+:root[data-theme="dark"] button.cite-pill:focus-visible {
+  filter: brightness(1.2);
 }
 
 /* Chat alone keeps a readable line length. */

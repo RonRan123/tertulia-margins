@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { findPageRefs, linkHighlight, linkPageRefs, pdfParagraphs, type PageLink, type PageRef } from "@/core/page-links.ts";
 import { estimateTokens, isReferenceTooLong, REFERENCE_TOKEN_LIMIT } from "@/core/passage.ts";
 import { exportMarkdown } from "@/core/export.ts";
@@ -44,11 +44,10 @@ import {
   QuizIcon,
   MaximizeIcon,
   MinimizeIcon,
-  MoonIcon,
   PanelLeftIcon,
-  SunIcon,
   UploadIcon,
 } from "./components/icons";
+import { SettingsMenu } from "./components/Settings";
 import { OpenPageContext } from "./components/CitedText";
 import { PdfPane, type PdfPaneHandle } from "./components/PdfPane";
 import type { ReferenceTextHandle } from "./components/ReferenceText";
@@ -317,24 +316,24 @@ export default function Home() {
 
   // ---- Page links (R4, D33) ----
   // A layer over the notes, recomputed as they change (deferred, so typing stays smooth); never
-  // written into them. Free methods only: exact quote, word overlap, page.
+  // written into them. Free methods only: exact quote, word overlap, page. With page links off in
+  // settings (D47) the notes' references stay plain text; AI cites (citeOpener) stay clickable.
   const linkedNotes = useDeferredValue(notes);
   const pdfParas = useMemo(() => (pdfText ? pdfParagraphs(pdfText) : []), [pdfText]);
+  const isLinking = ui.pageLinks && pdfParas.length > 0;
   const pageLinks = useMemo(
-    () => ({ notes: linkedNotes, links: pdfParas.length > 0 ? linkPageRefs(findPageRefs(linkedNotes), pdfParas) : [] }),
-    [linkedNotes, pdfParas],
+    () => ({ notes: linkedNotes, links: isLinking ? linkPageRefs(findPageRefs(linkedNotes), pdfParas) : [] }),
+    [linkedNotes, pdfParas, isLinking],
   );
   const openLink = (link: PageLink) => {
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
-  // A page cite in AI text (D38): linked like the notes' references, together with the other cites
-  // of that text so their exact hits teach the page offset.
-  const citeOpener = {
-    hasPdf: pdfParas.length > 0,
-    openCite: (refs: PageRef[], index: number) => openLink(linkPageRefs(refs, pdfParas)[index]),
-    openPage,
-  };
+  // A page cite in AI text (D38, D45): linked like the notes' references, together with the other
+  // cites of that text so their exact hits teach the page offset. Stable while the PDF is, so each
+  // message links its cites once.
+  const linkCites = useCallback((refs: PageRef[]) => linkPageRefs(refs, pdfParas), [pdfParas]);
+  const citeOpener = { hasPdf: pdfParas.length > 0, linkCites, openLink, openPage };
 
   // The palette (D28) is set on <html>, so the page background and dialogs follow it too.
   useEffect(() => {
@@ -414,15 +413,7 @@ export default function Home() {
               {isAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
           </div>
-          <button
-            type="button"
-            className="quiet icon"
-            aria-label={ui.theme === "dark" ? "Light theme" : "Dark theme"}
-            title={ui.theme === "dark" ? "Light theme" : "Dark theme"}
-            onClick={() => setUi((u) => ({ ...u, theme: u.theme === "dark" ? "light" : "dark" }))}
-          >
-            {ui.theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
+          <SettingsMenu ui={ui} onChange={(patch) => setUi((u) => ({ ...u, ...patch }))} />
         </header>
         {/* Below the full-width bar (D30, like ChatPDF): toggling the sidebar never moves the bar. */}
         <div className="app-body">
@@ -473,6 +464,7 @@ export default function Home() {
                   onOpenLink={openLink}
                   marginHeader={<DaemonPanel margin={margin} />}
                   highlight={activeCard}
+                  quoteSource={ui.autocomplete ? pdfText || reference : undefined}
                   renderMargin={(row) => <MarginCell row={row} margin={margin} activeId={activeCard?.id} onToggle={toggleCard} />}
                 />
               </div>

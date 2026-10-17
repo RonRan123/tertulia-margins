@@ -19,16 +19,27 @@ export type PageRef = {
 export type LinkMethod = "exact" | "overlap" | "page";
 export type PageLink = PageRef & { pdfPage: number; method: LinkMethod; match?: string };
 
+// How each method reads to the reader (pill tooltips and labels, D45).
+export const LINK_METHODS: Record<LinkMethod, string> = {
+  exact: "Quote found",
+  overlap: "Closest paragraph by shared words",
+  page: "Estimated page",
+};
+
+// What a screen reader says for a pill: the ↗ is decoration, the match strength isn't.
+export const pillName = (label: string, method: LinkMethod) => `Open ${label} in the PDF (${LINK_METHODS[method].toLowerCase()})`;
+
 // ---- Finding references ----
 
-const RANGE = String.raw`(\d+)(?:\s*[-–]\s*\d+)?`;
+// Spaces and tabs only, never a line break: a reference is drawn on one line (D45).
+const RANGE = String.raw`(\d+)(?:[ \t]*[-–][ \t]*\d+)?`;
 // Earlier patterns win where two overlap: "[p. 42]" isn't also read as "p. 42".
 const REF_PATTERNS: { pattern: RegExp }[] = [
-  { pattern: new RegExp(String.raw`\[(PDF\s+)?pp?\.?\s*${RANGE}\]`, "gi") },
-  { pattern: new RegExp(String.raw`(?<![\w¶])(PDF\s+)?(?:pp?\.|pg\.?)\s*${RANGE}\b`, "gi") },
-  { pattern: new RegExp(String.raw`\b()pages?\s+${RANGE}\b`, "gi") },
+  { pattern: new RegExp(String.raw`\[(PDF[ \t]+)?pp?\.?[ \t]*${RANGE}\]`, "gi") },
+  { pattern: new RegExp(String.raw`(?<![\w¶])(PDF[ \t]+)?(?:pp?\.|pg\.?)[ \t]*${RANGE}\b`, "gi") },
+  { pattern: new RegExp(String.raw`\b()pages?[ \t]+${RANGE}\b`, "gi") },
   { pattern: new RegExp(String.raw`(?<=["”]\s*)()\(${RANGE}\)`, "g") },
-  { pattern: new RegExp(String.raw`(?<=["”]\s*)()[—–]\s*${RANGE}\b`, "g") },
+  { pattern: new RegExp(String.raw`(?<=["”]\s*)()[—–][ \t]*${RANGE}\b`, "g") },
 ];
 // “…” or "…", paired in order (a straight " can open or close), then kept if at least three words:
 // skipping short quotes inside the pattern would pair one quote's closing mark with the next's opening.
@@ -161,4 +172,12 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
 export function linkHighlight(link: PageLink): string | undefined {
   if (!link.match) return undefined;
   return link.method === "exact" ? link.match : link.match.split(/\s+/).slice(0, 6).join(" ");
+}
+
+// What a reference shows as a pill (D45), whatever form it was written in: "[p. 42]", "page 42"
+// and “…” (42) all read "p. 42"; a range "pp. 10–11"; a PDF page keeps its "PDF".
+export function pageLabel(written: string): string {
+  const [first, last] = written.match(/\d+/g) ?? [];
+  const pages = last ? `pp. ${first}–${last}` : `p. ${first}`;
+  return /^\[?PDF\b/i.test(written) ? `PDF ${pages}` : pages;
 }
