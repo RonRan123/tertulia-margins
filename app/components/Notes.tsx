@@ -98,7 +98,9 @@ export function Notes<C extends Card>({ notes, cards, onChange, marginHeader, re
             },
           }),
           EditorView.lineWrapping,
-          EditorView.contentAttributes.of({ "aria-label": "Notes" }),
+          // The browser's own spell check (CodeMirror turns it off by default): squiggles and
+          // right-click suggestions from the reader's OS dictionary.
+          EditorView.contentAttributes.of({ "aria-label": "Notes", spellcheck: "true", autocorrect: "on" }),
           placeholder(EMPTY_COPY),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
