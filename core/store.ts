@@ -145,6 +145,7 @@ export type Theme = "light" | "dark"; // D28: light unless the reader switches
 // (the draggable divider); the rest goes to the margin, PDF or chat.
 // autocomplete, pageLinks: switches in the settings gear (D47), on unless the reader turns them off.
 // reactions: the margin's Show/Hide reactions toggle (D50); hidden, the daemons do nothing at all.
+// pdfDark: the settings gear's "Dark PDF pages" (D57), off unless the reader turns it on.
 export type UiState = {
   view: View;
   isSidebarOpen: boolean;
@@ -153,6 +154,7 @@ export type UiState = {
   autocomplete: boolean;
   pageLinks: boolean;
   reactions: boolean;
+  pdfDark: boolean;
 };
 export const UI_KEY = "tertulia-margins:ui";
 export const NOTES_SHARE = { min: 0.35, max: 0.75, step: 0.02 };
@@ -164,6 +166,7 @@ export const defaultUi: UiState = {
   autocomplete: true,
   pageLinks: true,
   reactions: true,
+  pdfDark: false,
 };
 // Rounded to 0.1%, so arrow-key steps don't pile up float noise.
 export const clampNotesShare = (share: number) =>
@@ -187,6 +190,7 @@ export function loadUi(storage: KeyValueStorage): UiState {
     autocomplete: isOn(saved.autocomplete),
     pageLinks: isOn(saved.pageLinks),
     reactions: isOn(saved.reactions),
+    pdfDark: saved.pdfDark === true,
   };
 }
 

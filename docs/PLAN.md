@@ -149,6 +149,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S10.8: sensible OCR text (D56)
 - [x] Keep every OCR word; repair doubtful words (under 60%) from the document's confident words via common OCR confusions; status after OCR: words read, misreads fixed, words uncertain. **Verify:** core tests (`¢f` → `if`, punctuation kept, `¢f` not taken for "F.", no fix without a confident match, confident words untouched); 205 tests, lint, build green. Hayek scan in the browser: PDF page 2 now reads "information, if we can start" (was "¢f"); status "Read 5,896 words from 13 scanned pages: fixed 1 likely misread; 20 words are uncertain, so check quotes against the page." Left for option B: `HAvex`, italic "why" read `w/y`, `codrdinate`, logo specks.
 
+### S10.9: dark PDF pages (D57)
+- [x] "Dark PDF pages" switch in the settings gear, indented under Dark theme, independent, off by default, saved with the view; on, the PDF's drawn pages are inverted. **Verify:** store tests (off by default, on persists, malformed is off); 205 tests, lint, build green. Headless Chrome on the Hayek scan: switch under Dark theme, pages dark with light text, a clicked page link's quote highlight still shows; with the light theme the setting stays and the pages stay dark.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

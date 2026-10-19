@@ -441,6 +441,13 @@ button.pill[aria-pressed="true"] {
   background: var(--paper);
 }
 
+/* A switch that belongs under the one above it (D57: Dark PDF pages under Dark theme). */
+.setting.is-sub {
+  padding-left: calc(var(--s3) + var(--s4));
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
 /* A checkbox drawn as a switch: a track with a knob that slides right when on. */
 .setting input {
   appearance: none;
@@ -1591,6 +1598,17 @@ main[data-view="quiz"] .quiz {
 .pdf-drop-hint {
   margin: 0 0 var(--s2);
   font-size: 0.8125rem;
+}
+
+/* Dark PDF pages (D57): the drawn pages inverted, white to dark gray (0.9 matches the page
+   colour below), hues turned back so colours stay roughly themselves; text, scans and figures
+   alike. The text layer (selection, search and quote highlights) sits on top, untouched. */
+main[data-pdf-dark] .pdfViewer .page canvas {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+main[data-pdf-dark] .pdfViewer .page {
+  background-color: rgb(26 26 26);
 }
 
 /* OCR of a scanned PDF (D55): a card over the pages with a spinner and page progress. */

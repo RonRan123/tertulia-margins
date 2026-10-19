@@ -462,6 +462,7 @@ export default function Home() {
       <main
         data-view={ui.view}
         data-sidebar-open={ui.isSidebarOpen || undefined}
+        data-pdf-dark={ui.pdfDark || undefined}
         style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
       >
         <header className="app-header">

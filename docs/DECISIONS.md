@@ -615,6 +615,17 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D57. Dark PDF pages: a settings switch that inverts the drawn pages (amends D47)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** In the dark theme the PDF stays a bright white page. Ronith wants a switch, off by default, indented under Dark theme, to make the PDF dark too.
+- **Alternatives:** pdfjs's `pageColors` (redraws text and lines in our colours and leaves photos alone, but scanned pages are pictures, so scans like Hayek's would stay white, and the viewer must reopen on each toggle). The switch greyed out or hidden while Dark theme is off.
+- **Rules:** "Dark PDF pages" in the settings gear, indented under Dark theme but independent of it (a dark PDF in the light app is allowed), off unless turned on, saved with the view (`pdfDark`). On, the drawn pages get `filter: invert(0.9) hue-rotate(180deg)` (white to dark gray, colours roughly kept) and the page background matches; the text layer (selection, search, quote highlights) is untouched. Instant, no reload.
+- **Why:** it works on every PDF, scans included, for one CSS rule.
+- **Cost we accept:** photos and figures are inverted too.
+- **Revisit if:** testers read figure-heavy PDFs in the dark (then add `pageColors` for text PDFs and keep inversion for scans).
+
+---
+
 ## Template
 
 ```
