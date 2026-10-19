@@ -177,9 +177,11 @@ export default function Home() {
   };
 
   // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
+  // A card's words stay highlighted in the notes only while its margin is on screen.
   const showView = (view: View) => {
     if (view !== ui.view) trace({ kind: "view", view });
     if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
+    if (view !== "notes+margin") setActiveCard(undefined);
     setUi((u) => ({ ...u, view }));
   };
   // The side to bring back when the notes leave full screen (this tab only; after a reload, the margin).
