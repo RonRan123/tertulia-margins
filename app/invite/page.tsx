@@ -4,6 +4,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Logo } from "../components/icons";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -33,7 +34,10 @@ export default function LandingPage() {
         />
       </div>
       <div className="landing-copy">
-        <p className="landing-wordmark">tertulia</p>
+        <p className="landing-wordmark">
+          <Logo size={28} />
+          tertulia
+        </p>
         <h1>A tertulia of one.</h1>
         <p className="landing-lede">You write the margin notes. Your reading partner talks back.</p>
         <ul className="landing-points">

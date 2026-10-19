@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Two half-arrows reaching for each other, tips almost touching (also the Logo in app/components/icons.tsx). -->
+  <g fill="none" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 5V26L20 14" stroke="#2f6fd6"/>
+    <path d="M32 59V38L44 50" stroke="#d8443a"/>
+  </g>
+</svg>
