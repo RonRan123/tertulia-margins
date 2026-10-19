@@ -1067,6 +1067,12 @@ main[data-view="chat"] .side-pane {
   border-left: 0;
 }
 
+/* The PDF sheet (phones only, below): its head and the dimmed notes behind it. */
+.sheet-head,
+.sheet-backdrop {
+  display: none;
+}
+
 main[data-view="quiz"] .panes,
 main[data-view="pdf"] .panes,
 main[data-view="chat"] .panes {
@@ -1994,6 +2000,67 @@ dialog.reference form button {
     grid-column: 1 / -1;
     min-height: 70dvh;
     border-left: 0;
+  }
+
+  /* A page link tapped beside the notes opens the PDF as a sheet over them; a strip of notes
+     stays visible above it, dimmed. cursor: pointer lets iOS Safari send the backdrop its taps. */
+  main[data-pdf-sheet] .sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 2.75rem 0 0;
+    z-index: 39;
+    background: rgb(0 0 0 / 0.3);
+    cursor: pointer;
+  }
+
+  main[data-pdf-sheet] .side-pane,
+  main[data-pdf-sheet] .pdf-pane {
+    display: flex;
+  }
+
+  main[data-pdf-sheet] .side-pane {
+    --sheet-head: 3.25rem;
+    position: fixed;
+    inset: 22dvh 0 0;
+    z-index: 40;
+    min-height: 0;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.15);
+    transition: transform 0.15s ease-out;
+  }
+
+  main[data-pdf-sheet] .pdf-pane {
+    padding-top: 0;
+  }
+
+  /* The viewer fills the PDF pane absolutely (pdfjs needs that), so it starts below the head. */
+  main[data-pdf-sheet] .sheet-head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    height: var(--sheet-head);
+    padding: var(--s2) var(--s4) 0;
+    touch-action: none; /* the head's drags move the sheet, not the page */
+  }
+
+  main[data-pdf-sheet] .pdf-viewer {
+    top: var(--sheet-head);
+  }
+
+  .sheet-handle {
+    align-self: center;
+    width: 2.5rem;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--rule);
+  }
+
+  .sheet-back {
+    padding: var(--s1) 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ai);
   }
 
   .panes {
