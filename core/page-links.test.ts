@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { findPageRefs, linkHighlight, linkPageRefs, pageLabel, pdfParagraphs, pillName } from "./page-links.ts";
+import { findPageRefs, linkHighlight, linkPageRefs, pageLabel, pdfParagraphs, pillName, suggestPageCite } from "./page-links.ts";
 
 const refsIn = (notes: string) => findPageRefs(notes).map((r) => ({ text: notes.slice(r.start, r.end), page: r.page, isPdfPage: r.isPdfPage }));
 
@@ -118,4 +118,23 @@ test("a reference never spans a line break, so it can be drawn on one line (D45)
 test("pageLabel keeps a PDF range's PDF, and pillName names the match for screen readers", () => {
   expect(pageLabel("[PDF pp. 3–4]")).toBe("PDF pp. 3–4");
   expect(pillName("p. 42", "exact")).toBe("Open p. 42 in the PDF (quote found)");
+});
+
+// D54: the page cite suggested after a quote the reader just closed.
+test("suggestPageCite offers the page of a closed 4+ word quote found on one page", () => {
+  const pdf = pdfParagraphs("[PDF p. 7]\nEvery state is founded on force, said Trotsky.\n\n[PDF p. 8]\nThe monopoly of the legitimate use of physical force.");
+  const cite = (notes: string) => suggestPageCite(notes, notes.length, pdf);
+  expect(cite('- "every state is founded on force"')).toBe(" [p. 7]"); // no exact refs yet: the PDF page
+  expect(cite('"monopoly of the legitimate use" [p. 5]\n- "every state is founded on force"')).toBe(" [p. 4]"); // offset 3 learned
+  expect(cite('"every state is founded"')).toBe(" [p. 7]"); // 4 words
+  expect(cite('"state is founded"')).toBeUndefined(); // too short
+  expect(cite('"every state is founded on force')).toBeUndefined(); // not closed
+  expect(cite('"every state is founded on force" and')).toBeUndefined(); // caret not right after the quote
+  expect(cite('"words that are not in the book"')).toBeUndefined();
+  expect(cite('"every state is founded on force" [p. 7] and "')).toBeUndefined(); // an opening mark
+});
+
+test("suggestPageCite stays quiet when the quote is on more than one page", () => {
+  const pdf = pdfParagraphs("[PDF p. 1]\nThe power of the state is great.\n\n[PDF p. 2]\nThe power of the state is great.");
+  expect(suggestPageCite('"power of the state is"', 23, pdf)).toBeUndefined();
 });

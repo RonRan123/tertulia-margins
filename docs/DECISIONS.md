@@ -582,6 +582,17 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D54. A page cite as ghost text after a closed quote (amends D46)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** Quote autocomplete (D46) supplies a quote's words, but the reader still types its page. A completed quote is an exact match, so the app knows its PDF page, and page links (D33) already learn the PDF − paper offset from exact quotes.
+- **Alternatives:** suggest only once an offset is learned; insert the PDF page, `[PDF p. 7]`. Formats: `(p. 4)`, `(4)`.
+- **Rules:** when the caret is at the end of a line right after a closing `"` or `”`, and the quote before it is 4+ words found exactly on one PDF page, ghost text shows ` [p. N]`; Tab accepts, Esc dismisses, as for D46. N is the PDF page minus the median offset of the notes' exact quotes (the PDF page until there is one), the number a pill would estimate. Only from a PDF's text (its page markers); none for a quote on several pages.
+- **Why:** whatever number it shows, the pill links to the exact quote, so a guessed number never sends the reader to the wrong place; it only may need fixing on a book's first quote.
+- **Cost we accept:** before any exact quote teaches the offset, the number is the PDF page, which can differ from the paper page.
+- **Revisit if:** the first suggestions on a new book are often wrong enough to annoy.
+
+---
+
 ## Template
 
 ```

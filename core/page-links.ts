@@ -81,7 +81,7 @@ function contextOf(notes: string, start: number, end: number): { quote?: string;
 
 // ---- Matching ----
 
-type PdfParagraph = { text: string; norm: string; key: string; words: string[]; page: number };
+export type PdfParagraph = { text: string; norm: string; key: string; words: string[]; page: number };
 
 // Lowercase, straight quotes, no line-break hyphens, single spaces: how notes and PDF text compare.
 const normalize = (text: string) =>
@@ -131,6 +131,22 @@ export function pdfParagraphs(pdfText: string): PdfParagraph[] {
   return pieces;
 }
 
+// Where a quote is found exactly: the paragraph each occurrence starts in. The PDF is read as one
+// stream (D52), so a quote that runs across a paragraph or page break still matches.
+function exactHits(paragraphs: PdfParagraph[]): (quote: string) => PdfParagraph[] {
+  const stream = paragraphs.map((p) => p.key).join("");
+  const starts: number[] = [];
+  paragraphs.reduce((at, p) => (starts.push(at), at + p.key.length), 0);
+  const paragraphAt = (offset: number) => paragraphs[starts.findLastIndex((s) => s <= offset)];
+  return (quote) => {
+    const key = matchKey(quote);
+    if (key.length < MIN_KEY) return [];
+    const hits: PdfParagraph[] = [];
+    for (let at = stream.indexOf(key); at !== -1; at = stream.indexOf(key, at + 1)) hits.push(paragraphAt(at));
+    return hits;
+  };
+}
+
 const WINDOW = 3; // pages either side of the estimate searched by word overlap
 const OVERLAP_MIN = 0.35; // share of the reference's word weight a paragraph must cover
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
@@ -139,19 +155,12 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
   const lastPage = Math.max(1, ...paragraphs.map((p) => p.page));
   const clamp = (page: number) => Math.min(Math.max(1, page), lastPage);
 
-  // 1. Exact: each quote, anywhere in the PDF read as one stream (D52), so a quote that runs across
-  // a paragraph or page break still matches; a hit is the paragraph the quote starts in. The hits
-  // closest to their written page teach the offset.
-  const stream = paragraphs.map((p) => p.key).join("");
-  const starts: number[] = [];
-  paragraphs.reduce((at, p) => (starts.push(at), at + p.key.length), 0);
-  const paragraphAt = (offset: number) => paragraphs[starts.findLastIndex((s) => s <= offset)];
+  // 1. Exact: each quote, anywhere in the PDF (exactHits). The hits closest to their written page
+  // teach the offset.
+  const hitsOf = exactHits(paragraphs);
   const exact = new Map<PageRef, PdfParagraph[]>();
   for (const ref of refs) {
-    const quote = ref.quote ? matchKey(ref.quote) : "";
-    if (quote.length < MIN_KEY) continue;
-    const hits: PdfParagraph[] = [];
-    for (let at = stream.indexOf(quote); at !== -1; at = stream.indexOf(quote, at + 1)) hits.push(paragraphAt(at));
+    const hits = ref.quote ? hitsOf(ref.quote) : [];
     if (hits.length > 0) exact.set(ref, hits);
   }
   const closest = (hits: PdfParagraph[], target: number) =>
@@ -186,6 +195,25 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
     // 3. Page: the estimate alone.
     return { ...ref, pdfPage: estimate, method: "page" };
   });
+}
+
+// D54: the page cite to suggest after a quote the reader just closed, as ghost text: " [p. N]".
+// Only when the line before the caret ends with a closing quote mark, the quote is 4+ words and
+// found exactly on one page of the PDF. The number is the paper page: the PDF page minus the offset
+// the notes' exact quotes teach (the PDF page itself until one does), as a pill would estimate.
+export function suggestPageCite(notes: string, caret: number, paragraphs: PdfParagraph[]): string | undefined {
+  const before = notes.slice(notes.lastIndexOf("\n", caret - 1) + 1, caret);
+  if (!/["”]$/.test(before)) return undefined;
+  const last = [...before.matchAll(QUOTE)].at(-1);
+  const isClosedHere = last && last.index + last[0].length === before.length;
+  if (!isClosedHere || last[1].trim().split(/\s+/).length < 4) return undefined;
+  const pages = new Set(exactHits(paragraphs)(last[1]).map((p) => p.page));
+  if (pages.size !== 1) return undefined;
+  const offsets = linkPageRefs(findPageRefs(notes), paragraphs)
+    .filter((link) => link.method === "exact" && !link.isPdfPage)
+    .map((link) => link.pdfPage - link.page);
+  const offset = offsets.length > 0 ? median(offsets) : 0;
+  return ` [p. ${Math.max(1, [...pages][0] - offset)}]`;
 }
 
 // A quote as the PDF view should search for it: footnote numbers in it (left by an earlier text
