@@ -16,6 +16,7 @@ type Matches = { current: number; total: number };
 
 export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHandle> }) {
   const container = useRef<HTMLDivElement>(null);
+  const pagesBox = useRef<HTMLDivElement>(null);
   const viewer = useRef<PDFViewer>(null);
   const bus = useRef<EventBus>(null);
   const pendingPage = useRef<number>(undefined); // asked for before the pages were ready
@@ -59,8 +60,12 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
   const onPagesReady = useEffectEvent(() => jumpIfPending());
 
   // One viewer per PDF. pdf_viewer.mjs reads pdfjs from globalThis, so it's imported after it.
+  // A viewer is shut down with its PDF: its listeners removed (abortSignal) and its pages and
+  // hidden copy helper taken out of the box. Left running, the next viewer would take that helper
+  // (the box's first child) as its pages box and draw the new PDF out of sight.
   useEffect(() => {
     let isCancelled = false;
+    const listeners = new AbortController();
     let destroy = () => {};
     void (async () => {
       const { pdfjs, task: loading, close } = await openPdf(pdf.data);
@@ -68,11 +73,18 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
       if (isCancelled) return destroy();
       (globalThis as { pdfjsLib?: unknown }).pdfjsLib = pdfjs;
       const { EventBus, PDFFindController, PDFLinkService, PDFViewer } = await import("pdfjs-dist/web/pdf_viewer.mjs");
-      if (isCancelled || !container.current) return;
+      if (isCancelled || !container.current || !pagesBox.current) return;
       const eventBus = new EventBus();
       const linkService = new PDFLinkService({ eventBus });
       const findController = new PDFFindController({ eventBus, linkService });
-      const pages = new PDFViewer({ container: container.current, eventBus, linkService, findController });
+      // `abortSignal` is read by pdfjs's viewer but missing from its types, so the options go in as a variable.
+      const options = { container: container.current, viewer: pagesBox.current, eventBus, linkService, findController, abortSignal: listeners.signal };
+      const pages = new PDFViewer(options);
+      const shutDown = destroy;
+      destroy = () => {
+        pages.setDocument(null as never); // pdfjs accepts null: it empties the box
+        shutDown();
+      };
       linkService.setViewer(pages);
       // Loaded while hidden (another view): the resize observer fits it once it's shown.
       eventBus.on("pagesinit", () => {
@@ -105,6 +117,7 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
       isFitted.current = false;
       viewer.current = null;
       bus.current = null;
+      listeners.abort();
       destroy();
     };
   }, [pdf]);
@@ -161,7 +174,7 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     <div className="pdf-viewer">
       {/* pdfjs needs an absolutely positioned scroll container whose first child is the viewer. */}
       <div className="pdf-scroll" ref={container} tabIndex={0} aria-label={`PDF: ${pdf.name}`}>
-        <div className="pdfViewer" />
+        <div className="pdfViewer" ref={pagesBox} />
       </div>
       {error && <p className="warning pdf-error">{error}</p>}
       <div className="pdf-toolbar" role="toolbar" aria-label="PDF controls">
