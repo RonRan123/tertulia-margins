@@ -90,6 +90,7 @@ const isAlone = (view: View) => !view.startsWith("notes+");
 const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
 const isNotesAlone = (view: View) => view === "notes";
+const isSheet = (view: View) => sideOf(view) !== "margin"; // Quiz, PDF or Chat: a sheet on a phone
 
 // Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
 function download(filename: string, content: string) {
@@ -178,13 +179,35 @@ export default function Home() {
 
   // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
   // A card's words stay highlighted in the notes only while its margin is on screen.
+  // On a phone the notes are home, and Quiz, PDF and Chat open as a sheet over them (CSS; their
+  // alone views fill the screen). Entering a sheet from the notes is a history entry, so Back closes
+  // it; leaving one goes back, and popstate below brings the notes. Swapping sheets adds none.
   const showView = (view: View) => {
     if (view !== ui.view) trace({ kind: "view", view });
     if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
     if (view !== "notes+margin") setActiveCard(undefined);
-    if (isPdfSheet) closePdfSheet();
+    const isEnteringSheet = isPhone() && !isSheet(ui.view) && isSheet(view);
+    const isLeavingSheet = isPhone() && isSheet(ui.view) && !isSheet(view);
+    if (isEnteringSheet) {
+      homeView.current = ui.view;
+      window.history.pushState({ sheet: true }, "");
+    }
+    if (isLeavingSheet && window.history.state?.sheet) {
+      homeView.current = view;
+      return window.history.back();
+    }
     setUi((u) => ({ ...u, view }));
   };
+  const homeView = useRef<View>("notes+margin"); // the notes view a phone's sheet closes to
+  const closeSheet = () => showView(homeView.current);
+  useEffect(() => {
+    const onBack = () => {
+      if (window.history.state?.sheet) return;
+      setUi((u) => (isSheet(u.view) ? { ...u, view: homeView.current } : u));
+    };
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
   // The side to bring back when the notes leave full screen (this tab only; after a reload, the margin).
   const lastSide = useRef<Side>("margin");
   const toggleNotesAlone = () => {
@@ -429,31 +452,9 @@ export default function Home() {
   // hidden, the viewer holds the page until it is shown and fitted (PdfViewer).
   const openPage = (page: number) => {
     trace({ kind: "pdf", action: "opened-page", page });
-    showSource();
+    showPdf();
     pdfPane.current?.goTo(page);
   };
-
-  // On a phone, a page link or cite tapped while the notes show opens the PDF as a sheet over them
-  // (the one PDF pane, restyled by CSS), so checking a source never leaves the notes. It's a history
-  // entry: Back closes it, and so do "← Notes", a swipe down on its handle and a tap on the dimmed
-  // notes, each by going back. Elsewhere, and from the other views, the PDF view opens as before.
-  const [isPdfSheet, setIsPdfSheet] = useState(false);
-  const showSource = () => {
-    const isNotesShown = ui.view === "notes+margin" || ui.view === "notes";
-    if (!isPhone() || !isNotesShown) return showPdf();
-    if (isPdfSheet) return;
-    window.history.pushState({ pdfSheet: true }, "");
-    setIsPdfSheet(true);
-  };
-  const closePdfSheet = () => {
-    if (window.history.state?.pdfSheet) window.history.back(); // popstate below closes it
-    else setIsPdfSheet(false);
-  };
-  useEffect(() => {
-    const onBack = () => setIsPdfSheet(window.history.state?.pdfSheet === true);
-    window.addEventListener("popstate", onBack);
-    return () => window.removeEventListener("popstate", onBack);
-  }, []);
 
   // ---- Page links (R4, D33) ----
   // A layer over the notes, recomputed as they change (deferred, so typing stays smooth); never
@@ -468,7 +469,7 @@ export default function Home() {
   );
   const openLink = (link: PageLink) => {
     trace({ kind: "pdf", action: "opened-page", page: link.pdfPage });
-    showSource();
+    showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
   // The words a link selected in the PDF stay until the reader writes again.
@@ -504,9 +505,7 @@ export default function Home() {
       <main
         data-view={ui.view}
         data-sidebar-open={ui.isSidebarOpen || undefined}
-        data-pdf-dark={ui.pdfDark || undefined}
-        data-pdf-sheet={isPdfSheet || undefined}
-        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
+        data-pdf-dark={ui.pdfDark || undefined}        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
       >
         <header className="app-header">
           <span className="brand">
@@ -644,9 +643,10 @@ export default function Home() {
                 />
               </div>
               <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />
-              {/* Phone only (CSS): the dimmed notes behind the PDF sheet; a tap closes it. */}
-              <div className="sheet-backdrop" aria-hidden="true" onClick={closePdfSheet} />
+              {/* Phone only (CSS): the dimmed notes behind a Quiz, PDF or Chat sheet; a tap closes it. */}
+              <div className="sheet-backdrop" aria-hidden="true" onClick={closeSheet} />
               <section className="side-pane" aria-label="Beside the notes">
+                <SheetHead onClose={closeSheet} />
                 <div className="quiz-pane">
                   <Quiz
                     bookId={library.currentId}
@@ -659,7 +659,6 @@ export default function Home() {
                   />
                 </div>
                 <div className="pdf-pane">
-                  <SheetHead onClose={closePdfSheet} />
                   <PdfPane
                     ref={pdfPane}
                     bookId={library.currentId}
@@ -694,9 +693,9 @@ export default function Home() {
 
 const SWIPE_CLOSE_PX = 60; // how far down the sheet's handle is dragged before it closes
 
-// The PDF sheet's top (phone only, CSS): a grab handle and "← Notes". A drag down on it moves the
-// sheet with the finger and closes it past SWIPE_CLOSE_PX, else springs back. Only the head drags,
-// so scrolling and zooming the PDF never close the sheet.
+// A phone sheet's top (CSS): a grab handle and "← Notes". A drag down on it moves the sheet with
+// the finger and closes it past SWIPE_CLOSE_PX, else springs back. Only the head drags, so
+// scrolling a quiz or chat, or zooming the PDF, never closes the sheet.
 function SheetHead({ onClose }: { onClose: () => void }) {
   const start = useRef<number>(undefined);
   const sheetOf = (el: HTMLElement) => el.closest<HTMLElement>(".side-pane");

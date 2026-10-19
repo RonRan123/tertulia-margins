@@ -1964,11 +1964,11 @@ dialog.reference form button {
     min-height: 100dvh;
   }
 
-  /* Below the bar, so its toggle stays reachable. */
+  /* Below the bar, so its toggle stays reachable; above a Quiz, PDF or Chat sheet. */
   .sidebar {
     position: fixed;
     inset: 2.75rem auto 0 0;
-    z-index: 30;
+    z-index: 50;
     width: min(18rem, 85vw);
     box-shadow: 4px 0 16px rgb(0 0 0 / 0.12);
   }
@@ -1977,8 +1977,9 @@ dialog.reference form button {
     display: block;
     position: fixed;
     inset: 2.75rem 0 0;
-    z-index: 29;
+    z-index: 49;
     background: rgb(0 0 0 / 0.3);
+    cursor: pointer;
   }
 
   .workspace {
@@ -1989,22 +1990,22 @@ dialog.reference form button {
     display: none;
   }
 
-  /* Beside the notes, there is no room: the chosen pane shows instead of them. */
-  main[data-view="notes+quiz"] .panes,
-  main[data-view="notes+pdf"] .panes,
-  main[data-view="notes+chat"] .panes {
-    display: none;
+  /* The notes are home: Quiz, PDF and Chat open as a sheet over them, the notes dimmed above it
+     and kept where they were; their alone views (⤢) fill the screen under the bar. The notes stay
+     laid out underneath either way, so closing a sheet finds them as they were. */
+  main[data-view="quiz"] .panes,
+  main[data-view="pdf"] .panes,
+  main[data-view="chat"] .panes {
+    display: flex;
   }
 
   .side-pane {
     grid-column: 1 / -1;
-    min-height: 70dvh;
     border-left: 0;
   }
 
-  /* A page link tapped beside the notes opens the PDF as a sheet over them; a strip of notes
-     stays visible above it, dimmed. cursor: pointer lets iOS Safari send the backdrop its taps. */
-  main[data-pdf-sheet] .sheet-backdrop {
+  /* cursor: pointer lets iOS Safari send the backdrop its taps. */
+  main:is([data-view="notes+quiz"], [data-view="notes+pdf"], [data-view="notes+chat"]) .sheet-backdrop {
     display: block;
     position: fixed;
     inset: 2.75rem 0 0;
@@ -2013,38 +2014,37 @@ dialog.reference form button {
     cursor: pointer;
   }
 
-  main[data-pdf-sheet] .side-pane,
-  main[data-pdf-sheet] .pdf-pane {
-    display: flex;
-  }
-
-  main[data-pdf-sheet] .side-pane {
-    --sheet-head: 3.25rem;
+  main:is([data-view$="quiz"], [data-view$="pdf"], [data-view$="chat"]) .side-pane {
     position: fixed;
     inset: 22dvh 0 0;
     z-index: 40;
-    min-height: 0;
     border-radius: 12px 12px 0 0;
     box-shadow: 0 -4px 16px rgb(0 0 0 / 0.15);
-    transition: transform 0.15s ease-out;
+    transition: transform 0.15s ease-out, top 0.2s ease-out;
   }
 
-  main[data-pdf-sheet] .pdf-pane {
-    padding-top: 0;
+  main:is([data-view="quiz"], [data-view="pdf"], [data-view="chat"]) .side-pane {
+    top: 2.75rem;
+    border-radius: 0;
   }
 
-  /* The viewer fills the PDF pane absolutely (pdfjs needs that), so it starts below the head. */
-  main[data-pdf-sheet] .sheet-head {
+  /* A sheet's scrolling stops at its edges instead of moving the notes behind it. */
+  main .side-pane * {
+    overscroll-behavior: contain;
+  }
+
+  main:is([data-view$="quiz"], [data-view$="pdf"], [data-view$="chat"]) .sheet-head {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    height: var(--sheet-head);
+    flex: none;
     padding: var(--s2) var(--s4) 0;
     touch-action: none; /* the head's drags move the sheet, not the page */
   }
 
-  main[data-pdf-sheet] .pdf-viewer {
-    top: var(--sheet-head);
+  /* With nothing beside them, the notes are already full screen: their ⤢ has nothing to do. */
+  .panes .notes-alone {
+    display: none;
   }
 
   .sheet-handle {
