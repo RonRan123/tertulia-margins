@@ -118,8 +118,9 @@ function joinLines(
 }
 
 // Groups items into lines by baseline (top to bottom), ordering each line's items left to right.
+// Footnote marks are dropped first (D52).
 function linesOf(items: PdfTextItem[]): Line[] {
-  const visible = items.filter((it) => it.str.length > 0).sort((a, b) => b.y - a.y || a.x - b.x);
+  const visible = withoutFootnoteMarks(items.filter((it) => it.str.length > 0)).sort((a, b) => b.y - a.y || a.x - b.x);
   const groups: PdfTextItem[][] = [];
   for (const it of visible) {
     const last = groups.at(-1);
@@ -150,6 +151,19 @@ function linesOf(items: PdfTextItem[]): Line[] {
       height: Math.max(...inked.map((it) => it.height)),
     }];
   });
+}
+
+// A footnote mark in the text (D52): a 1–3 digit item in smaller type, raised above the baseline of
+// the body text it follows ("fixed.³²"). Left in, it lands on a line of its own above that text,
+// which reads as a new, indented paragraph, and its number ends up inside the reader's quotes.
+function withoutFootnoteMarks(items: PdfTextItem[]): PdfTextItem[] {
+  const body = items.filter((it) => /\p{L}/u.test(it.str) && it.height > 0);
+  if (body.length === 0) return items;
+  const bodyHeight = mode(body.map((it) => Math.round(it.height * 10) / 10), "largest");
+  const isMark = (it: PdfTextItem) =>
+    /^\s*\d{1,3}\s*$/.test(it.str) && it.height > 0 && it.height < 0.8 * bodyHeight &&
+    body.some((b) => b.height >= 0.9 * bodyHeight && it.y > b.y && it.y - b.y < 0.6 * bodyHeight && Math.abs(it.x - (b.x + b.width)) < bodyHeight);
+  return items.filter((it) => !isMark(it));
 }
 
 // Drops running headers/footers and page numbers: a first or last line whose text (digits ignored)

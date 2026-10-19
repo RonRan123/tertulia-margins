@@ -494,6 +494,138 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D48. Traces: a readable timeline of every reader action and agent output
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** daemon quality was judged by eye with no record of what each run saw and said (harness scorecard A4 = 2). Ronith wants traces that are "easy for a human to read and follow along", for eval runs and for real use: notes typed, chat, quiz, and what each agent answered.
+- **Alternatives:** where live traces go: each browser only, with an export button; localhost only; a server store (chosen). Stores: Vercel Blob (chosen), Supabase Postgres, Upstash Redis.
+- **Rules:**
+  - *Events* (`core/trace.ts`): session start, book open/create/rename/delete, view and setting changes, notes edits (lines added and removed, after a 4 s pause or before a book switch), PDF added and pages opened, chat question and full reply with token counts and each quote check, daemon runs with every draft and its fate (passed, dropped and why, runner-up, shown), anchor fallback, word count and tokens for panel and reviewer, runner-ups promoted, card clicks and dismissals, quiz start, questions written, each answer, grades, score.
+  - *Never traced:* book text. Titles, page numbers, the reader's own words and AI output only.
+  - *Readable:* `renderTrace` writes markdown: one entry per event, who acted (Reader, Chat, Daemons, Quiz agent, Quiz grader), what happened, and the text involved, grouped by book.
+  - *Where:* the browser posts batches to `/api/trace` (every 5 s and when the tab hides). On localhost (`next dev`) each session goes to `.scratch/traces/<day>/<browser>-<session>.{jsonl,md}`, rendered as it grows. Hosted, with a private Vercel Blob store connected (`BLOB_READ_WRITE_TOKEN`), each batch is a blob under `traces/<day>/<browser>/<session>/`; `npm run traces` downloads and renders them into `.scratch/traces/hosted/`. With neither, the route stores nothing.
+  - *Dependency:* `@vercel/blob` (Ronith approved).
+  - *Consent and deletion:* not built; Ronith tells testers directly (2026-10-17).
+  - The daemon route's `daemons` event now carries `drafts` (every draft and its fate) so the trace can show them.
+- **Why:** the harness rubric's first P1 gap: without traces nobody can read failures, count them or tell which stage caused them (evals FAQ: error analysis first).
+- **Cost we accept:** testers' notes and the AI's replies are stored on Vercel; tracing adds a request every few seconds of activity; traces drop silently on failure.
+- **Revisit if:** traces get large, testers object, or a tester asks for their data to be deleted.
+
+## D49. Two example books for every visitor
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** a visitor's first screen was an empty book, so it was hard to see what the app does. Ronith wants examples with notes and daemon cards to appear for everyone.
+- **Alternatives:** read-only examples rebuilt on every visit; editable and restored if deleted; editable, seeded once, with a restore action (chosen). For Weber's text: notes and cards only; the German original; a free translation; the Gerth & Mills translation (chosen: Ronith has the publisher's permission for this educational, non-commercial use).
+- **Rules:**
+  - *Books:* "Example: Politics as a Vocation" (Gerth & Mills, Oxford University Press 1946, PDF from Ronith; his own notes; his Author card) and "Example: Pride and Prejudice (ch. I–VIII)" (Project Gutenberg #1342, typeset to a 48-page PDF; sample notes labelled "written for this example, not a real reader's"; three real daemon cards from one run each). Files in `public/examples/` (`<name>.json`: title, notes, cards, chat; `<name>.pdf`).
+  - *Seeding:* once per browser (`tertulia-margins:examples`); the reference text comes from each PDF with the reader's own import; the notes count as already read, so the daemons answer only what the visitor adds; a first visit opens the Weber example.
+  - *Editable:* ordinary books; **Restore example books** in the settings gear (D47) puts them back as shipped (after a confirm) and moves them back to the top.
+  - *Order (Ronith, 2026-10-17):* Pride and Prejudice above Politics as a Vocation, both above the reader's own books, re-ordered on every load (`examplesFirst`) so browsers seeded earlier catch up; a first visit still opens Politics as a Vocation (real notes).
+  - *CLAUDE.md's book-text rule:* these two are the exception: public-domain text and the permitted Weber translation live in the public repo and site.
+- **Why:** a visitor sees the whole loop (notes, cards in the margin, page links into the PDF) before writing a word.
+- **Cost we accept:** ~1 MB of PDFs fetched on a first visit; the Weber permission must cover the public GitHub repo as well as the site; the P&P cards are a snapshot of one run.
+- **Revisit if:** the permission is limited to the site (then serve the Weber PDF from a store, not the repo), or Ronith's own P&P notes replace the sample notes.
+
+---
+
+## D50. Show/Hide reactions, and new cards that shimmer in
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** Ronith wants control over when the margin speaks: a toggle at the top of the margin, nothing running in the background when it's off, and new reactions that arrive rather than pop in.
+- **Alternatives:** the toggle only hiding cards while runs continue; no delay before a card shows; a third trigger, reading any new content after 30 minutes however little (built, then dropped by Ronith the same day: "the 10 lines quota and react notes button are good enough").
+- **Rules:**
+  - *Toggle:* **Hide reactions / Show reactions**, first in the margin's panel, remembered per browser (`UiState.reactions`, on by default). Hidden: the cards and their highlight disappear, **React to notes** goes, and the daemons do nothing: no wait timers, no runs, and a run already out is cancelled. Showing them again resumes after the next pause.
+  - *When they read:* unchanged from D37: 10 new lines of the reader's own and a 25 s pause, or **React to notes**.
+  - *Shimmer:* a new card (from a run or a saved runner-up) shows as a shimmering placeholder in its place for a random 1–2 s, then fades in; the screen-reader announcement waits for it. Cards already there on load show at once. Reduced motion: no animation, same delay.
+- **Why:** the reader decides whether the margin is live; a short wait signals that someone is responding.
+- **Cost we accept:** the delay adds 1–2 s to every new card.
+- **Revisit if:** testers miss the toggle, or short notes never get a reaction because they don't reach 10 lines.
+
+---
+
+## D51. One margin without repeats: sentence anchors, sparse sections, several cards a run (amends D37, D39)
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** Ronith saw the Author make the same point twice, reworded and anchored on different words ("You contrast politics with corporate hierarchy… [p. 15]"). He wants no repeats, highlights large enough that two cards rarely overlap, and after he dismisses cards, a run (10 lines or **React to notes**) that reacts again wherever the notes have few remarks. Using dismissals as feedback is a later sprint.
+- **Alternatives:** a prompt rule only (unchecked); an LLM check for repeats (a call per run); anchors widened to the paragraph (too coarse for bullet notes).
+- **Rules:**
+  - *Repeats, checked in code:* `isSameRemark` counts content words (4+ letters, no stopwords, page cites ignored): the same remark if 60% of the shorter one's words are shared, or 40% when both cite the same page. A draft that repeats a card in the margin is dropped (`repeats_margin`), one that repeats another draft of the same run too (`repeats_draft`); a runner-up that repeats a card is never promoted, and `afterRun` skips a pick that repeats one.
+  - *The margin goes with each run:* the cards shown are sent as `<margin>` in the panel's turn; the prompt says never to make a point already there and to aim at parts of the excerpt no remark answers, newest first.
+  - *Anchors:* widened in code to the whole sentence that holds them (`sentenceAround`: up to . ! or ? and a space, or the line's end; no list marker; at most 400 characters).
+  - *Sparse sections:* a run also reads every paragraph with a line of the reader's own that no card's anchor covers (dismissed cards leave lines uncovered). Only new lines start a run (10, as before); this amends D37's "never sweep the backlog": a book's existing notes are still marked read, but their uncovered paragraphs ride along with the next run.
+  - *Several cards a run:* each daemon may draft up to 2 remarks, on different parts; the reviewer picks up to `LIMITS.daemons.maxCardsPerRun` (3), best first, as `picks`; our code keeps them on different words (no overlapping anchors). Each new card shimmers on its own 1–2 s timer (D50).
+  - *Prompts:* `daemon-role.md` and `daemon-reviewer.md` gain the margin and several-picks rules (drafted by Claude; Ronith refines).
+- **Why:** repeats and overlapping highlights make the margin feel like one voice talking in circles; code can catch a reworded repeat for free and every time.
+- **Cost we accept:** the word-overlap test can miss a repeat that shares few words, or drop two genuinely different remarks about the same page; runs read more of the notes (more input tokens) once many paragraphs have no card.
+- **Revisit if:** repeats still get through (then an LLM judge in the eval, or embeddings), or runs get slow or costly on long notes.
+
+## D52. Quotes the reader takes from the book link exactly: footnote marks dropped, matching across breaks (amends D33, D46)
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** a quote Ronith pulled in whole with autocomplete showed as a partial (word-overlap) match. Two causes: (1) the PDF import read a raised footnote mark ("fixed.³²") as a line of its own, which looked like an indented new paragraph, split the sentence and left "32" in the text, so autocomplete offered "…for something 32 much more fixed."; (2) page links matched a quote exactly only inside one paragraph, while autocomplete reads the whole text as one stream, so the two disagreed whenever a quote crossed a paragraph or page break.
+- **Rules:**
+  - *Import:* a 1–3 digit item in smaller type (under 80% of the body text's height), raised above the baseline of the body text it follows, is a footnote mark and is dropped before lines are formed. On Ronith's PDFs: 216 marks and 202 false paragraph breaks gone from one paper, 8 and 7 from Weber; Pride and Prejudice unchanged.
+  - *Exact match:* on a key of letters and digits only (line-break hyphens joined, bare 1–3 digit numbers dropped), over the whole PDF text as one stream, so spacing, punctuation, quote marks, paragraph and page breaks and footnote numbers an older import left in a quote can't stop it; the hit is the paragraph the quote starts in. A key under 12 characters isn't placed. The PDF view searches for the quote without footnote numbers.
+- **Why:** whatever autocomplete offers from the book should always link as exact; both now read the text the same way.
+- **Cost we accept:** a book whose real text has superscript-sized numbers (rare) loses them; a reference text imported before this keeps its footnote numbers until the PDF is imported again (page links and autocomplete use the PDF's text read fresh, so they're fixed at once).
+- **Revisit if:** a quote that's really in the book still shows as overlap.
+
+---
+
+## D53. React to notes reads the bare parts of the notes in sections, all at once (amends D37, D51)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** with D51 a run could show up to 3 cards. Ronith asked why not more when the notes justify it. One panel call can't draft many good remarks (each daemon drafts at most two, voices blur, the output budget is shared), so more cards need more calls.
+- **Alternatives:** raise the cap and let one call draft more (quality drops as the count rises); cover the notes in batches (chosen); batches spread over the next automatic runs.
+- **Rules:**
+  - *Only on React to notes.* Automatic runs (10 new lines and a pause) stay one call, up to 3 cards.
+  - *Sections:* the parts of the notes with a line of the reader's own that no card answers, as whole paragraphs, or runs of lines when a paragraph is long, packed into sections of about 12 of the reader's own lines (`LIMITS.daemons.sectionLines`); the most recent 4 (`maxSections`). With every line answered, one run over all the notes, as before.
+  - *Runs:* one panel call (and reviewer) per section, all at once; each may show up to 3 cards; the first must show something. Each run's cards land when it finishes; one that repeats a card another section has just added is dropped (`afterRun`). The panel's status reads "Reading your notes in 4 sections… 2 done."
+  - *Cost and caps:* each section is a paid call sending the book and counts as one of the day's 40 daemon runs (D37), so a press costs up to 4 runs, ~20–40¢ on Weber until caching. Traces label each run "section 2 of 4".
+- **Why:** each call stays small and sharp, so quality holds while coverage grows; running them at once keeps a press as fast as one run (~8 s live).
+- **Cost we accept:** sections run in parallel, so two can draft the same point before either is in the margin; the merge drops exact-enough repeats but not every overlap. A press over long notes uses several of the day's runs.
+- **Revisit if:** presses feel slow or costly (then prompt caching first), or sections still produce near-repeats.
+
+---
+
+## D54. A page cite as ghost text after a closed quote (amends D46)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** Quote autocomplete (D46) supplies a quote's words, but the reader still types its page. A completed quote is an exact match, so the app knows its PDF page, and page links (D33) already learn the PDF − paper offset from exact quotes.
+- **Alternatives:** suggest only once an offset is learned; insert the PDF page, `[PDF p. 7]`. Formats: `(p. 4)`, `(4)`.
+- **Rules:** when the caret is at the end of a line right after a closing `"` or `”`, and the quote before it is 4+ words found exactly on one PDF page, ghost text shows ` [p. N]`; Tab accepts, Esc dismisses, as for D46. N is the PDF page minus the median offset of the notes' exact quotes (the PDF page until there is one), the number a pill would estimate. Only from a PDF's text (its page markers); none for a quote on several pages.
+- **Why:** whatever number it shows, the pill links to the exact quote, so a guessed number never sends the reader to the wrong place; it only may need fixing on a book's first quote.
+- **Cost we accept:** before any exact quote teaches the offset, the number is the PDF page, which can differ from the paper page.
+- **Revisit if:** the first suggestions on a new book are often wrong enough to annoy.
+
+---
+
+## D55. Scanned PDFs: in-browser OCR writes a text layer into the PDF (amends §3, D23)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** Ronith's Hayek PDF (a 1945 JSTOR scan: 13 fax-compressed page images, no text) showed blank pages and gave no reference text. Blank pages: pdfjs 6 decodes those images with wasm decoders we never pointed it to. No text: a scan has none, so the AI, page links, autocomplete and highlights had nothing to read. §3 had OCR as a non-goal.
+- **Alternatives:** Engines: Scribe.js (AGPL-3.0), PaddleOCR.js (line boxes only, 10+ MB, new SDK); Surya was ruled out (Python on a GPU or llama.cpp server, ~59 s a page on Apple Silicon, weights free only under $5M revenue, books would leave the browser). OCR on a Vercel function (4.5 MB request cap, time limits, a native canvas library, books uploaded). OCR text kept beside the PDF, with our own viewer search and highlights. Decoders and model from a CDN.
+- **Rules:** a page with a picture and no text is a scanned page. When a PDF has any, the PDF view shows "Reading the scanned pages… N of M" with a spinner while Tesseract.js (LSTM, English) reads each page drawn at ~300 dpi, in the browser; pdf-lib writes the words back as invisible text over the picture (`core/ocr-layout.ts` places each on its line's baseline at its width), and the result replaces the stored PDF, marked `isOcred` so it is never read twice. Everything downstream reads it like any text PDF: reference text, page links, quote autocomplete, search, selection and highlights. A scan stored before D55 is converted when first opened. pdfjs's decoders, Tesseract's worker, engine and model (`@tesseract.js-data/eng`, best_int) are copied from node_modules into `public/` before dev and build (`npm run copy-assets`) and load only when needed: a normal page load fetches none of them.
+- **Why:** writing the text into the PDF makes every existing feature work unchanged with no OCR-specific code downstream; Tesseract.js is Apache-2.0, mature and gives word boxes, and running it in the browser keeps books there (D34).
+- **Cost we accept:** ~2 s a page (Hayek: 28 s) and ~7 MB of downloads on the first scan; OCR misreads ("HAvex" for Hayek, logo specks as letters), which can stop an exact quote match (word overlap then links it); English only; Helvetica can't draw non-Latin characters, which are left out of the layer; rotated pages aren't handled.
+- **Revisit if:** testers bring long scanned books (time), non-English scans, or misreads break quotes often (then a better engine, or Claude transcribing pages).
+
+---
+
+## D56. OCR misreads: keep every word, repair doubtful ones from the document's own words, say how sure it was (amends D55)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** On Ronith's Hayek scan, an italic "if" came out as "¢f" in one run and was dropped in another (D55 discarded words under 20% confidence), and autocomplete copied the error into his notes. Tesseract's confidence pinpoints its mistakes: on page 2, 5 of 328 words were under 60%, and they were exactly the misreads (`HAvex*` 48, `if` 38, `#o¢t` 37, `"given"` 13, `frequently` 13).
+- **Alternatives:** B. Claude checks the doubtful words: each one sent as a small crop of the page image with its line for context, one call per scanned PDF; Claude reads what is printed. It would fix all five above, including `HAvex` → `Hayek`, which A can't. Cost: one API call per scan (against the daily cap, D35), page crops sent to Anthropic, and a new prompt file for Ronith to own. Parked in PLAN.md to revisit.
+- **Rules:** no word is dropped for low confidence. After all pages are read, each word under 60% confidence is tried against common OCR confusions (`¢`→`i`/`c`, `rn`→`m`, `cl`→`d`, `vv`→`w`, `0`→`o`, `1`→`l`, `|`→`l`, ligatures, stray `#*^~` marks); the first variant that is a word the same document read confidently (80%+) at least twice replaces it, keeping its punctuation. The rest stay as read and count as uncertain. When OCR finishes, the status says how many words were read, how many likely misreads were fixed and how many are uncertain. Pure code in `core/ocr-layout.ts`, no AI call.
+- **Why:** free, offline and deterministic, and it fixes the commonest misreads (a mangled common word) using only what the scan itself shows; Claude's check (B) waits until real use shows A missing things that matter.
+- **Cost we accept:** names and rare words read wrong stay wrong (`HAvex`); a fix can be wrong when a confusion turns one real word into another (only words already doubtful are touched).
+- **Revisit if:** testers' notes or quotes keep hitting OCR errors A didn't fix, then build B.
+
+---
+
+## D57. Dark PDF pages: a settings switch that inverts the drawn pages (amends D47)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** In the dark theme the PDF stays a bright white page. Ronith wants a switch, off by default, indented under Dark theme, to make the PDF dark too.
+- **Alternatives:** pdfjs's `pageColors` (redraws text and lines in our colours and leaves photos alone, but scanned pages are pictures, so scans like Hayek's would stay white, and the viewer must reopen on each toggle). The switch greyed out or hidden while Dark theme is off.
+- **Rules:** "Dark PDF pages" in the settings gear, indented under Dark theme but independent of it (a dark PDF in the light app is allowed), off unless turned on, saved with the view (`pdfDark`). On, the drawn pages get `filter: invert(0.9) hue-rotate(180deg)` (white to dark gray, colours roughly kept) and the page background matches; the text layer (selection, search, quote highlights) is untouched. Instant, no reload.
+- **Why:** it works on every PDF, scans included, for one CSS rule.
+- **Cost we accept:** photos and figures are inverted too.
+- **Revisit if:** testers read figure-heavy PDFs in the dark (then add `pageColors` for text PDFs and keep inversion for scans).
+
+---
+
 ## Template
 
 ```

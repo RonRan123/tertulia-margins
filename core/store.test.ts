@@ -131,14 +131,14 @@ test("storage that throws never crashes: load is empty, save reports save_failed
 
 test("layout round-trips under its own key and leaves the notes' key alone", () => {
   const { storage, data } = memoryStorage();
-  const ui = { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: false, pageLinks: false } as const;
+  const ui = { view: "notes+pdf", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: false, pageLinks: false, reactions: false, pdfDark: true } as const;
   saveUi(storage, ui);
   expect(loadUi(storage)).toEqual(ui);
   expect(Object.keys(data)).toEqual(["tertulia-margins:ui"]);
 });
 
 test("missing, corrupt or unknown layout falls back to notes + margin, sidebar open, light theme, 60% notes, settings on", () => {
-  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6, autocomplete: true, pageLinks: true };
+  const fallback = { view: "notes+margin", isSidebarOpen: true, theme: "light", notesShare: 0.6, autocomplete: true, pageLinks: true, reactions: true, pdfDark: false };
   expect(loadUi(memoryStorage().storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": "{oops" }).storage)).toEqual(fallback);
   expect(loadUi(memoryStorage({ "tertulia-margins:ui": '{"view":"drawer","isSidebarOpen":"yes"}' }).storage)).toEqual(fallback);
@@ -150,11 +150,14 @@ test("missing, corrupt or unknown layout falls back to notes + margin, sidebar o
 test("settings (D47): older saved UI without them loads both on; off persists; a malformed value is on", () => {
   const load = (json: string) => loadUi(memoryStorage({ "tertulia-margins:ui": json }).storage);
   const old = load('{"view":"chat","isSidebarOpen":false,"theme":"dark","notesShare":0.5}');
-  expect(old).toEqual({ view: "chat", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: true, pageLinks: true });
+  expect(old).toEqual({ view: "chat", isSidebarOpen: false, theme: "dark", notesShare: 0.5, autocomplete: true, pageLinks: true, reactions: true, pdfDark: false }); // older UI: reactions shown (D50), PDF pages light (D57)
   expect(load('{"autocomplete":false,"pageLinks":true}')).toMatchObject({ autocomplete: false, pageLinks: true });
   expect(load('{"autocomplete":true,"pageLinks":false}')).toMatchObject({ autocomplete: true, pageLinks: false });
   expect(load('{"autocomplete":"off","pageLinks":0}')).toMatchObject({ autocomplete: true, pageLinks: true });
   expect(load('{"autocomplete":null}')).toMatchObject({ autocomplete: true, pageLinks: true });
+  expect(load('{"reactions":false}')).toMatchObject({ reactions: false }); // D50: hidden persists
+  expect(load('{"pdfDark":true}')).toMatchObject({ pdfDark: true }); // D57: off unless turned on…
+  expect(load('{"pdfDark":"yes"}')).toMatchObject({ pdfDark: false }); // …and a malformed value is off
 });
 
 test("the divider's saved width is clamped to its range; a non-number falls back to 60%", () => {

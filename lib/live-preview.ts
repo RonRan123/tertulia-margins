@@ -38,6 +38,27 @@ class Bullet extends WidgetType {
 }
 const bullet = Decoration.replace({ widget: new Bullet() });
 
+// A list item's wrapped lines start under its text, not under its bullet: the indent and the
+// marker (with its space) sit in fixed-width boxes, and the line hangs by their total width.
+// Widths are in em, so this holds in the proportional font, raw or rendered.
+const TAB_EM = 1.5;
+const BULLET_EM = 1; // a rendered bullet's box; matches .md-bullet's width
+function hangListItem(state: EditorState, markFrom: number, markTo: number, ranges: Range<Decoration>[], isBullet: boolean) {
+  const line = state.doc.lineAt(markFrom);
+  const indent = state.sliceDoc(line.from, markFrom);
+  const isLineStart = /^[ \t]*$/.test(indent); // not a list inside a quote ("> - …")
+  const hasSpace = state.sliceDoc(markTo, markTo + 1) === " ";
+  if (!isLineStart || !hasSpace) return;
+  const tabs = indent.split("\t").length - 1;
+  const indentEm = (tabs + (indent.length - tabs) / 4) * TAB_EM;
+  const markerEm = isBullet ? BULLET_EM : 0.6 * (markTo - markFrom) + 0.4;
+  const box = (em: number) => ({ class: "md-listbox", attributes: { style: `width: ${em}em` } });
+  if (indent) ranges.push(Decoration.mark(box(indentEm)).range(line.from, markFrom));
+  if (!isBullet) ranges.push(Decoration.mark(box(markerEm)).range(markFrom, markTo + 1));
+  const hang = indentEm + markerEm;
+  ranges.push(Decoration.line({ class: "md-li", attributes: { style: `padding-left: ${hang}em; text-indent: -${hang}em` } }).range(line.from));
+}
+
 // Lines the selection touches; none while the editor isn't focused, so everything renders.
 function activeLines(state: EditorState, hasFocus: boolean): Set<number> {
   const lines = new Set<number>();
@@ -74,13 +95,20 @@ function decorate(view: EditorView): DecorationSet {
           }
           if (name === "FencedCode") return false; // its marks and text stay as written
         }
+        // "[p. 2]" or "[sic]": brackets with no (url) or [label] aren't a link, so they stay as written.
+        const isBareBrackets = (link: { name: string; getChild: (name: string) => unknown } | null) => link?.name === "Link" && !link.getChild("URL") && !link.getChild("LinkLabel");
+        if (isBareBrackets(node.node)) return;
         if (MARKS[name]) ranges.push(Decoration.mark({ class: MARKS[name] }).range(node.from, node.to));
+        const isBullet = name === "ListMark" && !isActive(node.from) && /^[-*+]$/.test(state.sliceDoc(node.from, node.to));
+        if (name === "ListMark") hangListItem(state, node.from, node.to, ranges, isBullet);
         if (isActive(node.from)) return;
-        if (name === "ListMark" && /^[-*+]$/.test(state.sliceDoc(node.from, node.to))) {
-          ranges.push(bullet.range(node.from, node.to));
+        if (isBullet) {
+          // The bullet takes its space too: it is the marker's fixed-width box (.md-bullet).
+          const hasSpace = state.sliceDoc(node.to, node.to + 1) === " ";
+          ranges.push(bullet.range(node.from, node.to + (hasSpace ? 1 : 0)));
           return;
         }
-        if (!HIDDEN.has(name)) return;
+        if (!HIDDEN.has(name) || (name === "LinkMark" && isBareBrackets(node.node.parent))) return;
         // A bare URL (<https://…> or autolinked) stays visible; only a link's (url) part hides.
         if (name === "URL" && node.node.parent?.name !== "Link") return;
         const takesSpace = (name === "HeaderMark" || name === "QuoteMark") && state.sliceDoc(node.to, node.to + 1) === " ";

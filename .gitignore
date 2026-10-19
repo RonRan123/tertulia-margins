@@ -1,5 +1,7 @@
 # deps & build
 node_modules/
+public/pdfjs-wasm/
+public/tesseract/
 .next/
 out/
 build/

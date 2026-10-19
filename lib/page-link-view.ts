@@ -52,11 +52,14 @@ function decorate(view: EditorView): DecorationSet {
     const { link, index } = cursor.value.spec as { link: PageLink; index: number };
     const attributes = { "data-link": String(index) };
     const isOneLine = state.doc.lineAt(from).to >= to; // a plugin may not replace a line break
-    ranges.push(
-      isEdited(from, to) || !isOneLine
-        ? Decoration.mark({ class: `md-pageref is-${link.method}`, attributes }).range(from, to)
-        : Decoration.replace({ widget: new Pill(index, link, pageLabel(state.sliceDoc(from, to))) }).range(from, to),
-    );
+    if (isEdited(from, to) || !isOneLine) {
+      ranges.push(Decoration.mark({ class: `md-pageref is-${link.method}`, attributes }).range(from, to));
+      continue;
+    }
+    // "(p. 4)": the pill takes the parentheses around the reference too.
+    const isWrapped = state.sliceDoc(from - 1, from) === "(" && state.sliceDoc(to, to + 1) === ")";
+    const widget = new Pill(index, link, pageLabel(state.sliceDoc(from, to)));
+    ranges.push(Decoration.replace({ widget }).range(isWrapped ? from - 1 : from, isWrapped ? to + 1 : to));
   }
   return Decoration.set(ranges);
 }

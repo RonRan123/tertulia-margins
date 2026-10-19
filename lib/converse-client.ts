@@ -2,12 +2,14 @@
 // streamMessage; a daemon run goes through runDaemons, a quiz through makeQuiz, a free response's
 // grade through gradeAnswer. The NDJSON parsing
 // lives in one place.
-import type { ConverseEvent, ConverseRequest } from "@/core/converse.ts";
+import type { ConverseEvent, ConverseRequest, ConverseStats } from "@/core/converse.ts";
 import { citedPages, parsePassage } from "@/core/passage.ts";
 import type { DaemonId, Nugget } from "@/core/daemons.ts";
 import type { QuizQuestion, Verdict } from "@/core/quiz.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { loadDaemonRunsToday, loadRepliesToday, localDay, recordDaemonRun, recordReply, type ChatMessage } from "@/core/store.ts";
+import { describeSetup, tokenUse, type DraftTrace } from "@/core/trace.ts";
+import { trace } from "./trace.ts";
 
 export type MessagePatch = (message: ChatMessage) => ChatMessage;
 
@@ -28,8 +30,14 @@ export async function streamMessage(
     return;
   }
   recordReply(window.localStorage, day);
+  // D48: the question, the whole reply and its quote checks go in the trace once it ends.
+  const start = performance.now();
+  const traced: { reply: string; error?: string; stats?: ConverseStats } = { reply: "" };
   try {
     const requestError = await streamReply(body, options.signal, (event) => {
+      if (event.type === "text") traced.reply += event.text;
+      if (event.type === "done") traced.stats = event.stats;
+      if (event.type === "error") traced.error = event.code;
       if (event.type === "text") update((m) => ({ ...m, content: m.content + event.text }));
       // An empty reply (e.g. a refusal) is an error, not a blank bubble.
       if (event.type === "done")
@@ -41,32 +49,67 @@ export async function streamMessage(
       if (event.type === "error") update((m) => ({ ...m, error: event.code }));
     });
     if (requestError) update((m) => ({ ...m, error: requestError }));
+    traced.error ??= requestError;
   } catch {
     update((m) => ({ ...m, error: "network_error" }));
+    traced.error = "network_error";
   }
   update((m) => ({ ...m, pages: citedPages(m.content, paragraphs), isStreaming: false }));
+  trace({
+    kind: "chat",
+    question: body.command ? `/${body.command.name} ${body.command.selection}` : body.question,
+    reply: traced.reply,
+    ms: Math.round(performance.now() - start),
+    tokens: tokenUse(traced.stats?.usage),
+    citations: (traced.stats?.citations ?? []).map((c) => `“${c.quote}” ${c.status}`),
+    ...(traced.error && { error: traced.error }),
+  });
 }
 
-// One daemon run (D37): the reviewer's pick and the nuggets, or an error code. Runs count against
+// One daemon run (D37): the reviewer's picks (indexes into the nuggets, D51) and the nuggets, or an error code. Runs count against
 // their own daily cap (LIMITS.daemons.dailyRuns), apart from chat replies. Never throws.
+// `trigger`: why the run started, and `section` ("2 of 4", D53) which part of a React to notes press it is, for the trace (D48).
 export async function runDaemons(
   body: ConverseRequest,
   signal: AbortSignal,
-): Promise<{ pick: DaemonId | null; nuggets: Nugget[] } | { error: string }> {
+  trigger: "pause" | "asked" = "pause",
+  section?: string,
+): Promise<{ picks: number[]; nuggets: Nugget[] } | { error: string }> {
   const day = localDay(new Date());
   if (loadDaemonRunsToday(window.localStorage, day) >= LIMITS.daemons.dailyRuns) return { error: "daemon_limit" };
   recordDaemonRun(window.localStorage, day);
-  let result: { pick: DaemonId | null; nuggets: Nugget[] } | undefined;
+  const start = performance.now();
+  let result: { picks: number[]; nuggets: Nugget[] } | undefined;
+  let drafts: DraftTrace[] = [];
+  let stats: ConverseStats | undefined;
   let error: string | undefined;
   try {
     const requestError = await streamReply(body, signal, (event) => {
-      if (event.type === "daemons") result = { pick: event.pick, nuggets: event.nuggets };
+      if (event.type === "daemons") {
+        result = { picks: event.picks, nuggets: event.nuggets };
+        drafts = event.drafts ?? [];
+      }
+      if (event.type === "done") stats = event.stats;
       if (event.type === "error") error = event.code;
     });
     error ??= requestError;
   } catch {
-    error = "network_error";
+    error = signal.aborted ? "aborted" : "network_error";
   }
+  if (error !== "aborted")
+    trace({
+      kind: "daemons",
+      trigger,
+      ...(section && { section }),
+      excerpt: body.daemons?.excerpt ?? "",
+      mustPick: body.daemons?.mustPick === true,
+      drafts,
+      picks: (result?.picks ?? []).map((i) => result!.nuggets[i]?.daemon).filter((d): d is DaemonId => d !== undefined),
+      ms: Math.round(performance.now() - start),
+      tokens: tokenUse(stats?.usage),
+      reviewerTokens: tokenUse(stats?.reviewerUsage),
+      ...(error && { error }),
+    });
   return result && !error ? result : { error: error ?? "empty_reply" };
 }
 
@@ -79,17 +122,30 @@ export async function makeQuiz(
   const day = localDay(new Date());
   if (loadRepliesToday(window.localStorage, day) >= LIMITS.dailyReplies) return { error: "daily_limit" };
   recordReply(window.localStorage, day);
+  if (body.quiz) trace({ kind: "quiz", action: "start", setup: describeSetup(body.quiz) });
+  const start = performance.now();
   let result: { verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] } | undefined;
+  let stats: ConverseStats | undefined;
   let error: string | undefined;
   try {
     const requestError = await streamReply(body, signal, (event) => {
       if (event.type === "quiz") result = { verdict: event.verdict, feedback: event.feedback, questions: event.questions };
+      if (event.type === "done") stats = event.stats;
       if (event.type === "error") error = event.code;
     });
     error ??= requestError;
   } catch {
     error = signal.aborted ? "aborted" : "network_error";
   }
+  trace({
+    kind: "quiz",
+    action: "ready",
+    ms: Math.round(performance.now() - start),
+    tokens: tokenUse(stats?.usage),
+    questions: result?.questions.map((q) => q.question) ?? [],
+    ...(result?.verdict === "insufficient" && { feedback: result.feedback }),
+    ...(error && { error }),
+  });
   return result && !error ? result : { error: error ?? "empty_reply" };
 }
 
@@ -99,6 +155,7 @@ export async function gradeAnswer(body: ConverseRequest, signal: AbortSignal): P
   const day = localDay(new Date());
   if (loadRepliesToday(window.localStorage, day) >= LIMITS.dailyReplies) return { error: "daily_limit" };
   recordReply(window.localStorage, day);
+  const start = performance.now();
   let result: { verdict: Verdict; feedback: string } | undefined;
   let error: string | undefined;
   try {
@@ -110,6 +167,16 @@ export async function gradeAnswer(body: ConverseRequest, signal: AbortSignal): P
   } catch {
     error = signal.aborted ? "aborted" : "network_error";
   }
+  trace({
+    kind: "quiz",
+    action: "grade",
+    question: body.grade?.question ?? "",
+    answer: body.grade?.answer ?? "",
+    verdict: result?.verdict ?? "",
+    feedback: result?.feedback ?? "",
+    ms: Math.round(performance.now() - start),
+    ...(error && { error }),
+  });
   return result && !error ? result : { error: error ?? "empty_reply" };
 }
 

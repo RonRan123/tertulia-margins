@@ -1,0 +1,23 @@
+{
+  "title": "Example: Pride and Prejudice (ch. I–VIII)",
+  "pdf": "pride-and-prejudice.pdf",
+  "notes": "# Sample notes (written for this example, not a real reader's)\n\n## Chapter I\n\n> It is a truth universally acknowledged, that a single man in possession of a good fortune must be in want of a wife. [p. 2]\n\nThe opening line is ironic: it's really the neighbourhood families who are in want of the single man's fortune, not the other way round.\n\nMr. Bennet answers every one of his wife's worries with a joke instead of an answer. Funny, but is he ever actually going to do anything for his daughters?\n\n## Chapter III\n\nBingley dances every dance and Darcy refuses almost everyone [p. 9]. The book is setting them up as opposites: warm versus cold.\n\nElizabeth laughs it off and tells the story to her friends. It clearly doesn't bother her.\n\n## Chapter VI\n\nCharlotte says Jane should show more affection than she feels. That's cynical, but maybe also realistic about how little time women here get to secure a match.\n\n## Chapter VII\n\nentail — an estate settled on male heirs only\n\nSo the Bennet girls' panic about marriage is completely rational, and Mrs. Bennet is the only one in the house facing it.\n\n## Chapter VIII\n\nElizabeth walking three miles through the mud to Netherfield shows she doesn't care what anyone thinks of her.\n",
+  "cards": [
+    {
+      "daemon": "author",
+      "text": "I show you his answer in the very next chapter: he visits Bingley in secret, then teases his wife about it [p. 6]. Is a joke the only way he can do something?",
+      "anchor": "is he ever actually going to do anything for his daughters?"
+    },
+    {
+      "daemon": "devils-advocate",
+      "text": "Is Darcy cold, or only unable to perform? He says he detests dancing without a familiar partner [p. 12]. Bingley's warmth also spreads evenly to everyone. Is that warmth, or ease?",
+      "anchor": "warm versus cold"
+    },
+    {
+      "daemon": "devils-advocate",
+      "text": "Is she facing it, or only chasing it? Her plan rests on Bingley's \"four or five thousand a year\" [p. 3], not on any thrift. Mr. Bennet's jokes might be his way of facing it too.",
+      "anchor": "completely rational"
+    }
+  ],
+  "messages": []
+}

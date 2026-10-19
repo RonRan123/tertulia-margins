@@ -33,7 +33,7 @@ Spec: @docs/DESIGN.md · Progress: docs/PLAN.md · Why: docs/DECISIONS.md · v1 
 <!-- Fill in once scaffolded (day 1): dev, build, test, lint, eval -->
 
 ## Gotchas
-- Never commit book text: it goes in `books/` (gitignored). Hosted testers' books stay in their own browser (D34, D35); local test data stays public-domain.
+- Never commit book text: it goes in `books/` (gitignored). Hosted testers' books stay in their own browser (D34, D35); local test data stays public-domain. Exception: the two example books in `public/examples/` (D49).
 - Never create or change files outside this repo (Ronith). Test files, logs, cookies and screenshots go in `.scratch/` (gitignored), not `/tmp` or the scratchpad; headless Chrome runs with `--user-data-dir=.scratch/chrome`.
 - `ANTHROPIC_API_KEY` lives in `.env.local` (gitignored). See `.env.example`.
 - Check current model IDs and pricing with the `claude-api` skill; don't rely on memory.

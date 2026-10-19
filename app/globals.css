@@ -210,6 +210,14 @@ main:not([data-sidebar-open]) .sidebar,
   background: var(--pill);
 }
 
+/* D49: a quiet link below the settings switches. */
+button.link.restore-examples {
+  display: block;
+  margin: var(--s1) var(--s3) 6px;
+  color: var(--ink-soft);
+  font-size: 0.85em;
+}
+
 .sidebar-error {
   margin: 0;
   padding: 0 var(--s2);
@@ -433,6 +441,13 @@ button.pill[aria-pressed="true"] {
   background: var(--paper);
 }
 
+/* A switch that belongs under the one above it (D57: Dark PDF pages under Dark theme). */
+.setting.is-sub {
+  padding-left: calc(var(--s3) + var(--s4));
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
 /* A checkbox drawn as a switch: a track with a knob that slides right when on. */
 .setting input {
   appearance: none;
@@ -568,6 +583,68 @@ button.pill[aria-pressed="true"] {
   opacity: 0.55;
 }
 
+/* D50: Show/Hide reactions, the first thing in the margin's panel. */
+.reactions-toggle {
+  justify-self: start;
+  padding: 2px var(--s2);
+  font: 600 0.8125rem/1.4 var(--font-ui);
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.reactions-toggle:hover {
+  background: var(--paper);
+}
+
+/* D50: a new card shimmers for 1–2 s where it will appear, then fades in. */
+.daemon-card.shimmer {
+  display: grid;
+  gap: 6px;
+  padding-block: 4px;
+}
+
+.shimmer-line {
+  display: block;
+  height: 0.65em;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--rule) 25%, var(--sheet) 50%, var(--rule) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.shimmer-line.short {
+  width: 40%;
+  background-color: color-mix(in srgb, var(--daemon) 35%, var(--rule));
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--daemon) 35%, var(--rule)) 25%, var(--sheet) 50%, color-mix(in srgb, var(--daemon) 35%, var(--rule)) 75%);
+}
+
+.shimmer-line:last-child {
+  width: 75%;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.daemon-card:not(.shimmer) {
+  animation: card-in 0.35s ease-out;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-line,
+  .daemon-card:not(.shimmer) {
+    animation: none;
+  }
+}
+
 .margin-group {
   position: absolute;
   top: 0;
@@ -690,7 +767,20 @@ button.pill[aria-pressed="true"] {
 }
 
 .md-bullet {
+  display: inline-block;
+  width: 1em; /* BULLET_EM in lib/live-preview.ts */
+  text-indent: 0;
   color: var(--ink-soft);
+}
+
+/* A list item's indent and marker boxes (lib/live-preview.ts): fixed widths, so the line's
+   hanging indent (.md-li, set inline) lines its wrapped lines up under the item's text. */
+.md-listbox {
+  display: inline-block;
+  text-indent: 0;
+  white-space: pre;
+  overflow: hidden;
+  vertical-align: top;
 }
 
 /* Page links (R4, D33, D45): off the line being edited a reference shows as a pill (.cite-pill,
@@ -1508,6 +1598,70 @@ main[data-view="quiz"] .quiz {
 .pdf-drop-hint {
   margin: 0 0 var(--s2);
   font-size: 0.8125rem;
+}
+
+/* Dark PDF pages (D57): the drawn pages inverted, white to dark gray (0.9 matches the page
+   colour below), hues turned back so colours stay roughly themselves; text, scans and figures
+   alike. The text layer (selection, search and quote highlights) sits on top, untouched. */
+main[data-pdf-dark] .pdfViewer .page canvas {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+main[data-pdf-dark] .pdfViewer .page {
+  background-color: rgb(26 26 26);
+}
+
+/* OCR of a scanned PDF (D55): a card over the pages with a spinner and page progress. */
+.pdf-ocr {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  width: min(26rem, calc(100% - 2 * var(--s6)));
+  height: fit-content;
+  margin: auto;
+  padding: var(--s6);
+  text-align: center;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.12);
+}
+
+.pdf-ocr-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdf-ocr-hint {
+  max-width: 24rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--rule);
+  border-top-color: var(--ai);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.5s;
+  }
 }
 
 .pdf-offer {

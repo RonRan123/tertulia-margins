@@ -2,15 +2,18 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { Row } from "@/core/blocks.ts";
-import { ACTIONS, afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { trace } from "@/lib/trace.ts";
+import { ACTIONS, afterPromote, afterRun, askedRuns, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState, type RunPlan } from "@/core/daemons.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { runDaemons } from "@/lib/converse-client.ts";
 import { CitedText } from "./CitedText";
 
-// The margin (D37): a panel naming the daemons, with their status and a "React to notes" button,
-// then their cards beside the lines they answer. The daemons look on their own once the reader
-// pauses (LIMITS.daemons.idleMs) after writing enough of their own words, or when asked; core/daemons
-// plans what to do, and a run asks the route for every daemon's nugget and the reviewer's pick.
+// The margin (D37): a panel naming the daemons, with their status, a Show/Hide reactions toggle
+// (D50) and a "React to notes" button, then their cards beside the lines they answer. The daemons
+// look on their own once the reader pauses (LIMITS.daemons.idleMs) after writing enough of their own
+// words, or when asked; core/daemons plans what to do, and a run asks the route for every daemon's nugget and the reviewer's pick. Hidden,
+// they do nothing: no timers, no runs, and a run already out is cancelled. A new card shimmers for
+// 1–2 s (random) before it shows, so it arrives rather than pops in.
 type DaemonsProps = {
   bookId: string; // a run for another book is abandoned when the book changes
   edits: number; // the reader's own edits in this tab: each restarts the wait
@@ -19,13 +22,20 @@ type DaemonsProps = {
   daemons: DaemonState;
   setDaemons: Dispatch<SetStateAction<DaemonState>>;
   pausedReason?: string; // no reference text, or over the D32 cap: the daemons don't look
+  isShown: boolean; // D50: the reader's Show/Hide reactions toggle
+  setShown: (isShown: boolean) => void;
 };
+
+const REVEAL_MS = { min: 1000, max: 2000 }; // D50: a new card shimmers this long (random) first
 
 // How the last look ended, until the reader's next edit: nothing worth showing, the daily cap,
 // or a failed call.
 type Outcome = "quiet" | "daemon_limit" | "failed";
 
 export type MarginApi = {
+  isShown: boolean;
+  setShown: (isShown: boolean) => void;
+  revealing: string[]; // ids of new cards still shimmering
   reactNow: () => void; // "React to notes"
   dismiss: (id: string) => void;
   status: string; // one line for the panel
@@ -34,63 +44,115 @@ export type MarginApi = {
   announcement: string; // for screen readers: "The Author wrote in the margin."
 };
 
-export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemons, pausedReason }: DaemonsProps): MarginApi {
+export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemons, pausedReason, isShown, setShown }: DaemonsProps): MarginApi {
   const isPaused = pausedReason !== undefined;
+  const isActive = isShown && !isPaused; // allowed to look at all
   const [isReading, setIsReading] = useState(false);
+  const [sections, setSections] = useState({ done: 0, total: 0 }); // D53: a React to notes press's progress
   // The last look's outcome, kept with the edit count it followed: a newer edit hides it.
   const [last, setLast] = useState<{ outcome?: Outcome; edits: number }>({ edits: 0 });
   const outcome = last.edits === edits ? last.outcome : undefined;
   const [announcement, setAnnouncement] = useState("");
   const running = useRef<AbortController>(undefined);
   // The timer fires later: it reads the latest notes, not the ones it was set with.
-  const latest = useRef({ reference, notes, daemons, edits });
+  const latest = useRef({ reference, notes, daemons, edits, isActive });
   useEffect(() => {
-    latest.current = { reference, notes, daemons, edits };
+    latest.current = { reference, notes, daemons, edits, isActive };
   });
 
-  // A new book: abandon a run made for the last one.
+  // A new book: abandon a run made for the last one. Hidden: cancel a run that's out (D50).
   useEffect(() => () => running.current?.abort(), [bookId]);
+  useEffect(() => {
+    if (!isActive) running.current?.abort();
+  }, [isActive]);
 
+  // A new card shimmers for 1–2 s before it shows; the announcement waits for it too.
+  const [revealing, setRevealing] = useState<string[]>([]);
+  const reveal = (id: string, daemon: DaemonCard["daemon"]) => {
+    setRevealing((ids) => [...ids, id]);
+    const delay = REVEAL_MS.min + Math.random() * (REVEAL_MS.max - REVEAL_MS.min);
+    setTimeout(() => {
+      setRevealing((ids) => ids.filter((x) => x !== id));
+      setAnnouncement(`${DAEMONS[daemon].name} wrote in the margin.`);
+    }, delay);
+  };
+
+  // "React to notes" (isAsked) reads the bare parts of the notes as sections, one run each, all at
+  // once (D53); a pause after enough new lines is one run. Each run's cards land as it finishes, and
+  // afterRun drops any that repeat a card another section has just added.
   async function look(isAsked = false) {
-    if (running.current) return;
+    if (running.current || !latest.current.isActive) return;
     const { reference, notes, daemons, edits } = latest.current;
     const setOutcome = (outcome?: Outcome) => setLast({ outcome, edits });
-    const plan = planDaemons(notes, daemons, isAsked);
-    if (plan.kind === "wait") return;
-    if (plan.kind === "promote") {
-      setDaemons((d) => afterPromote(d, plan.card));
-      return setAnnouncement(`${DAEMONS[plan.card.daemon].name} wrote in the margin.`);
+    let plans: RunPlan[];
+    if (isAsked) plans = askedRuns(notes, daemons);
+    else {
+      const plan = planDaemons(notes, daemons);
+      if (plan.kind === "wait") return;
+      if (plan.kind === "promote") {
+        trace({ kind: "promote", daemon: plan.card.daemon, text: plan.card.text });
+        setDaemons((d) => afterPromote(d, plan.card));
+        return reveal(plan.card.id, plan.card.daemon);
+      }
+      plans = [plan];
     }
+    if (plans.length === 0) return;
     const abort = new AbortController();
     running.current = abort;
     setIsReading(true);
-    const result = await runDaemons({ passage: reference, notes, question: "", daemons: { excerpt: plan.excerpt, mustPick: plan.mustPick } }, abort.signal);
+    setSections({ done: 0, total: plans.length });
+    // D51: the cards already shown go along, so no new remark repeats one; a run may show several.
+    const margin = daemons.cards.map(({ daemon, text, anchor }) => ({ daemon, text, anchor }));
+    const results = await Promise.all(
+      plans.map(async (plan, i) => {
+        const request = { excerpt: plan.excerpt, mustPick: plan.mustPick, margin, maxCards: LIMITS.daemons.maxCardsPerRun };
+        const section = plans.length > 1 ? `${i + 1} of ${plans.length}` : undefined;
+        const result = await runDaemons({ passage: reference, notes, question: "", daemons: request }, abort.signal, isAsked ? "asked" : "pause", section);
+        setSections((s) => ({ ...s, done: s.done + 1 }));
+        if (abort.signal.aborted || "error" in result) return result;
+        // The ids are made here, once, so each picked card's id is known for its shimmer.
+        const ids = result.nuggets.map(() => crypto.randomUUID());
+        setDaemons((d) => {
+          let next = 0;
+          return afterRun(d, plan, result.picks, result.nuggets, () => ids[next++]);
+        });
+        for (const p of result.picks) reveal(ids[p], result.nuggets[p].daemon);
+        return result;
+      }),
+    );
     running.current = undefined;
     setIsReading(false);
     if (abort.signal.aborted) return;
-    if ("error" in result) return setOutcome(result.error === "daemon_limit" ? "daemon_limit" : "failed");
-    setDaemons((d) => afterRun(d, plan, result.pick, result.nuggets, () => crypto.randomUUID()));
-    setOutcome(result.pick ? undefined : "quiet");
-    if (result.pick) setAnnouncement(`${DAEMONS[result.pick].name} wrote in the margin.`);
+    const answered = results.filter((r) => !("error" in r));
+    if (answered.length === 0) {
+      const isAtCap = results.some((r) => "error" in r && r.error === "daemon_limit");
+      return setOutcome(isAtCap ? "daemon_limit" : "failed");
+    }
+    setOutcome(answered.some((r) => "picks" in r && r.picks.length > 0) ? undefined : "quiet");
   }
 
   // Every edit of the reader's restarts the wait; a pause long enough lets the daemons look. A failed
   // run leaves its lines unread, so the next pause after an edit tries again (never a retry loop).
   useEffect(() => {
-    if (isPaused || edits === 0) return;
+    if (!isActive || edits === 0) return;
     const timer = setTimeout(() => void look(), LIMITS.daemons.idleMs);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- look reads `latest`; only these restart the wait
-  }, [edits, isPaused]);
+  }, [edits, isActive]);
 
   // How many new lines the daemons have to read so far (deferred, so typing stays smooth).
   const deferredNotes = useDeferredValue(notes);
   const waiting = useMemo(() => planDaemons(deferredNotes, daemons), [deferredNotes, daemons]);
   const newLines = waiting.kind === "wait" ? waiting.lines : LIMITS.daemons.minLines;
-  const status = isPaused
+
+  const status = !isShown
+    ? "Reactions are hidden: the daemons aren't reading your notes."
+    : isPaused
     ? `Paused: ${pausedReason}`
     : isReading
-      ? "Reading your notes…"
+      ? sections.total > 1
+        ? `Reading your notes in ${sections.total} sections… ${sections.done} done.`
+        : "Reading your notes…"
       : outcome === "quiet"
         ? "Nothing to add this time."
         : outcome === "daemon_limit"
@@ -101,14 +163,22 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
               ? "They'll read when you pause."
               : `Listening: ${newLines} of ${LIMITS.daemons.minLines} new lines.`;
 
-  const dismiss = (id: string) => setDaemons((d) => dismissCard(d, id));
-  return { reactNow: () => void look(true), dismiss, status, isReading, isPaused, announcement };
+  const dismiss = (id: string) => {
+    const card = latest.current.daemons.cards.find((c) => c.id === id);
+    if (card) trace({ kind: "card", action: "dismiss", daemon: card.daemon, text: card.text });
+    setDaemons((d) => dismissCard(d, id));
+  };
+  return { isShown, setShown, revealing, reactNow: () => void look(true), dismiss, status, isReading, isPaused, announcement };
 }
 
-// The top of the margin: who the daemons are, what they're doing, and a way to ask them now.
+// The top of the margin: who the daemons are, what they're doing, a way to ask them now, and the
+// Show/Hide reactions toggle (D50).
 export function DaemonPanel({ margin }: { margin: MarginApi }) {
   return (
     <div className="daemon-panel">
+      <button type="button" className="reactions-toggle" aria-pressed={!margin.isShown} onClick={() => margin.setShown(!margin.isShown)}>
+        {margin.isShown ? "Hide reactions" : "Show reactions"}
+      </button>
       <ul className="daemon-list" aria-label="Daemons">
         {DAEMON_IDS.map((id) => (
           <li key={id} style={{ "--daemon": DAEMONS[id].colour } as CSSProperties}>
@@ -117,9 +187,11 @@ export function DaemonPanel({ margin }: { margin: MarginApi }) {
         ))}
       </ul>
       <p className="daemon-status">{margin.status}</p>
-      <button type="button" className="react-notes" disabled={margin.isPaused || margin.isReading} onClick={margin.reactNow}>
-        React to notes
-      </button>
+      {margin.isShown && (
+        <button type="button" className="react-notes" disabled={margin.isPaused || margin.isReading} onClick={margin.reactNow}>
+          React to notes
+        </button>
+      )}
     </div>
   );
 }
@@ -140,6 +212,14 @@ export function MarginCell({ row, margin, activeId, onToggle }: MarginCellProps)
       {row.cards.map(({ card }) => {
         const daemon = DAEMONS[card.daemon];
         const isActive = card.id === activeId;
+        if (margin.revealing.includes(card.id))
+          return (
+            <div key={card.id} className="card daemon-card shimmer" style={{ "--daemon": daemon.colour } as CSSProperties} aria-hidden="true">
+              <span className="shimmer-line short" />
+              <span className="shimmer-line" />
+              <span className="shimmer-line" />
+            </div>
+          );
         return (
           <article
             key={card.id}
