@@ -3,7 +3,7 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkCitations, type CitationCheck } from "./citations.ts";
 import { COMMANDS, isCommandName, type Command } from "./commands.ts";
-import { ACTIONS, DAEMON_IDS, DAEMONS, type DaemonId, type DaemonsRequest, type Nugget } from "./daemons.ts";
+import { ACTIONS, DAEMON_IDS, DAEMONS, isSameRemark, sentenceAround, type DaemonId, type DaemonsRequest, type MarginRemark, type Nugget } from "./daemons.ts";
 import { LIMITS } from "./limits.ts";
 import { isReferenceTooLong, pageCitePattern, parsePages, parsePassage, type BookPage } from "./passage.ts";
 import { findExcerpt } from "./blocks.ts";
@@ -65,10 +65,11 @@ export type QuizRequest = QuizSetup & { avoid?: string[] };
 // The wire format of POST /api/converse: one JSON object per line (NDJSON): a "text" event per
 // delta (or one "daemons" event for a daemon run), then "done" or "error".
 export type ConverseEvent =
-  // A daemon run's result: every nugget that survived the grounding check, and the one the reviewer
-  // picked to show (null: nothing worth interrupting the reader). The rest are runners-up.
+  // A daemon run's result: every nugget that survived the checks, and the ones the reviewer picked to
+  // show, as indexes into `nuggets`, best first (none: nothing worth interrupting the reader; D51:
+  // several, each on different words). The rest are runners-up.
   // `drafts`: every daemon's draft and what became of it (passed, dropped and why, runner-up, picked), for traces (D48).
-  | { type: "daemons"; pick: DaemonId | null; nuggets: Nugget[]; drafts: DraftTrace[] }
+  | { type: "daemons"; picks: number[]; nuggets: Nugget[]; drafts: DraftTrace[] }
   // A quiz (D42): its questions, checked and shuffled, or (verdict "insufficient") why not.
   | { type: "quiz"; verdict: "ok" | "insufficient"; feedback: string; questions: QuizQuestion[] }
   // A free response's grade (D44): right, partly right or wrong, and one line on why.
@@ -125,8 +126,11 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
   const isQuizValid = isQuizSetup(quiz) && (avoid === undefined || isAvoidList(avoid));
   if (quiz !== undefined && !isQuizValid) return { error: "quiz_invalid" };
   if (grade !== undefined && !isGradeRequest(grade)) return { error: "grade_invalid" };
+  const isRemark = (r: unknown) => isRecord(r) && DAEMON_IDS.includes(r.daemon as DaemonId) && typeof r.text === "string" && typeof r.anchor === "string";
   const isDaemonsShaped = daemons === undefined || (isRecord(daemons) && typeof daemons.excerpt === "string" &&
-    (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean"));
+    (daemons.mustPick === undefined || typeof daemons.mustPick === "boolean") &&
+    (daemons.margin === undefined || (Array.isArray(daemons.margin) && daemons.margin.length <= MAX_MARGIN && daemons.margin.every(isRemark))) &&
+    (daemons.maxCards === undefined || (Number.isInteger(daemons.maxCards) && (daemons.maxCards as number) >= 1 && (daemons.maxCards as number) <= LIMITS.daemons.maxCardsPerRun)));
   if (!isDaemonsShaped) return { error: "daemons_invalid" };
   if (daemons !== undefined && !isText(daemons.excerpt)) return { error: "excerpt_missing" };
 
@@ -137,7 +141,14 @@ export function parseConverseRequest(body: unknown): ConverseRequest | { error: 
     history: ((history ?? []) as Turn[]).map(({ role, content }) => ({ role, content })),
     book: book === undefined ? undefined : pickBook(book as Book),
     ...(command !== undefined && { command: { name: command.name, selection: command.selection } as Command }),
-    ...(daemons !== undefined && { daemons: { excerpt: daemons.excerpt as string, mustPick: daemons.mustPick === true } }),
+    ...(daemons !== undefined && {
+      daemons: {
+        excerpt: daemons.excerpt as string,
+        mustPick: daemons.mustPick === true,
+        ...(Array.isArray(daemons.margin) && { margin: (daemons.margin as MarginRemark[]).map(({ daemon, text, anchor }) => ({ daemon, text, anchor })) }),
+        ...(typeof daemons.maxCards === "number" && { maxCards: daemons.maxCards }),
+      },
+    }),
     ...(isQuizSetup(quiz) && {
       quiz: { topics: [...new Set(quiz.topics)], count: quiz.count, difficulty: quiz.difficulty, styles: [...new Set(quiz.styles)], ...(isAvoidList(avoid) && { avoid: [...avoid] }) },
     }),
@@ -211,16 +222,16 @@ async function* runDaemons(
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     system,
-    messages: [{ role: "user", content: panelTurn(run.excerpt) }],
+    messages: [{ role: "user", content: panelTurn(run.excerpt, run.margin) }],
   }, { signal });
   // Structured output cut off by max_tokens may still parse, but it is a failed run (Sonnet 5.5 guide).
   const isCutOff = panel.stop_reason === "max_tokens";
-  const { nuggets, drafts } = isCutOff ? { nuggets: [], drafts: [] } : screenDrafts(jsonOf(panel), pages, request.notes ?? "", run.excerpt);
+  const { nuggets, drafts } = isCutOff ? { nuggets: [], drafts: [] } : screenDrafts(jsonOf(panel), pages, request.notes ?? "", run.excerpt, run.margin);
 
-  const { pick, usage: reviewerUsage } = await reviewNuggets(client, nuggets, pages, run, signal);
-  const traced = drafts.map((d) => (d.outcome === "runner-up" && d.daemon === pick ? { ...d, outcome: "picked" as const } : d));
-  yield { type: "daemons", pick, nuggets, drafts: traced };
-  const picked = nuggets.find((n) => n.daemon === pick);
+  const { picks, usage: reviewerUsage } = await reviewNuggets(client, nuggets, pages, run, signal);
+  const traced = drafts.map((d) => (d.card !== undefined && picks.includes(d.card) ? { ...d, outcome: "picked" as const } : d));
+  yield { type: "daemons", picks, nuggets, drafts: traced };
+  const picked = picks.length > 0 ? nuggets[picks[0]] : undefined;
   return {
     model: panel.model,
     stopReason: panel.stop_reason,
@@ -254,27 +265,37 @@ const PANEL_SCHEMA = {
   additionalProperties: false,
 };
 
-// The panel's user turn: each daemon (its action, then its persona), then the excerpt. The shared
-// rules and examples are the daemon role, in the system blocks.
-export function panelTurn(excerpt: string): string {
+// The panel's user turn: each daemon (its action, then its persona), what's already in the margin
+// (D51), then the excerpt. The shared rules and examples are the daemon role, in the system blocks.
+export function panelTurn(excerpt: string, margin: MarginRemark[] = []): string {
   const daemons = DAEMON_IDS.map((id) => {
     const { name, action, promptFile } = DAEMONS[id];
     const actionPrompt = readPrompt(ACTIONS[action].promptFile).trim();
     return `<daemon id="${id}" name="${name}">\n<action>\n${actionPrompt}\n</action>\n<persona>\n${readPrompt(promptFile).trim()}\n</persona>\n</daemon>`;
   });
-  return [`<daemons>\n${daemons.join("\n\n")}\n</daemons>`, `<excerpt>\n${excerpt.trim()}\n</excerpt>`].join("\n\n");
+  const shown = margin.map((r) => `<remark daemon="${DAEMONS[r.daemon].name}" answers="${r.anchor.replace(/"/g, "'")}">\n${r.text}\n</remark>`);
+  return [
+    `<daemons>\n${daemons.join("\n\n")}\n</daemons>`,
+    `<margin>\n${shown.join("\n") || "(empty)"}\n</margin>`,
+    `<excerpt>\n${excerpt.trim()}\n</excerpt>`,
+  ].join("\n\n");
 }
 
-// The panel's drafts → nuggets worth reviewing: passes and blanks dropped, one per daemon, and any
-// whose quote fails the check (D38: cites a missing page, isn't on its page, or is in neither the
-// book nor the notes). An anchor that isn't in the excerpt falls back to the excerpt's first line.
-export function groundedNuggets(output: unknown, pages: BookPage[], notes: string, excerpt: string): Nugget[] {
-  return screenDrafts(output, pages, notes, excerpt).nuggets;
+const MAX_MARGIN = 100; // cards sent with a run, so no new remark repeats one (D51)
+const DRAFTS_PER_DAEMON = 2; // D51: a daemon may answer two different parts of the excerpt
+
+// The panel's drafts → nuggets worth reviewing: passes and blanks dropped, at most two per daemon
+// (D51), and any whose quote fails the check (D38: cites a missing page, isn't on its page, or is in
+// neither the book nor the notes), or that repeat a remark already in the margin or kept from this
+// run (D51). An anchor is widened to its whole sentence (D51); one that isn't in the excerpt falls
+// back to the excerpt's first line.
+export function groundedNuggets(output: unknown, pages: BookPage[], notes: string, excerpt: string, margin: MarginRemark[] = []): Nugget[] {
+  return screenDrafts(output, pages, notes, excerpt, margin).nuggets;
 }
 
 // The same screening, keeping every draft and what became of it, for traces (D48). A kept draft is
 // "runner-up" here; runDaemons marks the reviewer's pick.
-export function screenDrafts(output: unknown, pages: BookPage[], notes: string, excerpt: string): { nuggets: Nugget[]; drafts: DraftTrace[] } {
+export function screenDrafts(output: unknown, pages: BookPage[], notes: string, excerpt: string, margin: MarginRemark[] = []): { nuggets: Nugget[]; drafts: DraftTrace[] } {
   const raw = isRecord(output) && Array.isArray(output.drafts) ? output.drafts : [];
   const firstLine = excerpt.trim().split("\n")[0].trim();
   const nuggets: Nugget[] = [];
@@ -285,14 +306,23 @@ export function screenDrafts(output: unknown, pages: BookPage[], notes: string, 
     const text = isText(draft.nugget) ? draft.nugget.trim() : "";
     const anchor = typeof draft.anchor === "string" ? draft.anchor.trim() : "";
     const anchorFound = anchor !== "" && findExcerpt(excerpt, anchor) !== undefined;
-    const traced = (outcome: DraftTrace["outcome"], reason?: string) => drafts.push({ daemon, outcome, text, anchor, anchorFound, ...(reason && { reason }) });
+    const traced = (outcome: DraftTrace["outcome"], reason?: string, card?: number) =>
+      drafts.push({ daemon, outcome, text, anchor, anchorFound, ...(reason && { reason }), ...(card !== undefined && { card }) });
     if (draft.pass === true || text === "") {
       traced("passed");
       continue;
     }
-    const isKnown = DAEMON_IDS.includes(daemon as DaemonId) && !nuggets.some((n) => n.daemon === daemon);
+    const isKnown = DAEMON_IDS.includes(daemon as DaemonId) && nuggets.filter((n) => n.daemon === daemon).length < DRAFTS_PER_DAEMON;
     if (!isKnown) {
       traced("dropped", "unknown_or_repeated_daemon");
+      continue;
+    }
+    if (margin.some((r) => isSameRemark(r.text, text))) {
+      traced("dropped", "repeats_margin");
+      continue;
+    }
+    if (nuggets.some((n) => isSameRemark(n.text, text))) {
+      traced("dropped", "repeats_draft");
       continue;
     }
     const failed = checkCitations(text, pages, notes).find((c) => c.status !== "ok");
@@ -300,52 +330,70 @@ export function screenDrafts(output: unknown, pages: BookPage[], notes: string, 
       traced("dropped", failed.status);
       continue;
     }
-    nuggets.push({ daemon: daemon as DaemonId, text, anchor: anchorFound ? anchor : firstLine });
-    traced("runner-up");
+    nuggets.push({ daemon: daemon as DaemonId, text, anchor: anchorFound ? sentenceAround(excerpt, anchor) : firstLine });
+    traced("runner-up", undefined, nuggets.length - 1);
   }
   return { nuggets, drafts };
 }
 
-// The reviewer sees no book: only the excerpt, the nuggets and the pages they cite. No call
-// when there is nothing to choose: no nuggets, or one that must be shown anyway.
+// The reviewer sees no book: only the excerpt, the nuggets and the pages they cite. It picks up to
+// `maxCards` (D51), best first, or none. No call when there is nothing to choose: no nuggets, or one
+// that must be shown anyway. Our code keeps the picks on different words of the notes.
 async function reviewNuggets(
   client: Anthropic,
   nuggets: Nugget[],
   pages: BookPage[],
   run: DaemonsRequest,
   signal?: AbortSignal,
-): Promise<{ pick: DaemonId | null; usage?: Anthropic.Beta.BetaUsage }> {
-  if (nuggets.length === 0) return { pick: null };
-  if (nuggets.length === 1 && run.mustPick) return { pick: nuggets[0].daemon };
-  const choices = [...nuggets.map((n) => n.daemon), ...(run.mustPick ? [] : ["none"])];
+): Promise<{ picks: number[]; usage?: Anthropic.Beta.BetaUsage }> {
+  if (nuggets.length === 0) return { picks: [] };
+  if (nuggets.length === 1 && run.mustPick) return { picks: [0] };
+  const maxCards = run.maxCards ?? 1;
+  const ids = nuggets.map((_, i) => String(i + 1));
+  const schema = {
+    type: "object",
+    properties: { picks: { type: "array", items: { type: "string", enum: ids }, ...(run.mustPick && { minItems: 1 }) } },
+    required: ["picks"],
+    additionalProperties: false,
+  };
   const review = await client.beta.messages.create({
     model: MODEL,
     max_tokens: LIMITS.replyTokens.reviewer,
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: { type: "object", properties: { pick: { type: "string", enum: choices } }, required: ["pick"], additionalProperties: false } },
-    },
+    output_config: { effort: "low", format: { type: "json_schema", schema } },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     system: readPrompt("daemon-reviewer.md").trim(),
     messages: [{ role: "user", content: reviewerTurn(nuggets, pages, run) }],
   }, { signal });
   const answer = jsonOf(review);
-  const pick = isRecord(answer) ? nuggets.find((n) => n.daemon === answer.pick)?.daemon ?? null : null;
-  return { pick: pick ?? (run.mustPick ? nuggets[0].daemon : null), usage: review.usage };
+  const chosen = isRecord(answer) && Array.isArray(answer.picks) ? answer.picks.map((id) => ids.indexOf(String(id))).filter((i) => i >= 0) : [];
+  const picks = distinctPicks(chosen, nuggets, maxCards);
+  return { picks: picks.length === 0 && run.mustPick ? [0] : picks, usage: review.usage };
+}
+
+// Picks in order, each once, at most `max`, none on the same words as an earlier one (overlapping anchors).
+export function distinctPicks(chosen: number[], nuggets: Nugget[], max: number): number[] {
+  const picks: number[] = [];
+  for (const i of chosen) {
+    const anchor = nuggets[i].anchor;
+    const overlaps = picks.some((p) => nuggets[p].anchor.includes(anchor) || anchor.includes(nuggets[p].anchor));
+    if (!picks.includes(i) && !overlaps && picks.length < max) picks.push(i);
+  }
+  return picks;
 }
 
 export function reviewerTurn(nuggets: Nugget[], pages: BookPage[], run: DaemonsRequest): string {
-  const candidates = nuggets.map((n) => {
+  const candidates = nuggets.map((n, i) => {
     const { name, action } = DAEMONS[n.daemon];
     const beyond = ACTIONS[action].isBeyondBook ? ' beyond_the_book="true"' : "";
-    return `<candidate id="${n.daemon}" name="${name}"${beyond}>\n${n.text}\n</candidate>`;
+    return `<candidate id="${i + 1}" name="${name}"${beyond} answers="${n.anchor.replace(/"/g, "'")}">\n${n.text}\n</candidate>`;
   });
   const cited = citedPages(nuggets.map((n) => n.text), pages);
   return [
     `<excerpt>\n${run.excerpt.trim()}\n</excerpt>`,
     ...candidates,
     `<cited>\n${cited}\n</cited>`,
+    `<max_picks>${run.maxCards ?? 1}</max_picks>`,
     `<must_pick>${run.mustPick === true}</must_pick>`,
   ].join("\n\n");
 }

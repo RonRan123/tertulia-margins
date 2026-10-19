@@ -66,26 +66,26 @@ export async function streamMessage(
   });
 }
 
-// One daemon run (D37): the reviewer's pick and the nuggets, or an error code. Runs count against
+// One daemon run (D37): the reviewer's picks (indexes into the nuggets, D51) and the nuggets, or an error code. Runs count against
 // their own daily cap (LIMITS.daemons.dailyRuns), apart from chat replies. Never throws.
 // `trigger`: why the run started, for the trace (D48).
 export async function runDaemons(
   body: ConverseRequest,
   signal: AbortSignal,
   trigger: "pause" | "asked" = "pause",
-): Promise<{ pick: DaemonId | null; nuggets: Nugget[] } | { error: string }> {
+): Promise<{ picks: number[]; nuggets: Nugget[] } | { error: string }> {
   const day = localDay(new Date());
   if (loadDaemonRunsToday(window.localStorage, day) >= LIMITS.daemons.dailyRuns) return { error: "daemon_limit" };
   recordDaemonRun(window.localStorage, day);
   const start = performance.now();
-  let result: { pick: DaemonId | null; nuggets: Nugget[] } | undefined;
+  let result: { picks: number[]; nuggets: Nugget[] } | undefined;
   let drafts: DraftTrace[] = [];
   let stats: ConverseStats | undefined;
   let error: string | undefined;
   try {
     const requestError = await streamReply(body, signal, (event) => {
       if (event.type === "daemons") {
-        result = { pick: event.pick, nuggets: event.nuggets };
+        result = { picks: event.picks, nuggets: event.nuggets };
         drafts = event.drafts ?? [];
       }
       if (event.type === "done") stats = event.stats;
@@ -102,7 +102,7 @@ export async function runDaemons(
       excerpt: body.daemons?.excerpt ?? "",
       mustPick: body.daemons?.mustPick === true,
       drafts,
-      pick: result?.pick ?? null,
+      picks: (result?.picks ?? []).map((i) => result!.nuggets[i]?.daemon).filter((d): d is DaemonId => d !== undefined),
       ms: Math.round(performance.now() - start),
       tokens: tokenUse(stats?.usage),
       reviewerTokens: tokenUse(stats?.reviewerUsage),

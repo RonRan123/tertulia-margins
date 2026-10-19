@@ -540,6 +540,33 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D51. One margin without repeats: sentence anchors, sparse sections, several cards a run (amends D37, D39)
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** Ronith saw the Author make the same point twice, reworded and anchored on different words ("You contrast politics with corporate hierarchy… [p. 15]"). He wants no repeats, highlights large enough that two cards rarely overlap, and after he dismisses cards, a run (10 lines or **React to notes**) that reacts again wherever the notes have few remarks. Using dismissals as feedback is a later sprint.
+- **Alternatives:** a prompt rule only (unchecked); an LLM check for repeats (a call per run); anchors widened to the paragraph (too coarse for bullet notes).
+- **Rules:**
+  - *Repeats, checked in code:* `isSameRemark` counts content words (4+ letters, no stopwords, page cites ignored): the same remark if 60% of the shorter one's words are shared, or 40% when both cite the same page. A draft that repeats a card in the margin is dropped (`repeats_margin`), one that repeats another draft of the same run too (`repeats_draft`); a runner-up that repeats a card is never promoted, and `afterRun` skips a pick that repeats one.
+  - *The margin goes with each run:* the cards shown are sent as `<margin>` in the panel's turn; the prompt says never to make a point already there and to aim at parts of the excerpt no remark answers, newest first.
+  - *Anchors:* widened in code to the whole sentence that holds them (`sentenceAround`: up to . ! or ? and a space, or the line's end; no list marker; at most 400 characters).
+  - *Sparse sections:* a run also reads every paragraph with a line of the reader's own that no card's anchor covers (dismissed cards leave lines uncovered). Only new lines start a run (10, as before); this amends D37's "never sweep the backlog": a book's existing notes are still marked read, but their uncovered paragraphs ride along with the next run.
+  - *Several cards a run:* each daemon may draft up to 2 remarks, on different parts; the reviewer picks up to `LIMITS.daemons.maxCardsPerRun` (3), best first, as `picks`; our code keeps them on different words (no overlapping anchors). Each new card shimmers on its own 1–2 s timer (D50).
+  - *Prompts:* `daemon-role.md` and `daemon-reviewer.md` gain the margin and several-picks rules (drafted by Claude; Ronith refines).
+- **Why:** repeats and overlapping highlights make the margin feel like one voice talking in circles; code can catch a reworded repeat for free and every time.
+- **Cost we accept:** the word-overlap test can miss a repeat that shares few words, or drop two genuinely different remarks about the same page; runs read more of the notes (more input tokens) once many paragraphs have no card.
+- **Revisit if:** repeats still get through (then an LLM judge in the eval, or embeddings), or runs get slow or costly on long notes.
+
+## D52. Quotes the reader takes from the book link exactly: footnote marks dropped, matching across breaks (amends D33, D46)
+- **Status:** Accepted (2026-10-17, Ronith)
+- **Context:** a quote Ronith pulled in whole with autocomplete showed as a partial (word-overlap) match. Two causes: (1) the PDF import read a raised footnote mark ("fixed.³²") as a line of its own, which looked like an indented new paragraph, split the sentence and left "32" in the text, so autocomplete offered "…for something 32 much more fixed."; (2) page links matched a quote exactly only inside one paragraph, while autocomplete reads the whole text as one stream, so the two disagreed whenever a quote crossed a paragraph or page break.
+- **Rules:**
+  - *Import:* a 1–3 digit item in smaller type (under 80% of the body text's height), raised above the baseline of the body text it follows, is a footnote mark and is dropped before lines are formed. On Ronith's PDFs: 216 marks and 202 false paragraph breaks gone from one paper, 8 and 7 from Weber; Pride and Prejudice unchanged.
+  - *Exact match:* on a key of letters and digits only (line-break hyphens joined, bare 1–3 digit numbers dropped), over the whole PDF text as one stream, so spacing, punctuation, quote marks, paragraph and page breaks and footnote numbers an older import left in a quote can't stop it; the hit is the paragraph the quote starts in. A key under 12 characters isn't placed. The PDF view searches for the quote without footnote numbers.
+- **Why:** whatever autocomplete offers from the book should always link as exact; both now read the text the same way.
+- **Cost we accept:** a book whose real text has superscript-sized numbers (rare) loses them; a reference text imported before this keeps its footnote numbers until the PDF is imported again (page links and autocomplete use the PDF's text read fresh, so they're fixed at once).
+- **Revisit if:** a quote that's really in the book still shows as overlap.
+
+---
+
 ## Template
 
 ```

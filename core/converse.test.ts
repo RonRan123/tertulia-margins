@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMANDS } from "./commands.ts";
 import { LIMITS } from "./limits.ts";
-import { buildContext, converse, errorCode, groundedNuggets, parseConverseRequest, quizTurn, reviewerTurn, screenDrafts, type ConverseRequest } from "./converse.ts";
+import { buildContext, converse, distinctPicks, errorCode, groundedNuggets, panelTurn, parseConverseRequest, quizTurn, reviewerTurn, screenDrafts, type ConverseRequest } from "./converse.ts";
 
 const valid = { passage: "One.\n\nTwo.", question: "Why?" };
 const errorOf = (body: unknown) => {
@@ -180,20 +180,25 @@ const daemonRun = { ...book, question: "", daemons: { excerpt: "- Everyone panic
 const draft = (daemon: string, nugget: string, anchor = "Everyone panicked") => ({ daemon, pass: false, nugget, anchor });
 const pass = (daemon: string) => ({ daemon, pass: true, nugget: "", anchor: "" });
 
-test("daemon run validation: shape, excerpt, mustPick, and nothing else alongside", () => {
+test("daemon run validation: shape, excerpt, mustPick, margin and maxCards (D51), and nothing else alongside", () => {
   expect(parseConverseRequest({ passage: book.passage, daemons: { excerpt: "Mine", extra: 1 } })).toEqual({
     passage: book.passage, question: "", notes: undefined, history: [], book: undefined, daemons: { excerpt: "Mine", mustPick: false },
   });
   expect(parseConverseRequest({ ...valid, daemons: { excerpt: "Mine", mustPick: true } })).toMatchObject({ daemons: { mustPick: true } });
+  const margin = [{ daemon: "author", text: "Hm?", anchor: "Mine" }];
+  expect(parseConverseRequest({ ...valid, daemons: { excerpt: "Mine", margin, maxCards: 3 } })).toMatchObject({ daemons: { margin, maxCards: 3 } });
   expect(errorOf({ ...valid, daemons: "Mine" })).toBe("daemons_invalid");
   expect(errorOf({ ...valid, daemons: { excerpt: "Mine", mustPick: "yes" } })).toBe("daemons_invalid");
+  expect(errorOf({ ...valid, daemons: { excerpt: "Mine", margin: [{ daemon: "narrator", text: "x", anchor: "y" }] } })).toBe("daemons_invalid");
+  expect(errorOf({ ...valid, daemons: { excerpt: "Mine", maxCards: 4 } })).toBe("daemons_invalid");
   expect(errorOf({ ...valid, daemons: { excerpt: " " } })).toBe("excerpt_missing");
   expect(errorOf({ ...valid, daemons: { excerpt: "Mine" }, command: { name: "define", selection: "x" } })).toBe("request_conflict");
 });
 
-test("the panel call shares chat's book and notes but has its own role; its turn holds each daemon, then the excerpt", async () => {
+test("the panel call shares chat's book and notes but has its own role; its turn holds each daemon, the margin, then the excerpt", async () => {
+  const margin = [{ daemon: "author" as const, text: "Is panic the point?", anchor: "Everyone panicked." }];
   const { client, calls } = daemonClient({ drafts: [pass("author"), pass("devils-advocate")] });
-  await run(daemonRun, client);
+  await run({ ...daemonRun, daemons: { ...daemonRun.daemons, margin } }, client);
   const panel = calls[0] as { system: { text: string }[]; messages: { content: string }[]; output_config: { format: { type: string } } };
   const chat = buildContext({ ...book, question: "x" }).system;
   expect(panel.system[0]).toEqual(chat[0]); // the book: the shared prefix
@@ -201,23 +206,32 @@ test("the panel call shares chat's book and notes but has its own role; its turn
   expect(panel.system[2]).toEqual(chat[2]); // the notes
   expect(panel.output_config.format.type).toBe("json_schema");
   const turn = panel.messages[0].content;
-  expect(turn).toMatch(/^<daemons>\n<daemon id="author" name="The Author">\n<action>\nConnect [^]*<persona>\nVoice:[^]*<daemon id="devils-advocate"[^]*<action>\nOffer the strongest other reading[^]*<daemon id="scholar" name="The Scholar">\n<action>\nWiden [^]*<\/daemons>\n\n<excerpt>\n- Everyone panicked\.\n- Tuesday matters\.\n<\/excerpt>$/);
+  expect(turn).toMatch(/^<daemons>\n<daemon id="author" name="The Author">\n<action>\nConnect [^]*<persona>\nVoice:[^]*<daemon id="devils-advocate"[^]*<action>\nOffer the strongest other reading[^]*<daemon id="scholar" name="The Scholar">\n<action>\nWiden [^]*<\/daemons>\n\n<margin>\n<remark daemon="The Author" answers="Everyone panicked\.">\nIs panic the point\?\n<\/remark>\n<\/margin>\n\n<excerpt>\n- Everyone panicked\.\n- Tuesday matters\.\n<\/excerpt>$/);
   expect(turn + panel.system[1].text).not.toContain("DRAFTED BY CLAUDE");
+  expect(panelTurn("x")).toContain("<margin>\n(empty)\n</margin>");
 });
 
-test("grounding: passes, unknown and repeated daemons, and invented quotes are dropped; a stray anchor falls back", () => {
+test("grounding: passes, unknown daemons, a third draft from one daemon, invented quotes and repeats are dropped; anchors widen to their sentence", () => {
   const output = {
     drafts: [
-      draft("author", "As I wrote, “nobody minded the sky” [p. 2].", "Tuesday matters"),
-      draft("author", "A second author draft."),
+      draft("author", "As I wrote, “nobody minded the sky” [p. 2].", "Tuesday"),
+      draft("author", "A second author draft on panic and fear."),
+      draft("author", "A third author draft about something else entirely."),
       draft("devils-advocate", "Where does “everyone ran screaming home” come from [p. 1]?"),
+      draft("devils-advocate", "A second author draft on panic and fear, reworded."),
       draft("narrator", "Not a daemon."),
-      pass("devils-advocate"),
+      pass("scholar"),
     ],
   };
   expect(groundedNuggets(output, bookPages, book.notes, daemonRun.daemons.excerpt)).toEqual([
-    { daemon: "author", text: "As I wrote, “nobody minded the sky” [p. 2].", anchor: "Tuesday matters" },
+    { daemon: "author", text: "As I wrote, “nobody minded the sky” [p. 2].", anchor: "Tuesday matters." },
+    { daemon: "author", text: "A second author draft on panic and fear.", anchor: "Everyone panicked." },
   ]);
+  const { drafts } = screenDrafts(output, bookPages, book.notes, daemonRun.daemons.excerpt);
+  expect(drafts.map((d) => d.reason ?? d.outcome)).toEqual(["runner-up", "runner-up", "unknown_or_repeated_daemon", "quote_not_on_page", "repeats_draft", "unknown_or_repeated_daemon", "passed"]);
+  // D51: a remark already in the margin isn't drafted again, even reworded.
+  const margin = [{ daemon: "author" as const, text: "A second author draft on panic and fear.", anchor: "x" }];
+  expect(groundedNuggets({ drafts: [draft("scholar", "A second draft on panic and fear, from the scholar.")] }, bookPages, book.notes, daemonRun.daemons.excerpt, margin)).toEqual([]);
   // Quoting the reader's own note is fine (D38); a stray anchor falls back to the excerpt's first line.
   const stray = groundedNuggets({ drafts: [draft("devils-advocate", "You say “Everyone panicked” but did they?", "not in the notes")] }, bookPages, book.notes, " - Everyone panicked.\n- x");
   expect(stray).toEqual([{ daemon: "devils-advocate", text: "You say “Everyone panicked” but did they?", anchor: "- Everyone panicked." }]);
@@ -228,58 +242,72 @@ test("all pass: no reviewer call, nothing picked", async () => {
   const { client, calls } = daemonClient({ drafts: [pass("author"), pass("devils-advocate")] });
   const { events, stats } = await run(daemonRun, client);
   expect(calls).toHaveLength(1);
-  expect(events).toEqual([{ type: "daemons", pick: null, nuggets: [], drafts: [
+  expect(events).toEqual([{ type: "daemons", picks: [], nuggets: [], drafts: [
     { daemon: "author", outcome: "passed", text: "", anchor: "", anchorFound: false },
     { daemon: "devils-advocate", outcome: "passed", text: "", anchor: "", anchorFound: false },
   ] }]);
   expect(stats.reviewerUsage).toBeUndefined();
 });
 
-test("two nuggets: the reviewer sees the excerpt, both, and only the pages they cite, and picks one", async () => {
-  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone? Nobody minded [pp. 2–2].")];
-  const { client, calls } = daemonClient({ drafts }, { pick: "devils-advocate" });
-  const { events, stats } = await run(daemonRun, client);
+test("nuggets: the reviewer sees the excerpt, each candidate with the words it answers, only the cited pages, and how many it may pick", async () => {
+  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone? Nobody minded [pp. 2–2].", "Tuesday matters")];
+  const { client, calls } = daemonClient({ drafts }, { picks: ["2", "1"] });
+  const request = { ...daemonRun, daemons: { ...daemonRun.daemons, maxCards: 2 } };
+  const { events, stats } = await run(request, client);
   expect(calls).toHaveLength(2);
-  const reviewer = calls[1] as { system: string; messages: { content: string }[]; output_config: { format: { schema: { properties: { pick: { enum: string[] } } } } } };
+  const reviewer = calls[1] as { system: string; messages: { content: string }[]; output_config: { format: { schema: { properties: { picks: { items: { enum: string[] } } } } } } };
   expect(reviewer.system).toMatch(/^You are the editor of a reader's margin/);
-  expect(reviewer.output_config.format.schema.properties.pick.enum).toEqual(["author", "devils-advocate", "none"]);
-  expect(reviewer.messages[0].content).toBe(reviewerTurn(events[0].type === "daemons" ? events[0].nuggets : [], bookPages, daemonRun.daemons));
+  expect(reviewer.output_config.format.schema.properties.picks.items.enum).toEqual(["1", "2"]);
+  expect(reviewer.messages[0].content).toBe(reviewerTurn(events[0].type === "daemons" ? events[0].nuggets : [], bookPages, request.daemons));
+  expect(reviewer.messages[0].content).toContain('<candidate id="2" name="The Devil\'s Advocate" answers="Tuesday matters.">');
   expect(reviewer.messages[0].content).toContain('<cited>\n<page n="2">\nNobody minded the sky.\n</page>\n</cited>');
+  expect(reviewer.messages[0].content).toContain("<max_picks>2</max_picks>");
   expect(reviewer.messages[0].content).not.toContain("The sky fell on Tuesday.");
   expect(events).toEqual([{
     type: "daemons",
-    pick: "devils-advocate",
-    nuggets: drafts.map((d) => ({ daemon: d.daemon, text: d.nugget, anchor: d.anchor })),
-    // D48: every draft and its fate, for traces; the reviewer's pick is marked.
+    picks: [1, 0], // D51: several cards, best first
+    nuggets: [
+      { daemon: "author", text: drafts[0].nugget, anchor: "Everyone panicked." },
+      { daemon: "devils-advocate", text: drafts[1].nugget, anchor: "Tuesday matters." },
+    ],
+    // D48: every draft and its fate, for traces; the reviewer's picks are marked.
     drafts: [
-      { daemon: "author", outcome: "runner-up", text: drafts[0].nugget, anchor: drafts[0].anchor, anchorFound: true },
-      { daemon: "devils-advocate", outcome: "picked", text: drafts[1].nugget, anchor: drafts[1].anchor, anchorFound: true },
+      { daemon: "author", outcome: "picked", text: drafts[0].nugget, anchor: drafts[0].anchor, anchorFound: true, card: 0 },
+      { daemon: "devils-advocate", outcome: "picked", text: drafts[1].nugget, anchor: drafts[1].anchor, anchorFound: true, card: 1 },
     ],
   }]);
   expect(stats.reviewerUsage).toEqual({ input_tokens: 2 });
 });
 
+test("distinctPicks: in order, once each, within the limit, never two on the same words", () => {
+  const n = (anchor: string) => ({ daemon: "author" as const, text: "x", anchor });
+  const nuggets = [n("Everyone panicked."), n("Everyone panicked."), n("Tuesday matters."), n("Other.")];
+  expect(distinctPicks([0, 0, 1, 2, 3], nuggets, 2)).toEqual([0, 2]);
+  expect(distinctPicks([3, 2], nuggets, 3)).toEqual([3, 2]);
+});
+
 test("the reviewer is told which candidates draw on knowledge beyond the book (D39)", () => {
   const nuggets = [{ daemon: "author", text: "See [p. 2].", anchor: "a" }, { daemon: "scholar", text: "Arendt names this.", anchor: "a" }] as const;
   const turn = reviewerTurn([...nuggets], bookPages, { excerpt: "a" });
-  expect(turn).toContain('<candidate id="author" name="The Author">\n');
-  expect(turn).toContain('<candidate id="scholar" name="The Scholar" beyond_the_book="true">\nArendt names this.\n</candidate>');
+  expect(turn).toContain('<candidate id="1" name="The Author" answers="a">\n');
+  expect(turn).toContain('<candidate id="2" name="The Scholar" beyond_the_book="true" answers="a">\nArendt names this.\n</candidate>');
 });
 
 test("the reviewer may show nothing, unless the run must pick", async () => {
-  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone?")];
-  const none = await run(daemonRun, daemonClient({ drafts }, { pick: "none" }).client);
-  expect(none.events[0]).toMatchObject({ pick: null });
+  const drafts = [draft("author", "Look again at [p. 2]."), draft("devils-advocate", "Did everyone?", "Tuesday matters")];
+  const none = await run(daemonRun, daemonClient({ drafts }, { picks: [] }).client);
+  expect(none.events[0]).toMatchObject({ picks: [] });
 
   const mustPick = { ...daemonRun, daemons: { ...daemonRun.daemons, mustPick: true } };
-  const { client, calls } = daemonClient({ drafts }, { pick: "author" });
-  await run(mustPick, client);
-  expect((calls[1] as { output_config: { format: { schema: { properties: { pick: { enum: string[] } } } } } }).output_config.format.schema.properties.pick.enum).toEqual(["author", "devils-advocate"]);
+  const { client, calls } = daemonClient({ drafts }, { picks: [] });
+  const forced = await run(mustPick, client);
+  expect((calls[1] as { output_config: { format: { schema: { properties: { picks: { minItems: number } } } } } }).output_config.format.schema.properties.picks.minItems).toBe(1);
+  expect(forced.events[0]).toMatchObject({ picks: [0] }); // an empty answer still shows the first
 
   const single = daemonClient({ drafts: [drafts[1], pass("author")] });
   const shown = await run(mustPick, single.client);
   expect(single.calls).toHaveLength(1); // one nugget that must be shown: no reviewer call
-  expect(shown.events[0]).toMatchObject({ pick: "devils-advocate" });
+  expect(shown.events[0]).toMatchObject({ picks: [0] });
 });
 
 // ---- Quiz (D42) ----

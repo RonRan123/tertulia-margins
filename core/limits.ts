@@ -20,6 +20,7 @@ export const LIMITS = {
   daemons: {
     idleMs: 25_000,
     minLines: 10,
+    maxCardsPerRun: 3, // D51: a run may show several cards, each on a different line, none repeating the margin
     floorLines: 15,
     poolSize: 6, // runners-up kept per book, to fill the floor without a call
     dailyRuns: 40,

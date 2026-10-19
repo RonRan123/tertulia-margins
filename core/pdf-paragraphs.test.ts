@@ -138,3 +138,17 @@ test("textItemsOf maps pdfjs items and skips marked content", () => {
   ];
   expect(textItemsOf(items)).toEqual([{ str: "Hi", x: 72, y: 700, width: 10, height: 12, hasEOL: true }]);
 });
+
+test("a raised footnote mark is dropped, so it neither splits the paragraph nor joins the text (D52)", () => {
+  const p = page(20, [
+    { text: "the state removes the plasticity and autonomy that exist in social life for something", full: true },
+    { text: "much more fixed." },
+  ]);
+  // "32" in 7pt type, raised 5pt above the line it follows, as in the Scott paper.
+  p.items.push({ str: "32", x: 72 + 16 * 5, y: p.items[1].y + 5, width: 7, height: 7.2, hasEOL: false });
+  expect(referenceTextFromPages([p])).toBe("[PDF p. 20]\nthe state removes the plasticity and autonomy that exist in social life for something much more fixed.");
+  // A number in body type (a year, a count) stays.
+  const year = page(3, [{ text: "It happened in" }]);
+  year.items.push({ str: "1868", x: 72 + 15 * 5, y: year.items[0].y, width: 20, height: 12, hasEOL: true });
+  expect(referenceTextFromPages([year])).toBe("[PDF p. 3]\nIt happened in 1868");
+});

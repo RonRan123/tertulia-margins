@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { findPageRefs, linkPageRefs, pageLabel, pdfParagraphs, pillName } from "./page-links.ts";
+import { findPageRefs, linkHighlight, linkPageRefs, pageLabel, pdfParagraphs, pillName } from "./page-links.ts";
 
 const refsIn = (notes: string) => findPageRefs(notes).map((r) => ({ text: notes.slice(r.start, r.end), page: r.page, isPdfPage: r.isPdfPage }));
 
@@ -68,6 +68,14 @@ test("exact matching tolerates curly quotes, case, spacing and line-break hyphen
   const paragraphs = pdfParagraphs("[PDF p. 2]\nShe said \"It is a truth uni-\nversally  acknowledged\" then.");
   const [link] = linkPageRefs(findPageRefs("“it is a truth universally acknowledged” [PDF p. 2]"), paragraphs);
   expect(link).toMatchObject({ method: "exact", pdfPage: 2 });
+});
+
+test("an exact quote may run across a paragraph or page break, and ignores footnote numbers an older import left in it (D52)", () => {
+  const paragraphs = pdfParagraphs("[PDF p. 19]\nExample after example, Scott shows that the state removes the autonomy that exist in social life for something\n\n[PDF p. 20]\nmuch more fixed. The troubling feature follows.");
+  const notes = "“Example after example, Scott shows that the state removes the autonomy that exist in social life for something 32 much more fixed.” [p. 17]";
+  const [link] = linkPageRefs(findPageRefs(notes), paragraphs);
+  expect(link).toMatchObject({ method: "exact", pdfPage: 19 });
+  expect(linkHighlight(link)).not.toContain(" 32 "); // the PDF view searches without it
 });
 
 test("a PDF page reference ignores the offset; estimates stay inside the PDF", () => {

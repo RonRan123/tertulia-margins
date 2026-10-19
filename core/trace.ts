@@ -15,6 +15,7 @@ export type DraftTrace = {
   anchor: string;
   anchorFound: boolean;
   reason?: string;
+  card?: number; // a kept draft's index among the run's nuggets
 };
 
 export type TokenUse = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
@@ -33,7 +34,7 @@ export type TraceEvent = { at: string; book?: string } & (
       excerpt: string;
       mustPick: boolean;
       drafts: DraftTrace[];
-      pick: string | null;
+      picks: string[]; // the daemons whose cards were shown, best first (D51)
       ms: number;
       tokens?: TokenUse;
       reviewerTokens?: TokenUse;
@@ -126,7 +127,7 @@ function entry(event: TraceEvent): { who: string; what: string; details?: string
       const why = event.trigger === "asked" ? "the reader pressed React to notes" : "the reader paused";
       const head = event.error
         ? `run failed (${event.error}) after ${why}`
-        : `ran after ${why}${event.mustPick ? " (must show a card)" : ""}: ${event.pick ? `${daemonName(event.pick)}'s card shown` : "no card shown"}, ${secs(event.ms)}`;
+        : `ran after ${why}${event.mustPick ? " (must show a card)" : ""}: ${(event.picks ?? []).length > 0 ? `${event.picks.map(daemonName).join(", ")} shown` : "no card shown"}, ${secs(event.ms)}`;
       const usage = [event.tokens && `panel ${tokens(event.tokens)}`, event.reviewerTokens && `reviewer ${tokens(event.reviewerTokens)}`].filter(Boolean).join("; ");
       const drafts = event.drafts.map((d) => {
         const name = daemonName(d.daemon);

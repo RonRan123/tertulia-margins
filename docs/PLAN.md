@@ -135,6 +135,11 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S10.3: Show/Hide reactions, shimmer (D50)
 - [x] Toggle first in the margin's panel (hidden: no cards, no timers, no runs, a run out is cancelled; remembered per browser); a new card shimmers 1–2 s (random) then fades in. A 30-minute trigger was built and dropped the same day (Ronith). **Verify:** store test (old UI loads with reactions shown; hidden persists); 193 tests, lint, build green. *Browser check pending:* the local dev server has the invite gate on.
 
+### S10.4: a margin without repeats (D51)
+- [x] Cards in the margin go with each run; drafts repeating one (or each other) are dropped in code; anchors widen to their sentence; runs also read paragraphs no card answers and may show up to 3 cards on different words; prompts drafted for the margin and several picks. **Verify:** core tests (repeat detection on the two Author cards Ronith saw, sentence anchors, sparse paragraphs, several picks, distinct anchors, request validation); 198 tests, lint, build green. Live on Ronith's Weber notes with the Author's card in the margin (`.scratch/tools/d51-live.ts`): no draft repeated it; the Devil's Advocate's card anchored on the whole sentence ("Yes even politicians are \"beholden\"… everything the electorate wants") instead of a phrase; the reviewer showed 1 of 2 drafts. *Browser check pending* (invite gate on the local dev server).
+### S10.5: autocompleted quotes link exactly (D52)
+- [x] Footnote marks dropped at import; exact page links match across paragraph and page breaks, ignoring footnote numbers. **Verify:** core tests (a raised mark dropped, a body-size year kept; a quote across a page break with an old "32" in it links exactly and highlights without it); Ronith's note from the screenshot links `exact` to PDF p. 20 with both old and new PDF text (was overlap); his 5 PDFs: footnote marks gone (216 in the Scott paper, 8 in Weber), other text unchanged.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

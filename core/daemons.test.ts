@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { afterPromote, afterRun, freshDaemonState, ownLines, planDaemons, type DaemonCard } from "./daemons.ts";
+import { afterPromote, afterRun, freshDaemonState, isSameRemark, ownLines, planDaemons, sentenceAround, type DaemonCard } from "./daemons.ts";
 
 // The reader's own lines (D37): short and distinct, so each counts as one line.
 const WORDS = ["pride", "prejudice", "marriage", "fortune", "irony", "manners", "letters", "estate", "sisters", "mother", "father", "ball", "rain", "walk", "proposal", "regiment"];
@@ -24,12 +24,14 @@ test("a book's existing notes count as seen: daemons never sweep the backlog", (
   expect(planDaemons(notes, freshDaemonState(notes))).toMatchObject({ kind: "wait" });
 });
 
-test("ten new lines of the reader's own words start a run on the paragraphs that hold them", () => {
+test("ten new lines of the reader's own words start a run on the paragraphs that hold them, and (D51) on those whose lines no card answers", () => {
   const old = mine(5, "old");
   const state = freshDaemonState(old);
-  expect(planDaemons(`${old}\n\n${mine(9)}`, state)).toMatchObject({ kind: "wait" });
+  expect(planDaemons(`${old}\n\n${mine(9)}`, state)).toMatchObject({ kind: "wait" }); // sparse paragraphs never start a run
   const plan = planDaemons(`${old}\n\n${mine(10)}`, state);
-  expect(plan).toEqual({ kind: "run", excerpt: mine(10), paragraphs: [mine(10)], lines: 10, mustPick: false });
+  expect(plan).toEqual({ kind: "run", excerpt: `${old}\n\n${mine(10)}`, paragraphs: [old, mine(10)], lines: 10, mustPick: false });
+  const answered = { ...state, cards: [{ id: "c", daemon: "author" as const, text: "Hm?", anchor: old }] };
+  expect(planDaemons(`${old}\n\n${mine(10)}`, answered)).toMatchObject({ excerpt: mine(10), paragraphs: [mine(10)] });
 });
 
 test("adding to a paragraph counts only the new lines; a touched-up line counts as seen", () => {
@@ -52,13 +54,13 @@ test("after a run: its lines are seen; the pick becomes a card, the rest join th
   const plan = planDaemons(notes, freshDaemonState(""));
   if (plan.kind !== "run") throw new Error("expected a run");
 
-  const picked = afterRun(freshDaemonState(""), plan, "author", [nugget("author", "thought 1"), nugget("devils-advocate", "thought 2")], newId);
+  const picked = afterRun(freshDaemonState(""), plan, [0], [nugget("author", "thought 1"), nugget("devils-advocate", "thought 2")], newId);
   expect(picked.cards.map((c) => c.daemon)).toEqual(["author"]);
   expect(picked.pool.map((c) => c.daemon)).toEqual(["devils-advocate"]);
   expect(picked.linesSinceCard).toBe(0);
   expect(planDaemons(notes, picked)).toMatchObject({ kind: "wait" });
 
-  const empty = afterRun(freshDaemonState(""), plan, null, [], newId);
+  const empty = afterRun(freshDaemonState(""), plan, [], [], newId);
   expect(empty).toMatchObject({ cards: [], pool: [], linesSinceCard: 10 });
 });
 
@@ -88,4 +90,22 @@ test("the reader asks: a run now, on all the notes, that must pick", () => {
   // No words of the reader's own (empty, or only a copied quote): nothing to react to.
   expect(planDaemons("", freshDaemonState(""), true)).toEqual({ kind: "wait", lines: 0 });
   expect(planDaemons("> “A quote from the book, copied.”", freshDaemonState(""), true)).toEqual({ kind: "wait", lines: 0 });
+});
+
+test("isSameRemark (D51): the same point reworded is a repeat; a different point on the same page isn't", () => {
+  const first = "You contrast politics with corporate hierarchy, but I compare them myself later: shareholders are as little influential in management as a 'people' ruled by expert officials [p. 15]. Is political independence then partly an illusion?";
+  const again = "You contrast politics with corporate hierarchy, yet I make the same comparison later: shareholders are \"just as little influential in the business management as is a 'people' ruled by expert officials\" [p. 15]. Does that blur your independence line?";
+  const other = "Weber says the state claims a monopoly of legitimate force within a territory [p. 15]. Is force the end, or only the means?";
+  expect(isSameRemark(first, again)).toBe(true);
+  expect(isSameRemark(first, other)).toBe(false);
+  expect(isSameRemark("", first)).toBe(false);
+});
+
+test("sentenceAround (D51): an anchor widens to its whole sentence, without the list marker; unknown anchors stay as given", () => {
+  const notes = '- Insight: I never made the connection. Politics requires an element of "independence" for it to work. This is a contrast with corporate life (e.g, even the CEO reports to a board).\n- Next line.';
+  expect(sentenceAround(notes, "an element of")).toBe('Politics requires an element of "independence" for it to work.');
+  expect(sentenceAround(notes, "Insight")).toBe("Insight: I never made the connection.");
+  expect(sentenceAround(notes, "even the CEO reports")).toBe("This is a contrast with corporate life (e.g, even the CEO reports to a board).");
+  expect(sentenceAround(notes, "Next")).toBe("Next line.");
+  expect(sentenceAround(notes, "not there")).toBe("not there");
 });

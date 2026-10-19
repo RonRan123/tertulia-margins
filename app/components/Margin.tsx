@@ -90,20 +90,22 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
     const abort = new AbortController();
     running.current = abort;
     setIsReading(true);
-    const result = await runDaemons({ passage: reference, notes, question: "", daemons: { excerpt: plan.excerpt, mustPick: plan.mustPick } }, abort.signal, isAsked ? "asked" : "pause");
+    // D51: the cards already shown go along, so no new remark repeats one; a run may show several.
+    const margin = daemons.cards.map(({ daemon, text, anchor }) => ({ daemon, text, anchor }));
+    const request = { excerpt: plan.excerpt, mustPick: plan.mustPick, margin, maxCards: LIMITS.daemons.maxCardsPerRun };
+    const result = await runDaemons({ passage: reference, notes, question: "", daemons: request }, abort.signal, isAsked ? "asked" : "pause");
     running.current = undefined;
     setIsReading(false);
     if (abort.signal.aborted) return;
     if ("error" in result) return setOutcome(result.error === "daemon_limit" ? "daemon_limit" : "failed");
-    // The ids are made here, once, so the picked card's id is known for its shimmer.
+    // The ids are made here, once, so each picked card's id is known for its shimmer.
     const ids = result.nuggets.map(() => crypto.randomUUID());
     setDaemons((d) => {
       let next = 0;
-      return afterRun(d, plan, result.pick, result.nuggets, () => ids[next++]);
+      return afterRun(d, plan, result.picks, result.nuggets, () => ids[next++]);
     });
-    setOutcome(result.pick ? undefined : "quiet");
-    const picked = result.nuggets.findIndex((n) => n.daemon === result.pick);
-    if (picked >= 0) reveal(ids[picked], result.nuggets[picked].daemon);
+    setOutcome(result.picks.length > 0 ? undefined : "quiet");
+    for (const i of result.picks) reveal(ids[i], result.nuggets[i].daemon);
   }
 
   // Every edit of the reader's restarts the wait; a pause long enough lets the daemons look. A failed

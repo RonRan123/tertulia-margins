@@ -24,7 +24,7 @@ test("renderTrace: a readable timeline of the reader and each agent, grouped by 
     { at: "2026-10-17T13:00:05.000Z", book: "Persuasion", kind: "notes", added: ["Anne is patient."], removed: [], lines: 4 },
     { at: "2026-10-17T13:00:00.000Z", kind: "session", view: "notes+margin", books: ["Persuasion"] },
     {
-      at: "2026-10-17T13:01:00.000Z", book: "Persuasion", kind: "daemons", trigger: "pause", excerpt: "Anne is patient.", mustPick: false, pick: "author", ms: 6200,
+      at: "2026-10-17T13:01:00.000Z", book: "Persuasion", kind: "daemons", trigger: "pause", excerpt: "Anne is patient.", mustPick: false, picks: ["author"], ms: 6200,
       drafts: [
         { daemon: "author", outcome: "picked", text: "Patient, or resigned? [p. 3]", anchor: "Anne is patient", anchorFound: true },
         { daemon: "devils-advocate", outcome: "passed", text: "", anchor: "", anchorFound: false },
@@ -38,7 +38,7 @@ test("renderTrace: a readable timeline of the reader and each agent, grouped by 
   expect(md).toContain("# Session session- · browser browser-");
   expect(md.indexOf("App** opened")).toBeLessThan(md.indexOf("## In \"Persuasion\""));
   expect(md).toContain("**13:00:05 · Reader** edited the notes (+1 / −0 lines, 4 lines in all)\n  + Anne is patient.");
-  expect(md).toContain("**13:01:00 · Daemons** ran after the reader paused: The Author's card shown, 6.2 s");
+  expect(md).toContain("**13:01:00 · Daemons** ran after the reader paused: The Author shown, 6.2 s");
   expect(md).toContain("The Devil's Advocate: passed");
   expect(md).toContain("→ DROPPED (quote_not_in_text)");
   expect(md).toContain("not in the excerpt, fell back to its first line");

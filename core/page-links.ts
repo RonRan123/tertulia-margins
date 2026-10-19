@@ -81,7 +81,7 @@ function contextOf(notes: string, start: number, end: number): { quote?: string;
 
 // ---- Matching ----
 
-type PdfParagraph = { text: string; norm: string; words: string[]; page: number };
+type PdfParagraph = { text: string; norm: string; key: string; words: string[]; page: number };
 
 // Lowercase, straight quotes, no line-break hyphens, single spaces: how notes and PDF text compare.
 const normalize = (text: string) =>
@@ -92,6 +92,19 @@ const normalize = (text: string) =>
     .replace(/(\w)-\s*\n\s*(\w)/g, "$1$2")
     .replace(/\s+/g, " ")
     .trim();
+// The exact match's key (D52): letters and digits only, with words hyphenated across a line joined
+// and bare 1–3 digit numbers (footnote marks such as "fixed. 32") dropped. Spacing, punctuation,
+// quote marks and paragraph or page breaks can't stop a quote from matching, as in autocomplete,
+// which reads the whole text as one stream; so a quote autocomplete supplied always links exactly.
+const matchKey = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/(\p{L})-\s*\n\s*(\p{L})/gu, "$1$2")
+    .replace(/(\p{L})- +(\p{Ll})/gu, "$1$2")
+    .replace(/(^|[\s"“”'‘’(])\d{1,3}(?=[\s"“”'‘’).,;:]|$)/g, "$1")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+const MIN_KEY = 12; // a quote's key shorter than this (a word or two) is too common to place
+
 const STOPWORDS = new Set(
   "the and that this with from have were which their there would could should about into than then them they what when where while your been being also very more most some such only other upon must said".split(" "),
 );
@@ -112,7 +125,7 @@ export function pdfParagraphs(pdfText: string): PdfParagraph[] {
     for (const block of part.split(/\n\s*\n/)) {
       const text = block.replace(/\s+/g, " ").trim();
       // normalize reads the raw block: it rejoins words hyphenated across a line break.
-      if (text) pieces.push({ text, norm: normalize(block), words: wordsOf(block), page });
+      if (text) pieces.push({ text, norm: normalize(block), key: matchKey(block), words: wordsOf(block), page });
     }
   }
   return pieces;
@@ -126,11 +139,19 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
   const lastPage = Math.max(1, ...paragraphs.map((p) => p.page));
   const clamp = (page: number) => Math.min(Math.max(1, page), lastPage);
 
-  // 1. Exact: each quote, anywhere in the PDF; the hits closest to their written page teach the offset.
+  // 1. Exact: each quote, anywhere in the PDF read as one stream (D52), so a quote that runs across
+  // a paragraph or page break still matches; a hit is the paragraph the quote starts in. The hits
+  // closest to their written page teach the offset.
+  const stream = paragraphs.map((p) => p.key).join("");
+  const starts: number[] = [];
+  paragraphs.reduce((at, p) => (starts.push(at), at + p.key.length), 0);
+  const paragraphAt = (offset: number) => paragraphs[starts.findLastIndex((s) => s <= offset)];
   const exact = new Map<PageRef, PdfParagraph[]>();
   for (const ref of refs) {
-    const quote = ref.quote && normalize(ref.quote);
-    const hits = quote ? paragraphs.filter((p) => p.norm.includes(quote)) : [];
+    const quote = ref.quote ? matchKey(ref.quote) : "";
+    if (quote.length < MIN_KEY) continue;
+    const hits: PdfParagraph[] = [];
+    for (let at = stream.indexOf(quote); at !== -1; at = stream.indexOf(quote, at + 1)) hits.push(paragraphAt(at));
     if (hits.length > 0) exact.set(ref, hits);
   }
   const closest = (hits: PdfParagraph[], target: number) =>
@@ -148,7 +169,7 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
     const hits = exact.get(ref);
     if (hits) {
       const hit = closest(hits, estimate);
-      return { ...ref, pdfPage: hit.page, method: "exact", match: ref.quote };
+      return { ...ref, pdfPage: hit.page, method: "exact", match: withoutFootnoteMarks(ref.quote!) };
     }
     // 2. Overlap: the nearby paragraph covering the largest share of the reference's word weight.
     const refWords = [...new Set(wordsOf(ref.context))];
@@ -166,6 +187,10 @@ export function linkPageRefs(refs: PageRef[], paragraphs: PdfParagraph[]): PageL
     return { ...ref, pdfPage: estimate, method: "page" };
   });
 }
+
+// A quote as the PDF view should search for it: footnote numbers in it (left by an earlier text
+// import, D52) aren't where the PDF prints them, so they'd stop the search.
+const withoutFootnoteMarks = (quote: string) => quote.replace(/(^|\s)\d{1,3}(?=\s)/g, "$1").replace(/\s+/g, " ").trim();
 
 // The words the PDF view finds and selects when a link opens: the quote itself, or the start of
 // the matched paragraph (short, so a line break in the PDF doesn't break the search).
