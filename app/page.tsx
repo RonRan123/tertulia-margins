@@ -90,6 +90,7 @@ const isAlone = (view: View) => !view.startsWith("notes+");
 const viewOf = (side: Side, alone: boolean): View => (alone ? (side === "margin" ? "notes" : side) : `notes+${side}`);
 const showsChat = (view: View) => view === "notes+chat" || view === "chat";
 const isNotesAlone = (view: View) => view === "notes";
+const isSheet = (view: View) => sideOf(view) !== "margin"; // Quiz, PDF or Chat: a sheet on a phone
 
 // Hands a file to the browser's downloads: DOM code, so it lives here, not in core.
 function download(filename: string, content: string) {
@@ -177,11 +178,38 @@ export default function Home() {
   };
 
   // A reply counts as read once chat has been on screen: entering or leaving a chat view clears it.
+  // A card's words stay highlighted in the notes only while its margin is on screen.
+  // On a phone the notes are home, and Quiz, PDF and Chat open as a sheet over them (CSS; their
+  // alone views fill the screen). Entering a sheet from the notes is a history entry, so Back closes
+  // it; leaving one goes back, and popstate below brings the notes. Swapping sheets adds none.
   const showView = (view: View) => {
     if (view !== ui.view) trace({ kind: "view", view });
     if (showsChat(view) || showsChat(ui.view)) setHasUnread(false);
+    if (view !== "notes+margin") setActiveCard(undefined);
+    const isEnteringSheet = isPhone() && !isSheet(ui.view) && isSheet(view);
+    const isLeavingSheet = isPhone() && isSheet(ui.view) && !isSheet(view);
+    if (isEnteringSheet) {
+      homeView.current = ui.view;
+      window.history.pushState({ sheet: true }, "");
+    }
+    if (isLeavingSheet && window.history.state?.sheet) {
+      homeView.current = view;
+      return window.history.back();
+    }
     setUi((u) => ({ ...u, view }));
   };
+  const homeView = useRef<View>("notes+margin"); // the notes view a phone's sheet closes to
+  const closeSheet = () => showView(homeView.current);
+  // Quiz, PDF or Chat alone or beside the notes (on a phone: a full-screen sheet or one that peeks).
+  const toggleAlone = () => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)));
+  useEffect(() => {
+    const onBack = () => {
+      if (window.history.state?.sheet) return;
+      setUi((u) => (isSheet(u.view) ? { ...u, view: homeView.current } : u));
+    };
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
   // The side to bring back when the notes leave full screen (this tab only; after a reload, the margin).
   const lastSide = useRef<Side>("margin");
   const toggleNotesAlone = () => {
@@ -446,6 +474,10 @@ export default function Home() {
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
+  // The words a link selected in the PDF stay until the reader writes again.
+  useEffect(() => {
+    if (edits > 0) pdfPane.current?.clearHighlight();
+  }, [edits]);
   // A page cite in AI text (D38, D45): linked like the notes' references, together with the other
   // cites of that text so their exact hits teach the page offset. Stable while the PDF is, so each
   // message links its cites once.
@@ -475,8 +507,7 @@ export default function Home() {
       <main
         data-view={ui.view}
         data-sidebar-open={ui.isSidebarOpen || undefined}
-        data-pdf-dark={ui.pdfDark || undefined}
-        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
+        data-pdf-dark={ui.pdfDark || undefined}        style={{ "--notes-share": `${ui.notesShare * 100}%` } as CSSProperties}
       >
         <header className="app-header">
           <span className="brand">
@@ -531,12 +562,12 @@ export default function Home() {
             })}
             <button
               type="button"
-              className="quiet icon pill"
+              className="quiet icon pill show-alone"
               aria-pressed={isAlone(ui.view) && !isNotesAlone(ui.view)}
               disabled={sideOf(ui.view) === "margin"} // the margin has nothing to show alone; the notes have their own ⤢
               title={sideOf(ui.view) === "margin" ? "Pick Quiz, PDF or Chat to show it alone" : isAlone(ui.view) ? "Show beside the notes" : "Show alone"}
               aria-label="Show alone"
-              onClick={() => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)))}
+              onClick={toggleAlone}
             >
               {isAlone(ui.view) && !isNotesAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
@@ -614,7 +645,10 @@ export default function Home() {
                 />
               </div>
               <PaneDivider share={ui.notesShare} onChange={(notesShare) => setUi((u) => ({ ...u, notesShare }))} />
+              {/* Phone only (CSS): the dimmed notes behind a Quiz, PDF or Chat sheet; a tap closes it. */}
+              <div className="sheet-backdrop" aria-hidden="true" onClick={closeSheet} />
               <section className="side-pane" aria-label="Beside the notes">
+                <SheetHead isFull={isAlone(ui.view)} onClose={closeSheet} onToggleFull={toggleAlone} />
                 <div className="quiz-pane">
                   <Quiz
                     bookId={library.currentId}
@@ -656,5 +690,52 @@ export default function Home() {
         </div>
       </main>
     </OpenPageContext>
+  );
+}
+
+const SWIPE_PX = 60; // how far the sheet's head is dragged before the sheet changes size or closes
+
+type SheetHeadProps = { isFull: boolean; onClose: () => void; onToggleFull: () => void };
+
+// A phone sheet's top (CSS): a grab handle, "← Notes" and, in the opposite corner, ⤢ (full screen)
+// or ⤡ (back to the notes peeking above). A drag on the head moves the sheet with the finger; past
+// SWIPE_PX, up expands it, down shrinks a full sheet or closes one that peeks, else it springs
+// back. Only the head drags, so scrolling a quiz or chat, or zooming the PDF, never moves the sheet.
+function SheetHead({ isFull, onClose, onToggleFull }: SheetHeadProps) {
+  const drag = useRef<{ y: number; room: number }>(undefined); // where it started; how far up it may go
+  const sheetOf = (el: HTMLElement) => el.closest<HTMLElement>(".side-pane");
+  return (
+    <div
+      className="sheet-head"
+      onTouchStart={(e) => {
+        const sheet = sheetOf(e.currentTarget);
+        const barBottom = document.querySelector(".app-header")?.getBoundingClientRect().bottom ?? 0;
+        drag.current = { y: e.touches[0].clientY, room: sheet ? sheet.getBoundingClientRect().top - barBottom : 0 };
+      }}
+      onTouchMove={(e) => {
+        const sheet = sheetOf(e.currentTarget);
+        if (!drag.current || !sheet) return;
+        const dy = Math.max(-drag.current.room, e.touches[0].clientY - drag.current.y);
+        sheet.style.transform = `translateY(${dy}px)`;
+      }}
+      onTouchEnd={(e) => {
+        const sheet = sheetOf(e.currentTarget);
+        const dragged = drag.current ? e.changedTouches[0].clientY - drag.current.y : 0;
+        drag.current = undefined;
+        if (sheet) sheet.style.transform = "";
+        if (dragged < -SWIPE_PX && !isFull) onToggleFull();
+        if (dragged > SWIPE_PX) return isFull ? onToggleFull() : onClose();
+      }}
+    >
+      <span className="sheet-handle" aria-hidden="true" />
+      <div className="sheet-bar">
+        <button type="button" className="sheet-back" onClick={onClose}>
+          ← Notes
+        </button>
+        <button type="button" className="quiet icon" aria-pressed={isFull} aria-label={isFull ? "Show the notes above" : "Full screen"} onClick={onToggleFull}>
+          {isFull ? <MinimizeIcon /> : <MaximizeIcon />}
+        </button>
+      </div>
+    </div>
   );
 }

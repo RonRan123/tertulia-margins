@@ -4,10 +4,27 @@ import { paragraphsFromPages, textItemsOf, type PdfPage } from "@/core/pdf-parag
 
 export type PdfImportError = "pdf_unreadable" | "pdf_no_text";
 
+// pdfjs reads a page's text with `for await` over a ReadableStream (getTextContent, which the import
+// and the viewer's search both use), and Safari's streams can't be iterated that way: on an iPhone
+// or Mac Safari every PDF failed to read. This adds the iteration where it's missing.
+function iterableStreams() {
+  const proto = ReadableStream.prototype as unknown as Record<symbol, unknown>;
+  if (Symbol.asyncIterator in proto) return;
+  proto[Symbol.asyncIterator] = async function* (this: ReadableStream) {
+    const reader = this.getReader();
+    try {
+      for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) yield chunk.value;
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
 // Opens a PDF on its own worker, which `close` ends with the document. The import and the viewer
 // (D29) both open documents; a shared worker would be torn down when either closed its own.
 // pdfjs is loaded on first use, so it stays out of the first page load.
 export async function openPdf(data: Blob) {
+  iterableStreams();
   const pdfjs = await import("pdfjs-dist");
   // The bundler emits the worker script as its own chunk.
   const port = new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), { type: "module" });

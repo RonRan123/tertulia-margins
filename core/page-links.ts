@@ -47,24 +47,29 @@ const QUOTE = /[“"]([^“”"\n]+)[”"]/g;
 const isLongQuote = (quote: string) => quote.trim().split(/\s+/).length >= 3;
 
 export function findPageRefs(notes: string): PageRef[] {
-  const refs: PageRef[] = [];
-  const isTaken = (start: number, end: number) => refs.some((r) => start < r.end && end > r.start);
+  const spans: { start: number; end: number; page: number; isPdfPage: boolean }[] = [];
+  const isTaken = (start: number, end: number) => spans.some((r) => start < r.end && end > r.start);
   for (const { pattern } of REF_PATTERNS) {
     for (const m of notes.matchAll(pattern)) {
       const start = m.index;
       const end = start + m[0].length;
       if (isTaken(start, end)) continue;
-      const { quote, context } = contextOf(notes, start, end);
-      refs.push({ start, end, page: Number(m[2]), isPdfPage: Boolean(m[1]), ...(quote && { quote }), context });
+      spans.push({ start, end, page: Number(m[2]), isPdfPage: Boolean(m[1]) });
     }
   }
-  return refs.sort((a, b) => a.start - b.start);
+  spans.sort((a, b) => a.start - b.start);
+  return spans.map((span, i) => {
+    const { quote, context } = contextOf(notes, span.start, span.end, spans[i - 1]?.end ?? 0);
+    return { ...span, ...(quote && { quote }), context };
+  });
 }
 
 // The quote a reference cites: the last quote before it in its paragraph, or a blockquote line
-// just above it. Without one, the sentence around the reference, minus the reference.
-function contextOf(notes: string, start: number, end: number): { quote?: string; context: string } {
-  const paragraphStart = notes.lastIndexOf("\n\n", start) + 1;
+// just above it. Without one, the sentence around the reference, minus the reference. It never
+// looks back past the reference before it (`after`): a quote there is that reference's, and a
+// list's bullets, which share one paragraph, don't lend their quotes to a later bullet's page.
+function contextOf(notes: string, start: number, end: number, after: number): { quote?: string; context: string } {
+  const paragraphStart = Math.max(notes.lastIndexOf("\n\n", start) + 1, after);
   const nextBreak = notes.indexOf("\n\n", end);
   const paragraphEnd = nextBreak === -1 ? notes.length : nextBreak;
   const before = notes.slice(paragraphStart, start);

@@ -689,6 +689,15 @@ button.pill[aria-pressed="true"] {
   caret-color: var(--ink);
 }
 
+/* Scroll past the end, as in Obsidian: room below the last line, so it can rise level with the
+   PDF text being read. A click there puts the caret at the end; there's nothing to edit below it.
+   Not on phones, where the cards list under the notes. */
+@media not (max-width: 48rem) {
+  .notes-editor .cm-content {
+    padding-bottom: max(var(--s8), calc(100vh - 10rem));
+  }
+}
+
 .notes-editor .cm-line {
   padding: 0;
 }
@@ -1056,6 +1065,12 @@ main[data-view="pdf"] .side-pane,
 main[data-view="chat"] .side-pane {
   grid-column: 1 / -1;
   border-left: 0;
+}
+
+/* The PDF sheet (phones only, below): its head and the dimmed notes behind it. */
+.sheet-head,
+.sheet-backdrop {
+  display: none;
 }
 
 main[data-view="quiz"] .panes,
@@ -1949,11 +1964,11 @@ dialog.reference form button {
     min-height: 100dvh;
   }
 
-  /* Below the bar, so its toggle stays reachable. */
+  /* Below the bar, so its toggle stays reachable; above a Quiz, PDF or Chat sheet. */
   .sidebar {
     position: fixed;
     inset: 2.75rem auto 0 0;
-    z-index: 30;
+    z-index: 50;
     width: min(18rem, 85vw);
     box-shadow: 4px 0 16px rgb(0 0 0 / 0.12);
   }
@@ -1962,8 +1977,9 @@ dialog.reference form button {
     display: block;
     position: fixed;
     inset: 2.75rem 0 0;
-    z-index: 29;
+    z-index: 49;
     background: rgb(0 0 0 / 0.3);
+    cursor: pointer;
   }
 
   .workspace {
@@ -1974,17 +1990,89 @@ dialog.reference form button {
     display: none;
   }
 
-  /* Beside the notes, there is no room: the chosen pane shows instead of them. */
-  main[data-view="notes+quiz"] .panes,
-  main[data-view="notes+pdf"] .panes,
-  main[data-view="notes+chat"] .panes {
-    display: none;
+  /* The notes are home: Quiz, PDF and Chat open as a sheet over them, the notes dimmed above it
+     and kept where they were; their alone views (⤢) fill the screen under the bar. The notes stay
+     laid out underneath either way, so closing a sheet finds them as they were. */
+  main[data-view="quiz"] .panes,
+  main[data-view="pdf"] .panes,
+  main[data-view="chat"] .panes {
+    display: flex;
   }
 
   .side-pane {
     grid-column: 1 / -1;
-    min-height: 70dvh;
     border-left: 0;
+  }
+
+  /* cursor: pointer lets iOS Safari send the backdrop its taps. */
+  main:is([data-view="notes+quiz"], [data-view="notes+pdf"], [data-view="notes+chat"]) .sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 2.75rem 0 0;
+    z-index: 39;
+    background: rgb(0 0 0 / 0.3);
+    cursor: pointer;
+  }
+
+  main:is([data-view$="quiz"], [data-view$="pdf"], [data-view$="chat"]) .side-pane {
+    position: fixed;
+    inset: 22dvh 0 0;
+    z-index: 40;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.15);
+    transition: transform 0.15s ease-out, top 0.2s ease-out;
+  }
+
+  main:is([data-view="quiz"], [data-view="pdf"], [data-view="chat"]) .side-pane {
+    top: 2.75rem;
+    border-radius: 0;
+  }
+
+  /* A sheet's scrolling stops at its edges instead of moving the notes behind it. */
+  main .side-pane * {
+    overscroll-behavior: contain;
+  }
+
+  main:is([data-view$="quiz"], [data-view$="pdf"], [data-view$="chat"]) .sheet-head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex: none;
+    padding: var(--s2) var(--s4) 0;
+    touch-action: none; /* the head's drags move the sheet, not the page */
+  }
+
+  /* With nothing beside them, the notes are already full screen: their ⤢ has nothing to do. */
+  .panes .notes-alone {
+    display: none;
+  }
+
+  .sheet-handle {
+    align-self: center;
+    width: 2.5rem;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--rule);
+  }
+
+  /* "← Notes" in one corner, the sheet's ⤢ / ⤡ in the other (the bar's ⤢ is hidden on phones). */
+  .sheet-bar {
+    display: flex;
+    align-self: stretch;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .app-header .show-alone {
+    display: none;
+  }
+
+  .sheet-back {
+    padding: var(--s1) 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ai);
   }
 
   .panes {

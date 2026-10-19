@@ -16,6 +16,7 @@ export type PdfPaneHandle = {
   pick: () => void; // opens the file picker (top bar, sidebar)
   choosePages: () => void; // asks which PDF pages become the reference text (D32)
   goTo: (page: number, highlight?: string) => void; // a cite's or page link's page (R4: and its words)
+  clearHighlight: () => void; // unselects those words (the reader edited the notes)
   forget: (bookId: string) => void; // the book was deleted
 };
 
@@ -115,6 +116,10 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
     goTo: (page, highlight) => {
       if (viewer.current) return viewer.current.goTo(page, highlight);
       pendingPage.current = { page, highlight };
+    },
+    clearHighlight: () => {
+      if (pendingPage.current) pendingPage.current = { page: pendingPage.current.page };
+      viewer.current?.clearHighlight();
     },
     forget: (id) => void deletePdf(id),
   }));
