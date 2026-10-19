@@ -2,6 +2,7 @@
 
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { estimateTokens, fitPdfPages, isReferenceTooLong, pdfPageCount, REFERENCE_TOKEN_LIMIT, slicePdfPages } from "@/core/passage.ts";
+import type { OcrStats } from "@/core/ocr-layout.ts";
 import { deletePdf, loadPdf, savePdf, type StoredPdf } from "@/lib/pdf-store.ts";
 import { PdfViewer, type PdfViewerHandle } from "./PdfViewer";
 import { UploadIcon } from "./icons";
@@ -44,6 +45,7 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
   const pendingPage = useRef<{ page: number; highlight?: string }>(undefined);
   const [ocr, setOcr] = useState<{ done: number; total: number }>(); // OCR progress, while it runs
   const wantsReference = useRef(false); // offer the PDF's text as reference text once it's read
+  const ocrReport = useRef<string>(undefined); // D56: the last conversion's summary, shown once its text is in
 
   // Each book has its own PDF; switching books loads it (or finds none).
   useEffect(() => {
@@ -73,25 +75,28 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
   }
 
   // The PDF's text as the book's reference text: filled in, asked first, or a page picker (D32).
+  // After a conversion, the message starts with how sure the reading was (D56).
   function offerReference(text: string) {
-    if (text.length === 0) return onStatus(IMPORT_ERRORS.pdf_no_text);
-    if (isReferenceTooLong(text)) return askForPages(text);
+    const lead = ocrReport.current ? `${ocrReport.current} ` : "";
+    ocrReport.current = undefined;
+    if (text.length === 0) return onStatus(lead + IMPORT_ERRORS.pdf_no_text);
+    if (isReferenceTooLong(text)) return askForPages(text, lead);
     if (hasReference) {
       setOffer(text);
-      onStatus("");
+      onStatus(lead.trim());
       return;
     }
     onReference(text);
-    onStatus(`The PDF's text (~${estimateTokens(text).toLocaleString()} tokens) is now this book's reference text.`);
+    onStatus(`${lead}The PDF's text (~${estimateTokens(text).toLocaleString()} tokens) is now this book's reference text.`);
   }
 
   // D32: the PDF's text is over the cap; the reader picks the pages, prefilled with as many from
   // the start as fit.
-  function askForPages(text: string) {
+  function askForPages(text: string, lead = "") {
     setOffer(undefined);
     setRange({ text, from: "1", to: String(fitPdfPages(text, 1)) });
     const tokens = Math.round(estimateTokens(text) / 1000);
-    onStatus(`This PDF's text is ~${tokens}K tokens, over the ${REFERENCE_TOKEN_LIMIT / 1000}K limit: choose the pages the AI should read.`);
+    onStatus(`${lead}This PDF's text is ~${tokens}K tokens, over the ${REFERENCE_TOKEN_LIMIT / 1000}K limit: choose the pages the AI should read.`);
   }
 
   async function choosePages() {
@@ -144,12 +149,13 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
         latest.current.onStatus("");
         setOcr({ done: 0, total: scanned.length });
         const { ocrPdf } = await import("@/lib/pdf-ocr.ts");
-        const data = await ocrPdf(pdf.data, scanned, (done, total) => isCurrent && setOcr({ done, total }), abort.signal);
+        const { data, stats } = await ocrPdf(pdf.data, scanned, (done, total) => isCurrent && setOcr({ done, total }), abort.signal);
         if (!isCurrent) return;
         const searchable = { name: pdf.name, data, isOcred: true };
         await savePdf(book, searchable);
         if (!isCurrent) return;
         setOcr(undefined);
+        ocrReport.current = ocrSummary(scanned.length, stats);
         wantsReference.current = true;
         setPdf(searchable);
         return;
@@ -255,6 +261,15 @@ export function PdfPane({ bookId, hasReference, onReference, onAdded, onStatus, 
       )}
     </>
   );
+}
+
+// D56: what a conversion tells the reader, e.g. "Read 4,113 words from 13 scanned pages: fixed 3
+// likely misreads; 12 words are uncertain, so check quotes against the page."
+function ocrSummary(pageCount: number, { words, fixed, uncertain }: OcrStats): string {
+  const pages = `${pageCount} scanned page${pageCount === 1 ? "" : "s"}`;
+  const fixes = fixed > 0 ? `fixed ${fixed} likely misread${fixed === 1 ? "" : "s"}; ` : "";
+  const doubt = uncertain > 0 ? `${uncertain} word${uncertain === 1 ? " is" : "s are"} uncertain, so check quotes against the page.` : "every word was read clearly.";
+  return `Read ${words.toLocaleString()} words from ${pages}: ${fixes}${doubt}`;
 }
 
 // "Use PDF pages [from] to [to] of N": the estimate updates as the numbers change, and Use waits

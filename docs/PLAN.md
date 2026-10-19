@@ -146,6 +146,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S10.7: scanned PDFs (D55)
 - [x] Scanned pages render (pdfjs's wasm decoders served from `public/`); a PDF with scanned pages is OCR'd in the browser (Tesseract.js) with a progress card, its words written into the PDF as invisible text (pdf-lib), which replaces the stored PDF. **Verify:** core tests for word placement; Ronith's Hayek scan in headless Chrome: "Reading the scanned pages… N of 13", 28 s; reference text filled (~35K characters); `"…construct a rational economic order?" [p. 519]` links exact to PDF p. 2 and the click highlights it on the page; autocomplete offers "economic order?"; a normal page load fetches no OCR files.
 
+### S10.8: sensible OCR text (D56)
+- [x] Keep every OCR word; repair doubtful words (under 60%) from the document's confident words via common OCR confusions; status after OCR: words read, misreads fixed, words uncertain. **Verify:** core tests (`¢f` → `if`, punctuation kept, `¢f` not taken for "F.", no fix without a confident match, confident words untouched); 205 tests, lint, build green. Hayek scan in the browser: PDF page 2 now reads "information, if we can start" (was "¢f"); status "Read 5,896 words from 13 scanned pages: fixed 1 likely misread; 20 words are uncertain, so check quotes against the page." Left for option B: `HAvex`, italic "why" read `w/y`, `codrdinate`, logo specks.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
@@ -158,6 +161,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 - A daemon that tests the reader's claims against the book (was the quiz topic "Check my reading", removed 2026-10-14: Ronith, "more like a Daemon task")
 - After D37: "Elaborate" and replies that open a thread on a daemon nugget; custom daemons (a "New daemon" form); a Socratic daemon (open questions are now part of every daemon's purpose, D39); verifying the outside-knowledge daemon's sources (D39, maybe a search tool in S8.4); other inline AI actions on a selection
 - EPUB upload; photos of pages (scanned PDFs are read by OCR since D55)
+- OCR check by Claude (D56, option B): send each doubtful OCR word (under 60% confidence, not repaired from the document's own words) as a small crop of the page with its line, one call per scanned PDF, and let Claude read what's printed; fixes names like `HAvex` → `Hayek`. Costs a call per scan (daily cap), sends page crops to Anthropic, needs a prompt file Ronith owns. Build when testers keep hitting OCR errors the D56 repair misses.
 - Tester ideas Ronith passed on for now (2026-10-12): a Feedback link in the top bar (Google Form or email); a first-run public-domain sample book with a "how it works" screen; opening an existing Obsidian `.md` file into a book. Prompt caching + logging stays Sprint 7's first item
 - More Obsidian matching after T2: numbered lists renumbering, clickable `- [ ]` checkboxes, `==highlight==`, bullets drawn as dots with indent guides, `[[wikilinks]]`
 - Tensions across multiple books

@@ -604,6 +604,17 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D56. OCR misreads: keep every word, repair doubtful ones from the document's own words, say how sure it was (amends D55)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** On Ronith's Hayek scan, an italic "if" came out as "¢f" in one run and was dropped in another (D55 discarded words under 20% confidence), and autocomplete copied the error into his notes. Tesseract's confidence pinpoints its mistakes: on page 2, 5 of 328 words were under 60%, and they were exactly the misreads (`HAvex*` 48, `if` 38, `#o¢t` 37, `"given"` 13, `frequently` 13).
+- **Alternatives:** B. Claude checks the doubtful words: each one sent as a small crop of the page image with its line for context, one call per scanned PDF; Claude reads what is printed. It would fix all five above, including `HAvex` → `Hayek`, which A can't. Cost: one API call per scan (against the daily cap, D35), page crops sent to Anthropic, and a new prompt file for Ronith to own. Parked in PLAN.md to revisit.
+- **Rules:** no word is dropped for low confidence. After all pages are read, each word under 60% confidence is tried against common OCR confusions (`¢`→`i`/`c`, `rn`→`m`, `cl`→`d`, `vv`→`w`, `0`→`o`, `1`→`l`, `|`→`l`, ligatures, stray `#*^~` marks); the first variant that is a word the same document read confidently (80%+) at least twice replaces it, keeping its punctuation. The rest stay as read and count as uncertain. When OCR finishes, the status says how many words were read, how many likely misreads were fixed and how many are uncertain. Pure code in `core/ocr-layout.ts`, no AI call.
+- **Why:** free, offline and deterministic, and it fixes the commonest misreads (a mangled common word) using only what the scan itself shows; Claude's check (B) waits until real use shows A missing things that matter.
+- **Cost we accept:** names and rare words read wrong stay wrong (`HAvex`); a fix can be wrong when a confusion turns one real word into another (only words already doubtful are touched).
+- **Revisit if:** testers' notes or quotes keep hitting OCR errors A didn't fix, then build B.
+
+---
+
 ## Template
 
 ```
