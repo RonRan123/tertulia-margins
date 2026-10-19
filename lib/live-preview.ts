@@ -95,6 +95,9 @@ function decorate(view: EditorView): DecorationSet {
           }
           if (name === "FencedCode") return false; // its marks and text stay as written
         }
+        // "[p. 2]" or "[sic]": brackets with no (url) or [label] aren't a link, so they stay as written.
+        const isBareBrackets = (link: { name: string; getChild: (name: string) => unknown } | null) => link?.name === "Link" && !link.getChild("URL") && !link.getChild("LinkLabel");
+        if (isBareBrackets(node.node)) return;
         if (MARKS[name]) ranges.push(Decoration.mark({ class: MARKS[name] }).range(node.from, node.to));
         const isBullet = name === "ListMark" && !isActive(node.from) && /^[-*+]$/.test(state.sliceDoc(node.from, node.to));
         if (name === "ListMark") hangListItem(state, node.from, node.to, ranges, isBullet);
@@ -105,7 +108,7 @@ function decorate(view: EditorView): DecorationSet {
           ranges.push(bullet.range(node.from, node.to + (hasSpace ? 1 : 0)));
           return;
         }
-        if (!HIDDEN.has(name)) return;
+        if (!HIDDEN.has(name) || (name === "LinkMark" && isBareBrackets(node.node.parent))) return;
         // A bare URL (<https://…> or autolinked) stays visible; only a link's (url) part hides.
         if (name === "URL" && node.node.parent?.name !== "Link") return;
         const takesSpace = (name === "HeaderMark" || name === "QuoteMark") && state.sliceDoc(node.to, node.to + 1) === " ";
