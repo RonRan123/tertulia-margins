@@ -41,6 +41,22 @@ test("context: the quote before the reference, a blockquote above it, else its s
   expect(plain.context).toBe("The families want the man badly");
 });
 
+// Regression (Ronith's Weber notes): a list is one paragraph, so a paraphrased bullet's page took
+// the quote of an earlier bullet's page and linked "exactly" to the wrong words.
+test("a reference never looks back past the reference before it for its quote", () => {
+  const notes = [
+    '- state needs "every state is founded on force" and the "monopoly of the legitimate use of physical force" [p. 4]',
+    "\t- Others can use physical force only to the extent to which the state permits it",
+    "- Power is essential part of politics, for egoistic aims or other ideals [p. 4]",
+  ].join("\n");
+  const [first, second] = findPageRefs(notes);
+  expect(first.quote).toBe("monopoly of the legitimate use of physical force");
+  expect(second.quote).toBeUndefined();
+  expect(second.context).toBe("- Power is essential part of politics, for egoistic aims or other ideals");
+  const [, also] = findPageRefs('“a single man in possession” [p. 3], see also p. 7');
+  expect(also.quote).toBeUndefined();
+});
+
 // A PDF whose page 5 holds the book's page 1 (front matter): offset +4.
 const pdf = [
   "[PDF p. 5]\nIt is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.",
