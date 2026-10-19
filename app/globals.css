@@ -760,7 +760,20 @@ button.pill[aria-pressed="true"] {
 }
 
 .md-bullet {
+  display: inline-block;
+  width: 1em; /* BULLET_EM in lib/live-preview.ts */
+  text-indent: 0;
   color: var(--ink-soft);
+}
+
+/* A list item's indent and marker boxes (lib/live-preview.ts): fixed widths, so the line's
+   hanging indent (.md-li, set inline) lines its wrapped lines up under the item's text. */
+.md-listbox {
+  display: inline-block;
+  text-indent: 0;
+  white-space: pre;
+  overflow: hidden;
+  vertical-align: top;
 }
 
 /* Page links (R4, D33, D45): off the line being edited a reference shows as a pill (.cite-pill,
