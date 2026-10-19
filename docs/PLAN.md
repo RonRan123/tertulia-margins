@@ -143,6 +143,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S10.6: React to notes in sections (D53)
 - [x] `askedRuns` splits the bare parts of the notes into sections (~12 own lines, the most recent 4); the margin runs them at once, cards landing as each finishes, with "Reading your notes in N sections… M done"; traces label each section. **Verify:** core test (sections by own lines, long paragraphs split, short ones grouped, the most recent 4, first must pick, fallback when all is answered), trace test; 199 tests, lint, build green. Live on Ronith's Weber notes with every card dismissed (`.scratch/tools/d53-live.ts`): 4 sections in parallel, ~8 s in all; 3 cards on three different parts (guiding questions, "independent leadership", Weber's narrowing), one section with nothing worth showing, no repeats. *Browser check pending* (invite gate).
 
+### S10.7: scanned PDFs (D55)
+- [x] Scanned pages render (pdfjs's wasm decoders served from `public/`); a PDF with scanned pages is OCR'd in the browser (Tesseract.js) with a progress card, its words written into the PDF as invisible text (pdf-lib), which replaces the stored PDF. **Verify:** core tests for word placement; Ronith's Hayek scan in headless Chrome: "Reading the scanned pages… N of 13", 28 s; reference text filled (~35K characters); `"…construct a rational economic order?" [p. 519]` links exact to PDF p. 2 and the click highlights it on the page; autocomplete offers "economic order?"; a normal page load fetches no OCR files.
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.
@@ -154,7 +157,7 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ## Parking lot (ideas that are NOT in scope; write here instead of building)
 - A daemon that tests the reader's claims against the book (was the quiz topic "Check my reading", removed 2026-10-14: Ronith, "more like a Daemon task")
 - After D37: "Elaborate" and replies that open a thread on a daemon nugget; custom daemons (a "New daemon" form); a Socratic daemon (open questions are now part of every daemon's purpose, D39); verifying the outside-knowledge daemon's sources (D39, maybe a search tool in S8.4); other inline AI actions on a selection
-- EPUB upload; photo + OCR
+- EPUB upload; photos of pages (scanned PDFs are read by OCR since D55)
 - Tester ideas Ronith passed on for now (2026-10-12): a Feedback link in the top bar (Google Form or email); a first-run public-domain sample book with a "how it works" screen; opening an existing Obsidian `.md` file into a book. Prompt caching + logging stays Sprint 7's first item
 - More Obsidian matching after T2: numbered lists renumbering, clickable `- [ ]` checkboxes, `==highlight==`, bullets drawn as dots with indent guides, `[[wikilinks]]`
 - Tensions across multiple books

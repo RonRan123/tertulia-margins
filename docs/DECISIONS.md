@@ -593,6 +593,17 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D55. Scanned PDFs: in-browser OCR writes a text layer into the PDF (amends §3, D23)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** Ronith's Hayek PDF (a 1945 JSTOR scan: 13 fax-compressed page images, no text) showed blank pages and gave no reference text. Blank pages: pdfjs 6 decodes those images with wasm decoders we never pointed it to. No text: a scan has none, so the AI, page links, autocomplete and highlights had nothing to read. §3 had OCR as a non-goal.
+- **Alternatives:** Engines: Scribe.js (AGPL-3.0), PaddleOCR.js (line boxes only, 10+ MB, new SDK); Surya was ruled out (Python on a GPU or llama.cpp server, ~59 s a page on Apple Silicon, weights free only under $5M revenue, books would leave the browser). OCR on a Vercel function (4.5 MB request cap, time limits, a native canvas library, books uploaded). OCR text kept beside the PDF, with our own viewer search and highlights. Decoders and model from a CDN.
+- **Rules:** a page with a picture and no text is a scanned page. When a PDF has any, the PDF view shows "Reading the scanned pages… N of M" with a spinner while Tesseract.js (LSTM, English) reads each page drawn at ~300 dpi, in the browser; pdf-lib writes the words back as invisible text over the picture (`core/ocr-layout.ts` places each on its line's baseline at its width), and the result replaces the stored PDF, marked `isOcred` so it is never read twice. Everything downstream reads it like any text PDF: reference text, page links, quote autocomplete, search, selection and highlights. A scan stored before D55 is converted when first opened. pdfjs's decoders, Tesseract's worker, engine and model (`@tesseract.js-data/eng`, best_int) are copied from node_modules into `public/` before dev and build (`npm run copy-assets`) and load only when needed: a normal page load fetches none of them.
+- **Why:** writing the text into the PDF makes every existing feature work unchanged with no OCR-specific code downstream; Tesseract.js is Apache-2.0, mature and gives word boxes, and running it in the browser keeps books there (D34).
+- **Cost we accept:** ~2 s a page (Hayek: 28 s) and ~7 MB of downloads on the first scan; OCR misreads ("HAvex" for Hayek, logo specks as letters), which can stop an exact quote match (word overlap then links it); English only; Helvetica can't draw non-Latin characters, which are left out of the layer; rotated pages aren't handled.
+- **Revisit if:** testers bring long scanned books (time), non-English scans, or misreads break quotes often (then a better engine, or Claude transcribing pages).
+
+---
+
 ## Template
 
 ```

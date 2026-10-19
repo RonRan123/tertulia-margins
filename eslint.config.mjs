@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude's local test files and headless Chrome profile (gitignored)
     ".scratch/**",
+    // Vendor files scripts/copy-assets.ts copies from node_modules (gitignored)
+    "public/pdfjs-wasm/**",
+    "public/tesseract/**",
   ]),
 ]);
 

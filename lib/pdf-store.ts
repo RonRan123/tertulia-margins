@@ -2,7 +2,9 @@
 // too little for books, so PDFs live here while notes stay in core/store. The PDF never leaves the
 // reader's browser (D9). Every call resolves (never rejects): a failure reads as "no PDF".
 
-export type StoredPdf = { name: string; data: Blob };
+// `isOcred`: its scanned pages were already read by OCR (D55), so they aren't read again even
+// if some held no words.
+export type StoredPdf = { name: string; data: Blob; isOcred?: boolean };
 
 const DB = "tertulia-margins";
 const STORE = "pdfs";

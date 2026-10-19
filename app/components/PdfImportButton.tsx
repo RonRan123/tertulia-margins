@@ -4,7 +4,7 @@ import { useState } from "react";
 
 const ERROR_MESSAGES: Record<string, string> = {
   pdf_unreadable: "Couldn't read that PDF.",
-  pdf_no_text: "No text found in that PDF (scanned images aren't supported).",
+  pdf_no_text: "No text found in that PDF. If it's a scan, add it as the book's PDF instead: it's read into text there.",
 };
 
 // Reads a PDF in the browser and passes up reference text with [PDF p. N] markers (D13).
