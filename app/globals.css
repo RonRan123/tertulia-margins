@@ -689,6 +689,15 @@ button.pill[aria-pressed="true"] {
   caret-color: var(--ink);
 }
 
+/* Scroll past the end, as in Obsidian: room below the last line, so it can rise level with the
+   PDF text being read. A click there puts the caret at the end; there's nothing to edit below it.
+   Not on phones, where the cards list under the notes. */
+@media not (max-width: 48rem) {
+  .notes-editor .cm-content {
+    padding-bottom: max(var(--s8), calc(100vh - 10rem));
+  }
+}
+
 .notes-editor .cm-line {
   padding: 0;
 }
