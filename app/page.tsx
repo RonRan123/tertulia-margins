@@ -446,6 +446,10 @@ export default function Home() {
     showPdf();
     pdfPane.current?.goTo(link.pdfPage, linkHighlight(link));
   };
+  // The words a link selected in the PDF stay until the reader writes again.
+  useEffect(() => {
+    if (edits > 0) pdfPane.current?.clearHighlight();
+  }, [edits]);
   // A page cite in AI text (D38, D45): linked like the notes' references, together with the other
   // cites of that text so their exact hits teach the page offset. Stable while the PDF is, so each
   // message links its cites once.

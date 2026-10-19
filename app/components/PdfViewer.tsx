@@ -9,8 +9,9 @@ import { DownloadIcon, MinusIcon, PlusIcon, ResetZoomIcon, SearchIcon } from "./
 // The book's PDF (D29): pdfjs's own viewer (pages, selectable text, search highlights) under a
 // floating toolbar like ChatPDF's: zoom out, fit width, zoom in, "N of M", download, search.
 // The PDF is read from the reader's browser (lib/pdf-store) and never uploaded anywhere.
-// goTo's `highlight`: words to find and select on that page (a page link's quote, R4).
-export type PdfViewerHandle = { goTo: (page: number, highlight?: string) => void };
+// goTo's `highlight`: words to find and select on that page (a page link's quote, R4), until
+// clearHighlight (the reader's next edit to the notes). The reader's own search is left alone.
+export type PdfViewerHandle = { goTo: (page: number, highlight?: string) => void; clearHighlight: () => void };
 
 type Matches = { current: number; total: number };
 
@@ -21,6 +22,7 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
   const bus = useRef<EventBus>(null);
   const pendingPage = useRef<number>(undefined); // asked for before the pages were ready
   const pendingHighlight = useRef<string>(undefined);
+  const isHighlighted = useRef(false); // a goTo's words are selected
   const isFitted = useRef(false); // fit to width once, when first shown
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -54,7 +56,9 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     // Find searches from the current page, which pdfjs updates once the scroll lands.
     const highlight = pendingHighlight.current;
     pendingHighlight.current = undefined;
-    if (highlight) setTimeout(() => find(highlight, "", false, false), 100);
+    if (!highlight) return;
+    isHighlighted.current = true;
+    setTimeout(() => find(highlight, "", false, false), 100);
   };
   // The loading effect below runs once per PDF but should jump with the latest state.
   const onPagesReady = useEffectEvent(() => jumpIfPending());
@@ -146,7 +150,13 @@ export function PdfViewer({ pdf, ref }: { pdf: StoredPdf; ref?: Ref<PdfViewerHan
     observer.observe(box);
     return () => observer.disconnect();
   });
-  useImperativeHandle(ref, () => ({ goTo }));
+  const clearHighlight = () => {
+    pendingHighlight.current = undefined;
+    if (!isHighlighted.current || isSearching) return;
+    isHighlighted.current = false;
+    bus.current?.dispatch("findbarclose", { source: null });
+  };
+  useImperativeHandle(ref, () => ({ goTo, clearHighlight }));
 
   const closeSearch = () => {
     setIsSearching(false);
