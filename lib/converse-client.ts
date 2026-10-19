@@ -68,11 +68,12 @@ export async function streamMessage(
 
 // One daemon run (D37): the reviewer's picks (indexes into the nuggets, D51) and the nuggets, or an error code. Runs count against
 // their own daily cap (LIMITS.daemons.dailyRuns), apart from chat replies. Never throws.
-// `trigger`: why the run started, for the trace (D48).
+// `trigger`: why the run started, and `section` ("2 of 4", D53) which part of a React to notes press it is, for the trace (D48).
 export async function runDaemons(
   body: ConverseRequest,
   signal: AbortSignal,
   trigger: "pause" | "asked" = "pause",
+  section?: string,
 ): Promise<{ picks: number[]; nuggets: Nugget[] } | { error: string }> {
   const day = localDay(new Date());
   if (loadDaemonRunsToday(window.localStorage, day) >= LIMITS.daemons.dailyRuns) return { error: "daemon_limit" };
@@ -99,6 +100,7 @@ export async function runDaemons(
     trace({
       kind: "daemons",
       trigger,
+      ...(section && { section }),
       excerpt: body.daemons?.excerpt ?? "",
       mustPick: body.daemons?.mustPick === true,
       drafts,

@@ -21,6 +21,8 @@ export const LIMITS = {
     idleMs: 25_000,
     minLines: 10,
     maxCardsPerRun: 3, // D51: a run may show several cards, each on a different line, none repeating the margin
+    sectionLines: 12, // D53: "React to notes" reads the notes in sections of about this many of the reader's own lines,
+    maxSections: 4, //   one panel call each, at once; a press reads at most this many (the most recent)
     floorLines: 15,
     poolSize: 6, // runners-up kept per book, to fill the floor without a call
     dailyRuns: 40,

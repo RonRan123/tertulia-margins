@@ -81,6 +81,52 @@ export function planDaemons(notes: string, state: DaemonState, isAsked = false):
   return { kind: "run", excerpt: paragraphs.join("\n\n"), paragraphs, lines, mustPick: isFloorDue };
 }
 
+// D53: what "React to notes" reads: the parts of the notes no card answers, in sections of about
+// LIMITS.daemons.sectionLines of the reader's own lines (a long paragraph split by lines, short ones
+// grouped), the most recent LIMITS.daemons.maxSections of them, in the notes' order; each becomes one
+// run, the first of which must show something. With every line already answered, one run over all
+// the notes, as before.
+export type RunPlan = Extract<DaemonPlan, { kind: "run" }>;
+export function askedRuns(notes: string, state: DaemonState): RunPlan[] {
+  const { sectionLines, maxSections } = LIMITS.daemons;
+  const isSeen = seenChecker(state.seen);
+  const isCovered = coverageChecker(notes, state.cards);
+  const own = (lines: Line[]) => lines.reduce((sum, l) => sum + ownLines(l.text), 0);
+  const isBare = (lines: Line[]) => lines.some((l) => ownLines(l.text) > 0 && !isCovered(l));
+
+  // Pieces: whole paragraphs, or runs of a long paragraph's lines, that hold a line no card answers.
+  const pieces: Line[][] = [];
+  for (const block of splitBlocks(notes)) {
+    let chunk: Line[] = [];
+    const flush = () => {
+      if (isBare(chunk)) pieces.push(chunk);
+      chunk = [];
+    };
+    for (const line of splitLines(block)) {
+      if (chunk.length > 0 && own(chunk) + ownLines(line.text) > sectionLines) flush();
+      chunk.push(line);
+    }
+    flush();
+  }
+  // Sections: consecutive pieces packed up to sectionLines own lines.
+  const sections: Line[][][] = [];
+  for (const piece of pieces) {
+    const last = sections.at(-1);
+    const fits = last !== undefined && own(last.flat()) + own(piece) <= sectionLines;
+    if (fits) last.push(piece);
+    else sections.push([piece]);
+  }
+  if (sections.length === 0) {
+    const all = planDaemons(notes, state, true);
+    return all.kind === "run" ? [all] : [];
+  }
+  return sections.slice(-maxSections).map((section, i) => {
+    const paragraphs = section.map((piece) => piece.map((l) => l.text).join("\n"));
+    const lines = section.flat().filter((l) => !isSeen(l.text)).reduce((sum, l) => sum + ownLines(l.text), 0);
+    return { kind: "run", excerpt: paragraphs.join("\n\n"), paragraphs, lines, mustPick: i === 0 };
+  });
+}
+
 // A run's result folded in: its paragraphs are seen; the picks (indexes into `nuggets`, D51) become
 // cards, except any that repeat a card already shown; the rest join the pool.
 export function afterRun(state: DaemonState, plan: Extract<DaemonPlan, { kind: "run" }>, picks: number[], nuggets: Nugget[], newId: () => string): DaemonState {

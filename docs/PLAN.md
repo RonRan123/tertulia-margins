@@ -140,6 +140,9 @@ Left open in v1: Obsidian check on export, real-chapter use notes (S4). Sprint 7
 ### S10.5: autocompleted quotes link exactly (D52)
 - [x] Footnote marks dropped at import; exact page links match across paragraph and page breaks, ignoring footnote numbers. **Verify:** core tests (a raised mark dropped, a body-size year kept; a quote across a page break with an old "32" in it links exactly and highlights without it); Ronith's note from the screenshot links `exact` to PDF p. 20 with both old and new PDF text (was overlap); his 5 PDFs: footnote marks gone (216 in the Scott paper, 8 in Weber), other text unchanged.
 
+### S10.6: React to notes in sections (D53)
+- [x] `askedRuns` splits the bare parts of the notes into sections (~12 own lines, the most recent 4); the margin runs them at once, cards landing as each finishes, with "Reading your notes in N sections… M done"; traces label each section. **Verify:** core test (sections by own lines, long paragraphs split, short ones grouped, the most recent 4, first must pick, fallback when all is answered), trace test; 199 tests, lint, build green. Live on Ronith's Weber notes with every card dismissed (`.scratch/tools/d53-live.ts`): 4 sections in parallel, ~8 s in all; 3 cards on three different parts (guiding questions, "independent leadership", Weber's narrowing), one section with nothing worth showing, no repeats. *Browser check pending* (invite gate).
+
 ## Sprint 7: measure + write-up (after v2, D21)
 - [ ] Ronith reviews and refines every prompt, including the ones Claude drafted in Sprints 5–6 (D19). **Verify:** each prompt file's owner comment says reviewed.
 - [ ] Prompt caching on the passage prefix; log model, tokens and latency per call. **Verify:** cache read on turn 2; TTFT before/after recorded.

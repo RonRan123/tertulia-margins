@@ -31,6 +31,7 @@ export type TraceEvent = { at: string; book?: string } & (
   | {
       kind: "daemons";
       trigger: "pause" | "asked";
+      section?: string; // D53: "2 of 4" for one section of a React to notes press
       excerpt: string;
       mustPick: boolean;
       drafts: DraftTrace[];
@@ -124,7 +125,7 @@ function entry(event: TraceEvent): { who: string; what: string; details?: string
       return { who: "Reader → Chat", what: `asked ${said(event.question)}; the AI ${outcome}`, details: (event.reply ? quote(event.reply) : "") + cites };
     }
     case "daemons": {
-      const why = event.trigger === "asked" ? "the reader pressed React to notes" : "the reader paused";
+      const why = event.trigger === "asked" ? `the reader pressed React to notes${event.section ? ` (section ${event.section})` : ""}` : "the reader paused";
       const head = event.error
         ? `run failed (${event.error}) after ${why}`
         : `ran after ${why}${event.mustPick ? " (must show a card)" : ""}: ${(event.picks ?? []).length > 0 ? `${event.picks.map(daemonName).join(", ")} shown` : "no card shown"}, ${secs(event.ms)}`;

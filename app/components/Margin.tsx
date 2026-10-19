@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { Row } from "@/core/blocks.ts";
 import { trace } from "@/lib/trace.ts";
-import { ACTIONS, afterPromote, afterRun, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState } from "@/core/daemons.ts";
+import { ACTIONS, afterPromote, afterRun, askedRuns, DAEMON_IDS, DAEMONS, dismissCard, planDaemons, type DaemonCard, type DaemonState, type RunPlan } from "@/core/daemons.ts";
 import { LIMITS } from "@/core/limits.ts";
 import { runDaemons } from "@/lib/converse-client.ts";
 import { CitedText } from "./CitedText";
@@ -48,6 +48,7 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
   const isPaused = pausedReason !== undefined;
   const isActive = isShown && !isPaused; // allowed to look at all
   const [isReading, setIsReading] = useState(false);
+  const [sections, setSections] = useState({ done: 0, total: 0 }); // D53: a React to notes press's progress
   // The last look's outcome, kept with the edit count it followed: a newer edit hides it.
   const [last, setLast] = useState<{ outcome?: Outcome; edits: number }>({ edits: 0 });
   const outcome = last.edits === edits ? last.outcome : undefined;
@@ -76,36 +77,58 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
     }, delay);
   };
 
+  // "React to notes" (isAsked) reads the bare parts of the notes as sections, one run each, all at
+  // once (D53); a pause after enough new lines is one run. Each run's cards land as it finishes, and
+  // afterRun drops any that repeat a card another section has just added.
   async function look(isAsked = false) {
     if (running.current || !latest.current.isActive) return;
     const { reference, notes, daemons, edits } = latest.current;
     const setOutcome = (outcome?: Outcome) => setLast({ outcome, edits });
-    const plan = planDaemons(notes, daemons, isAsked);
-    if (plan.kind === "wait") return;
-    if (plan.kind === "promote") {
-      trace({ kind: "promote", daemon: plan.card.daemon, text: plan.card.text });
-      setDaemons((d) => afterPromote(d, plan.card));
-      return reveal(plan.card.id, plan.card.daemon);
+    let plans: RunPlan[];
+    if (isAsked) plans = askedRuns(notes, daemons);
+    else {
+      const plan = planDaemons(notes, daemons);
+      if (plan.kind === "wait") return;
+      if (plan.kind === "promote") {
+        trace({ kind: "promote", daemon: plan.card.daemon, text: plan.card.text });
+        setDaemons((d) => afterPromote(d, plan.card));
+        return reveal(plan.card.id, plan.card.daemon);
+      }
+      plans = [plan];
     }
+    if (plans.length === 0) return;
     const abort = new AbortController();
     running.current = abort;
     setIsReading(true);
+    setSections({ done: 0, total: plans.length });
     // D51: the cards already shown go along, so no new remark repeats one; a run may show several.
     const margin = daemons.cards.map(({ daemon, text, anchor }) => ({ daemon, text, anchor }));
-    const request = { excerpt: plan.excerpt, mustPick: plan.mustPick, margin, maxCards: LIMITS.daemons.maxCardsPerRun };
-    const result = await runDaemons({ passage: reference, notes, question: "", daemons: request }, abort.signal, isAsked ? "asked" : "pause");
+    const results = await Promise.all(
+      plans.map(async (plan, i) => {
+        const request = { excerpt: plan.excerpt, mustPick: plan.mustPick, margin, maxCards: LIMITS.daemons.maxCardsPerRun };
+        const section = plans.length > 1 ? `${i + 1} of ${plans.length}` : undefined;
+        const result = await runDaemons({ passage: reference, notes, question: "", daemons: request }, abort.signal, isAsked ? "asked" : "pause", section);
+        setSections((s) => ({ ...s, done: s.done + 1 }));
+        if (abort.signal.aborted || "error" in result) return result;
+        // The ids are made here, once, so each picked card's id is known for its shimmer.
+        const ids = result.nuggets.map(() => crypto.randomUUID());
+        setDaemons((d) => {
+          let next = 0;
+          return afterRun(d, plan, result.picks, result.nuggets, () => ids[next++]);
+        });
+        for (const p of result.picks) reveal(ids[p], result.nuggets[p].daemon);
+        return result;
+      }),
+    );
     running.current = undefined;
     setIsReading(false);
     if (abort.signal.aborted) return;
-    if ("error" in result) return setOutcome(result.error === "daemon_limit" ? "daemon_limit" : "failed");
-    // The ids are made here, once, so each picked card's id is known for its shimmer.
-    const ids = result.nuggets.map(() => crypto.randomUUID());
-    setDaemons((d) => {
-      let next = 0;
-      return afterRun(d, plan, result.picks, result.nuggets, () => ids[next++]);
-    });
-    setOutcome(result.picks.length > 0 ? undefined : "quiet");
-    for (const i of result.picks) reveal(ids[i], result.nuggets[i].daemon);
+    const answered = results.filter((r) => !("error" in r));
+    if (answered.length === 0) {
+      const isAtCap = results.some((r) => "error" in r && r.error === "daemon_limit");
+      return setOutcome(isAtCap ? "daemon_limit" : "failed");
+    }
+    setOutcome(answered.some((r) => "picks" in r && r.picks.length > 0) ? undefined : "quiet");
   }
 
   // Every edit of the reader's restarts the wait; a pause long enough lets the daemons look. A failed
@@ -127,7 +150,9 @@ export function useDaemons({ bookId, edits, reference, notes, daemons, setDaemon
     : isPaused
     ? `Paused: ${pausedReason}`
     : isReading
-      ? "Reading your notes…"
+      ? sections.total > 1
+        ? `Reading your notes in ${sections.total} sections… ${sections.done} done.`
+        : "Reading your notes…"
       : outcome === "quiet"
         ? "Nothing to add this time."
         : outcome === "daemon_limit"

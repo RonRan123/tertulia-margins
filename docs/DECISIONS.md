@@ -567,6 +567,21 @@ To add one, run `/decide <topic>`, or copy the template at the bottom.
 
 ---
 
+## D53. React to notes reads the bare parts of the notes in sections, all at once (amends D37, D51)
+- **Status:** Accepted (2026-10-18, Ronith)
+- **Context:** with D51 a run could show up to 3 cards. Ronith asked why not more when the notes justify it. One panel call can't draft many good remarks (each daemon drafts at most two, voices blur, the output budget is shared), so more cards need more calls.
+- **Alternatives:** raise the cap and let one call draft more (quality drops as the count rises); cover the notes in batches (chosen); batches spread over the next automatic runs.
+- **Rules:**
+  - *Only on React to notes.* Automatic runs (10 new lines and a pause) stay one call, up to 3 cards.
+  - *Sections:* the parts of the notes with a line of the reader's own that no card answers, as whole paragraphs, or runs of lines when a paragraph is long, packed into sections of about 12 of the reader's own lines (`LIMITS.daemons.sectionLines`); the most recent 4 (`maxSections`). With every line answered, one run over all the notes, as before.
+  - *Runs:* one panel call (and reviewer) per section, all at once; each may show up to 3 cards; the first must show something. Each run's cards land when it finishes; one that repeats a card another section has just added is dropped (`afterRun`). The panel's status reads "Reading your notes in 4 sections… 2 done."
+  - *Cost and caps:* each section is a paid call sending the book and counts as one of the day's 40 daemon runs (D37), so a press costs up to 4 runs, ~20–40¢ on Weber until caching. Traces label each run "section 2 of 4".
+- **Why:** each call stays small and sharp, so quality holds while coverage grows; running them at once keeps a press as fast as one run (~8 s live).
+- **Cost we accept:** sections run in parallel, so two can draft the same point before either is in the margin; the merge drops exact-enough repeats but not every overlap. A press over long notes uses several of the day's runs.
+- **Revisit if:** presses feel slow or costly (then prompt caching first), or sections still produce near-repeats.
+
+---
+
 ## Template
 
 ```

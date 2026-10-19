@@ -44,6 +44,8 @@ test("renderTrace: a readable timeline of the reader and each agent, grouped by 
   expect(md).toContain("not in the excerpt, fell back to its first line");
   expect(md).toContain("Tokens: panel 12000 in / 300 out");
   expect(md).toContain("**13:02:00 · Reader** dismissed The Author's card");
+  const section = renderTrace({ browser: "browser-1234", session: "session-1234" }, [{ ...events[2], trigger: "asked", section: "2 of 4" } as TraceEvent]);
+  expect(section).toContain("ran after the reader pressed React to notes (section 2 of 4)"); // D53
 });
 
 test("quizEvents: an answer to a choice question, then finishing; free responses and setup are left to their own events", () => {

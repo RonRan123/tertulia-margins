@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { afterPromote, afterRun, freshDaemonState, isSameRemark, ownLines, planDaemons, sentenceAround, type DaemonCard } from "./daemons.ts";
+import { afterPromote, afterRun, askedRuns, freshDaemonState, isSameRemark, ownLines, planDaemons, sentenceAround, type DaemonCard } from "./daemons.ts";
 
 // The reader's own lines (D37): short and distinct, so each counts as one line.
 const WORDS = ["pride", "prejudice", "marriage", "fortune", "irony", "manners", "letters", "estate", "sisters", "mother", "father", "ball", "rain", "walk", "proposal", "regiment"];
@@ -108,4 +108,28 @@ test("sentenceAround (D51): an anchor widens to its whole sentence, without the 
   expect(sentenceAround(notes, "even the CEO reports")).toBe("This is a contrast with corporate life (e.g, even the CEO reports to a board).");
   expect(sentenceAround(notes, "Next")).toBe("Next line.");
   expect(sentenceAround(notes, "not there")).toBe("not there");
+});
+
+test("askedRuns (D53): React to notes reads the parts no card answers in sections of ~12 own lines, the most recent 4, the first must pick", () => {
+  // Three paragraphs: 5 lines answered by a card, then 8 and 9 bare lines.
+  const answered = mine(5, "seen");
+  const notes = [answered, mine(8, "first"), mine(9, "second")].join("\n\n");
+  const state = { ...freshDaemonState(notes), cards: [{ id: "c", daemon: "author" as const, text: "Hm?", anchor: answered }] };
+  const runs = askedRuns(notes, state);
+  expect(runs.map((r) => r.paragraphs)).toEqual([[mine(8, "first")], [mine(9, "second")]]); // 8 + 9 > 12: two sections
+  expect(runs.map((r) => r.mustPick)).toEqual([true, false]);
+  expect(runs.map((r) => r.lines)).toEqual([0, 0]); // already read: nothing new counts toward the floor
+  // A long paragraph splits by lines; short ones group.
+  const long = mine(30, "long");
+  expect(askedRuns(long, freshDaemonState("")).map((r) => r.excerpt.split("\n").length)).toEqual([12, 12, 6]);
+  const short = [mine(3, "a"), mine(3, "b"), mine(3, "c")].join("\n\n");
+  expect(askedRuns(short, freshDaemonState(""))).toHaveLength(1);
+  // At most 4 sections, the most recent.
+  const many = Array.from({ length: 6 }, (_, i) => mine(12, `part${i}`)).join("\n\n");
+  const capped = askedRuns(many, freshDaemonState(""));
+  expect(capped).toHaveLength(4);
+  expect(capped[0].excerpt).toContain("part2 1:");
+  // Everything answered: one run over all the notes, as before.
+  const covered = { ...freshDaemonState(answered), cards: [{ id: "c", daemon: "author" as const, text: "Hm?", anchor: answered }] };
+  expect(askedRuns(answered, covered)).toEqual([{ kind: "run", excerpt: answered, paragraphs: [answered], lines: 0, mustPick: true }]);
 });
