@@ -2055,6 +2055,18 @@ dialog.reference form button {
     background: var(--rule);
   }
 
+  /* "← Notes" in one corner, the sheet's ⤢ / ⤡ in the other (the bar's ⤢ is hidden on phones). */
+  .sheet-bar {
+    display: flex;
+    align-self: stretch;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .app-header .show-alone {
+    display: none;
+  }
+
   .sheet-back {
     padding: var(--s1) 0;
     border: 0;

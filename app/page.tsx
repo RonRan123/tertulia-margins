@@ -200,6 +200,8 @@ export default function Home() {
   };
   const homeView = useRef<View>("notes+margin"); // the notes view a phone's sheet closes to
   const closeSheet = () => showView(homeView.current);
+  // Quiz, PDF or Chat alone or beside the notes (on a phone: a full-screen sheet or one that peeks).
+  const toggleAlone = () => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)));
   useEffect(() => {
     const onBack = () => {
       if (window.history.state?.sheet) return;
@@ -560,12 +562,12 @@ export default function Home() {
             })}
             <button
               type="button"
-              className="quiet icon pill"
+              className="quiet icon pill show-alone"
               aria-pressed={isAlone(ui.view) && !isNotesAlone(ui.view)}
               disabled={sideOf(ui.view) === "margin"} // the margin has nothing to show alone; the notes have their own ⤢
               title={sideOf(ui.view) === "margin" ? "Pick Quiz, PDF or Chat to show it alone" : isAlone(ui.view) ? "Show beside the notes" : "Show alone"}
               aria-label="Show alone"
-              onClick={() => showView(viewOf(sideOf(ui.view), !isAlone(ui.view)))}
+              onClick={toggleAlone}
             >
               {isAlone(ui.view) && !isNotesAlone(ui.view) ? <MinimizeIcon /> : <MaximizeIcon />}
             </button>
@@ -646,7 +648,7 @@ export default function Home() {
               {/* Phone only (CSS): the dimmed notes behind a Quiz, PDF or Chat sheet; a tap closes it. */}
               <div className="sheet-backdrop" aria-hidden="true" onClick={closeSheet} />
               <section className="side-pane" aria-label="Beside the notes">
-                <SheetHead onClose={closeSheet} />
+                <SheetHead isFull={isAlone(ui.view)} onClose={closeSheet} onToggleFull={toggleAlone} />
                 <div className="quiz-pane">
                   <Quiz
                     bookId={library.currentId}
@@ -691,35 +693,49 @@ export default function Home() {
   );
 }
 
-const SWIPE_CLOSE_PX = 60; // how far down the sheet's handle is dragged before it closes
+const SWIPE_PX = 60; // how far the sheet's head is dragged before the sheet changes size or closes
 
-// A phone sheet's top (CSS): a grab handle and "← Notes". A drag down on it moves the sheet with
-// the finger and closes it past SWIPE_CLOSE_PX, else springs back. Only the head drags, so
-// scrolling a quiz or chat, or zooming the PDF, never closes the sheet.
-function SheetHead({ onClose }: { onClose: () => void }) {
-  const start = useRef<number>(undefined);
+type SheetHeadProps = { isFull: boolean; onClose: () => void; onToggleFull: () => void };
+
+// A phone sheet's top (CSS): a grab handle, "← Notes" and, in the opposite corner, ⤢ (full screen)
+// or ⤡ (back to the notes peeking above). A drag on the head moves the sheet with the finger; past
+// SWIPE_PX, up expands it, down shrinks a full sheet or closes one that peeks, else it springs
+// back. Only the head drags, so scrolling a quiz or chat, or zooming the PDF, never moves the sheet.
+function SheetHead({ isFull, onClose, onToggleFull }: SheetHeadProps) {
+  const drag = useRef<{ y: number; room: number }>(undefined); // where it started; how far up it may go
   const sheetOf = (el: HTMLElement) => el.closest<HTMLElement>(".side-pane");
   return (
     <div
       className="sheet-head"
-      onTouchStart={(e) => (start.current = e.touches[0].clientY)}
+      onTouchStart={(e) => {
+        const sheet = sheetOf(e.currentTarget);
+        const barBottom = document.querySelector(".app-header")?.getBoundingClientRect().bottom ?? 0;
+        drag.current = { y: e.touches[0].clientY, room: sheet ? sheet.getBoundingClientRect().top - barBottom : 0 };
+      }}
       onTouchMove={(e) => {
         const sheet = sheetOf(e.currentTarget);
-        if (start.current === undefined || !sheet) return;
-        sheet.style.transform = `translateY(${Math.max(0, e.touches[0].clientY - start.current)}px)`;
+        if (!drag.current || !sheet) return;
+        const dy = Math.max(-drag.current.room, e.touches[0].clientY - drag.current.y);
+        sheet.style.transform = `translateY(${dy}px)`;
       }}
       onTouchEnd={(e) => {
         const sheet = sheetOf(e.currentTarget);
-        const dragged = start.current === undefined ? 0 : e.changedTouches[0].clientY - start.current;
-        start.current = undefined;
+        const dragged = drag.current ? e.changedTouches[0].clientY - drag.current.y : 0;
+        drag.current = undefined;
         if (sheet) sheet.style.transform = "";
-        if (dragged > SWIPE_CLOSE_PX) onClose();
+        if (dragged < -SWIPE_PX && !isFull) onToggleFull();
+        if (dragged > SWIPE_PX) return isFull ? onToggleFull() : onClose();
       }}
     >
       <span className="sheet-handle" aria-hidden="true" />
-      <button type="button" className="sheet-back" onClick={onClose}>
-        ← Notes
-      </button>
+      <div className="sheet-bar">
+        <button type="button" className="sheet-back" onClick={onClose}>
+          ← Notes
+        </button>
+        <button type="button" className="quiet icon" aria-pressed={isFull} aria-label={isFull ? "Show the notes above" : "Full screen"} onClick={onToggleFull}>
+          {isFull ? <MinimizeIcon /> : <MaximizeIcon />}
+        </button>
+      </div>
     </div>
   );
 }
